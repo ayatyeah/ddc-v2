@@ -1,0 +1,10 @@
+﻿.env
+.env.*.local
+node_modules/
+client/node_modules/
+public/assets/
+public/index.html
+*.log
+.DS_Store
+.vscode/
+.idea/
