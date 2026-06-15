@@ -83,22 +83,19 @@ button { font-family: inherit; cursor: pointer; }
 }
 [data-theme='dark'] #scroll-grain { opacity: 0.35; background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0); }
 
-/* Фоновые логотипы (Нацбанк + ЦЦР) — водяной знак вместо карты. */
-#brand-marks {
+/* Полноэкранный 3D-фон (Scene3D) — параллакс-проезд по станциям. */
+#bg3d {
   position: fixed; inset: 0; z-index: -3; pointer-events: none;
-  display: grid; place-items: center; overflow: hidden;
+  width: 100%; height: 100%; display: block; opacity: 0.8;
 }
-#brand-marks .bm-wrap { position: relative; width: min(86vw, 980px); height: min(60vw, 640px); }
-#brand-marks img { position: absolute; top: 50%; left: 50%; transition: transform 0.25s linear; }
-#brand-marks .bm-ddc {
-  width: 42%; transform: translate(-94%, -50%) scale(var(--ddc-scale, 1));
-  transform-origin: 35% 50%; opacity: 0.08; z-index: 1;
+[data-theme='dark'] #bg3d { opacity: 0.82; }
+
+/* Летающий 3D-логотип в боковых полях (за контентом). Скрыт на узких экранах. */
+#logo3d {
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  width: 100%; height: 100%; display: block;
 }
-#brand-marks .bm-nbk {
-  width: 48%; transform: translate(-6%, -50%); opacity: 0.09; z-index: 2;
-}
-[data-theme='dark'] #brand-marks .bm-ddc { opacity: 0.11; }
-[data-theme='dark'] #brand-marks .bm-nbk { opacity: 0.12; }
+@media (max-width: 1100px) { #logo3d { display: none; } }
 
 /* Канва с летающими частицами. */
 #particles {

@@ -12,7 +12,8 @@ import News from './News.jsx';
 import Contact from './Contact.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
-import BrandMarks from './BrandMarks.jsx';
+import Background3D from './Background3D.jsx';
+import Logo3D from './Logo3D.jsx';
 import Particles from './Particles.jsx';
 import Fog from './Fog.jsx';
 
@@ -89,7 +90,8 @@ export default function Site() {
   return (
     <>
       <div id="scroll-bg" />
-      <BrandMarks />
+      <Background3D />
+      <Logo3D />
       <Particles />
       <Fog />
       <div id="scroll-grain" />
