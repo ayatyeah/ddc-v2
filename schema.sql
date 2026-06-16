@@ -126,3 +126,16 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ai_analysis — кэш ИИ-анализа клиентов (Gemini).
+-- leads_sig — подпись набора заявок; если заявки не менялись, повторно ИИ не вызываем.
+-- content — JSON с результатом (важные клиенты, проблемы, рекомендации).
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ai_analysis (
+  id         SERIAL PRIMARY KEY,
+  leads_sig  TEXT        NOT NULL,
+  content    JSONB       NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_sig ON ai_analysis (leads_sig);

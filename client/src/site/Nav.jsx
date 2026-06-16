@@ -3,8 +3,6 @@ import { useLang, useTheme, setLang, toggleTheme, LANGS } from '../store.js';
 import { t } from '../i18n.js';
 import { IcoSun, IcoMoon } from './icons.jsx';
 
-const SECTIONS = ['services', 'about', 'news', 'contacts'];
-
 export default function Nav() {
   const lang = useLang();
   const theme = useTheme();
@@ -12,8 +10,8 @@ export default function Nav() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setSolid(window.scrollY > 40);
-    onScroll();
+    let cur = window.scrollY > 12; setSolid(cur);
+    const onScroll = () => { const next = window.scrollY > 12; if (next !== cur) { cur = next; setSolid(next); } };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
@@ -28,9 +26,6 @@ export default function Nav() {
   return (
     <nav className={`nav ${solid ? 'solid' : ''}`}>
       <div className="wrap">
-        <a href="#top" className="brand" onClick={go('top')}>
-          <img className="brand-logo" src="/ddc.png" alt="" /> DDC
-        </a>
         <div className={`nav-links ${open ? 'open' : ''}`}>
           <a href="#services" onClick={go('services')}>{t(lang, 'nav.services')}</a>
           <a href="#about" onClick={go('about')}>{t(lang, 'nav.about')}</a>
@@ -38,7 +33,6 @@ export default function Nav() {
           <a href="#contacts" onClick={go('contacts')}>{t(lang, 'nav.contacts')}</a>
         </div>
         <div className="nav-right">
-          <span className="nav-phone">+7 727 258-49-58</span>
           <div className="lang">
             {LANGS.map((l) => (
               <button key={l} className={l === lang ? 'active' : ''} onClick={() => setLang(l)}>

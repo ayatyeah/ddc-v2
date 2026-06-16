@@ -11,7 +11,7 @@ function fmtDate(iso) {
   } catch { return iso || ''; }
 }
 
-function Row({ row, onPatch, canEdit }) {
+function Row({ row, onPatch, canEdit, highlight }) {
   const [comment, setComment] = useState(row.admin_comment || '');
   const [saved, setSaved] = useState(false);
 
@@ -24,7 +24,7 @@ function Row({ row, onPatch, canEdit }) {
   };
 
   return (
-    <tr>
+    <tr id={`lead-${row.id}`} className={highlight ? 'lead-flash' : ''}>
       <td data-label="Клиент">
         <div className="who-name">{row.full_name}</div>
         <div className="who-sub">{row.email || '—'}{row.phone ? ` · ${row.phone}` : ''}</div>
@@ -72,7 +72,7 @@ function Row({ row, onPatch, canEdit }) {
   );
 }
 
-export default function Leads({ onAuthLost, canEdit = true }) {
+export default function Leads({ onAuthLost, canEdit = true, focusId = null }) {
   const [stats, setStats] = useState(null);
   const [rows, setRows] = useState([]);
   const [filter, setFilter] = useState('');
@@ -99,6 +99,14 @@ export default function Leads({ onAuthLost, canEdit = true }) {
 
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadLeads(filter, q); }, [filter, loadLeads]); // q обрабатывается отдельно с дебаунсом
+
+  useEffect(() => { if (focusId != null) { setFilter(''); setQ(''); } }, [focusId]);
+
+  useEffect(() => {
+    if (focusId == null) return;
+    const el = document.getElementById(`lead-${focusId}`);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash-on'); setTimeout(() => el.classList.remove('flash-on'), 1800); }
+  }, [rows, focusId]);
 
   const onSearch = (val) => {
     setQ(val);
@@ -144,7 +152,7 @@ export default function Leads({ onAuthLost, canEdit = true }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => <Row key={row.id} row={row} onPatch={patch} canEdit={canEdit} />)}
+            {rows.map((row) => <Row key={row.id} row={row} onPatch={patch} canEdit={canEdit} highlight={focusId === row.id} />)}
           </tbody>
         </table>
         {empty && <div className="adm-empty">Заявок пока нет.</div>}

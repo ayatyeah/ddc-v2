@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from '../store.js';
 import Nav from './Nav.jsx';
+import Brand from './Brand.jsx';
 import Hero from './Hero.jsx';
 import BuildingShot from './BuildingShot.jsx';
 import Services from './Services.jsx';
@@ -13,19 +14,17 @@ import Contact from './Contact.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Background3D from './Background3D.jsx';
-import Logo3D from './Logo3D.jsx';
-import Particles from './Particles.jsx';
 import Fog from './Fog.jsx';
 
 /* Мягкие палитры фона на ключевых точках прокрутки (0 → верх, 1 → низ).
    top — пятно-подсветка сверху, a/b — вертикальный градиент. */
 const STOPS = {
   light: [
-    { p: 0.00, top: '#eef3ff', a: '#fbfbfd', b: '#eef2fb' },
-    { p: 0.30, top: '#e9f6ff', a: '#f6f9ff', b: '#eaf1fc' },
-    { p: 0.55, top: '#fff6e8', a: '#fbfaf7', b: '#f4f0e6' },
-    { p: 0.78, top: '#eafaf2', a: '#f7fcf9', b: '#eaf3ef' },
-    { p: 1.00, top: '#eef3ff', a: '#fafbfe', b: '#eef2fb' },
+    { p: 0.00, top: '#cfe6ff', a: '#8fbdf0', b: '#e6f3ff' },
+    { p: 0.30, top: '#c7e0ff', a: '#84b4ec', b: '#e2f0ff' },
+    { p: 0.55, top: '#d8e9ff', a: '#9cc4f2', b: '#ecf5ff' },
+    { p: 0.78, top: '#cfe6ff', a: '#8fbdf0', b: '#e8f3ff' },
+    { p: 1.00, top: '#cfe6ff', a: '#8fbdf0', b: '#e6f3ff' },
   ],
   dark: [
     { p: 0.00, top: '#0a1430', a: '#000000', b: '#05080f' },
@@ -91,11 +90,10 @@ export default function Site() {
     <>
       <div id="scroll-bg" />
       <Background3D />
-      <Logo3D />
-      <Particles />
       <Fog />
       <div id="scroll-grain" />
       <Nav />
+      <Brand />
       <main>
         <Hero />
         <BuildingShot />

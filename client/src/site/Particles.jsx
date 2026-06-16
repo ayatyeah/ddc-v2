@@ -14,7 +14,7 @@ export default function Particles() {
     if (!canvas) return;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const ctx = canvas.getContext('2d');
-    let w = 0, h = 0, raf = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let w = 0, h = 0, raf = 0, dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     let pts = [];
 
     const palette = () => (themeRef.current === 'dark'
@@ -27,7 +27,7 @@ export default function Particles() {
       canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // плотность точек зависит от площади (но с потолком ради производительности)
-      const count = Math.min(130, Math.round((w * h) / 14000));
+      const count = Math.min(90, Math.round((w * h) / 19000));
       pts = Array.from({ length: count }, () => ({
         x: Math.random() * w, y: Math.random() * h,
         vx: (Math.random() - 0.5) * 0.25, vy: (Math.random() - 0.5) * 0.25,

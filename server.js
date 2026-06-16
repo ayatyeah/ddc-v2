@@ -436,6 +436,91 @@ app.delete('/api/admin/users/:id', auth, requireRole('admin'), async (req, res) 
   }
 });
 
+// ── ИИ-аналитика клиентов (Gemini) с кэшированием ────────────────────────────
+const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+async function callGemini(prompt) {
+  if (!GEMINI_KEY) throw new Error('GEMINI_API_KEY не задан в .env');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.3, responseMimeType: 'application/json' },
+    }),
+  });
+  if (!r.ok) { const tx = await r.text(); throw new Error(`Gemini ${r.status}: ${tx.slice(0, 300)}`); }
+  const j = await r.json();
+  return (j?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
+}
+
+function leadsSignature(rows) {
+  const crypto = require('crypto');
+  const parts = rows.map((r) => `${r.id}:${r.status}:${r.rating}:${new Date(r.updated_at).getTime()}`);
+  return crypto.createHash('sha1').update(rows.length + '|' + parts.join(',')).digest('hex');
+}
+
+// Текущий (последний) кэшированный анализ
+app.get('/api/admin/ai/analysis', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT content, leads_sig, created_at FROM ai_analysis ORDER BY id DESC LIMIT 1`);
+    if (!rows.length) return res.json({ analysis: null });
+    res.json({ analysis: rows[0].content, cached_at: rows[0].created_at, sig: rows[0].leads_sig });
+  } catch (e) {
+    console.error('GET /api/admin/ai/analysis:', e.message);
+    res.status(500).json({ error: 'Ошибка чтения анализа' });
+  }
+});
+
+// Запуск анализа. Если заявки не менялись (та же подпись) — отдаём кэш без вызова ИИ.
+app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (req, res) => {
+  const force = !!(req.body && req.body.force);
+  try {
+    const { rows: leads } = await db.query(
+      `SELECT id, full_name, email, phone, subject, message, status, admin_comment, rating, created_at, updated_at
+       FROM leads ORDER BY created_at DESC LIMIT 200`
+    );
+    const sig = leadsSignature(leads);
+
+    if (!force) {
+      const { rows: cached } = await db.query(
+        `SELECT content, created_at FROM ai_analysis WHERE leads_sig = $1 ORDER BY id DESC LIMIT 1`, [sig]
+      );
+      if (cached.length) return res.json({ analysis: cached[0].content, cached_at: cached[0].created_at, fromCache: true });
+    }
+
+    if (!leads.length) {
+      const empty = { summary: 'Заявок пока нет — анализировать нечего.', important_clients: [], main_problems: [], recommendations: [] };
+      await db.query(`INSERT INTO ai_analysis (leads_sig, content) VALUES ($1, $2)`, [sig, JSON.stringify(empty)]);
+      return res.json({ analysis: empty, fromCache: false });
+    }
+
+    const compact = leads.slice(0, 80).map((l) => ({
+      id: l.id, name: l.full_name,
+      subject: l.subject, message: (l.message || '').slice(0, 160),
+      status: l.status, rating: l.rating, note: (l.admin_comment || '').slice(0, 120),
+    }));
+    const prompt =
+`Проанализируй заявки клиентов IT-компании DDC. rating (0-5) — это оценка клиента сотрудником (важность/качество клиента), не отзыв клиента.
+Верни только JSON:
+{"summary":"2-3 предложения","important_clients":[{"id":число,"name":"имя","priority":"high|medium|low","reason":"кратко"}],"main_problems":[{"problem":"кратко","detail":"кратко"}],"recommendations":["шаг"]}
+До 6 важных клиентов. Кратко, по-русски. Заявки: ${JSON.stringify(compact)}`;
+
+    const text = await callGemini(prompt);
+    let analysis;
+    try { analysis = JSON.parse(text.replace(/```json|```/g, '').trim()); }
+    catch { analysis = { summary: text.slice(0, 1200), important_clients: [], main_problems: [], recommendations: [] }; }
+
+    await db.query(`INSERT INTO ai_analysis (leads_sig, content) VALUES ($1, $2)`, [sig, JSON.stringify(analysis)]);
+    res.json({ analysis, fromCache: false });
+  } catch (e) {
+    console.error('POST /api/admin/ai/analyze:', e.message);
+    res.status(502).json({ error: 'ИИ-анализ недоступен: ' + e.message });
+  }
+});
+
 // Health-check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 

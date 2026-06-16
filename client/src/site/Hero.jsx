@@ -7,12 +7,7 @@ export default function Hero() {
   const go = (id) => () => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   return (
     <header className="hero" id="top">
-      <div className="hero-orbs">
-        <div className="orb o1" /><div className="orb o2" /><div className="orb o3" />
-      </div>
       <div className="hero-inner">
-        <div className="eyebrow">{t(lang, 'hero.eyebrow')}</div>
-        <h1>{t(lang, 'hero.t1')}<br /><span className="grad">{t(lang, 'hero.t2')}</span></h1>
         <p className="hero-sub">{t(lang, 'hero.sub')}</p>
         <div className="hero-cta">
           <button className="btn btn-primary" onClick={go('services')}>{t(lang, 'hero.cta1')}</button>

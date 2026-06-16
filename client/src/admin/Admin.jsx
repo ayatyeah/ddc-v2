@@ -6,15 +6,29 @@ import Leads from './Leads.jsx';
 import NewsManager from './NewsManager.jsx';
 import Analytics from './Analytics.jsx';
 import Users from './Users.jsx';
+import AiPanel from './AiPanel.jsx';
 import './admin.css';
 
 const ROLE_LABEL = { admin: 'Администратор', editor: 'Редактор', viewer: 'Просмотр' };
+const TITLES = { leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', news: 'Новости', users: 'Пользователи' };
+
+function Ico({ name, size = 20 }) {
+  const p = {
+    leads: <><path d="M4 6h16M4 12h16M4 18h10" /></>,
+    ai: <><circle cx="12" cy="12" r="3.2" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>,
+    analytics: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
+    news: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
+    users: <><circle cx="9" cy="8" r="3" /><path d="M3 20a6 6 0 0 1 12 0M16 6.5a3 3 0 0 1 0 5M21 20a5 5 0 0 0-4-4.9" /></>,
+  }[name];
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
+}
 
 export default function Admin() {
   const theme = useTheme();
-  const [state, setState] = useState('checking'); // checking | login | app
+  const [state, setState] = useState('checking');
   const [me, setMe] = useState({ username: '', role: 'viewer' });
   const [tab, setTab] = useState('leads');
+  const [focusLead, setFocusLead] = useState(null);
 
   const [login, setLogin] = useState('');
   const [pass, setPass] = useState('');
@@ -56,7 +70,7 @@ export default function Admin() {
           <div className="adm-login-card">
             <div className="adm-login-logo"><img src="/ddc.png" alt="" className="adm-logo-img" /> DDC · Админ</div>
             <h1>Вход в панель</h1>
-            <p className="sub">Центр цифрового развития НБК</p>
+            <p className="sub">Центр цифрового развития</p>
             <div className="adm-field">
               <label>Логин</label>
               <input className="adm-input" value={login} onChange={(e) => setLogin(e.target.value)}
@@ -82,32 +96,50 @@ export default function Admin() {
   const canEdit = role === 'admin' || role === 'editor';
   const isAdmin = role === 'admin';
 
+  const items = [
+    { id: 'leads', show: true },
+    { id: 'ai', show: canEdit },
+    { id: 'analytics', show: true },
+    { id: 'news', show: true },
+    { id: 'users', show: isAdmin },
+  ].filter((x) => x.show);
+
   return (
-    <div className="adm">
-      <header className="adm-top">
-        <div className="brand"><img src="/ddc.png" alt="" className="adm-logo-img" /> DDC <small>Админ-панель</small></div>
-        <span className="sp" />
-        {me.username && <span className="who">👤 {me.username} <span className={`us-role r-${role}`}>{ROLE_LABEL[role]}</span></span>}
-        <button className="adm-ghost" onClick={toggleTheme} aria-label="Тема">
-          {theme === 'dark' ? <IcoMoon size={16} /> : <IcoSun size={16} />}
-        </button>
-        <a className="adm-ghost" href="/" data-spa>← На сайт</a>
-        <button className="adm-ghost" onClick={doLogout}>Выйти</button>
-      </header>
+    <div className="adm adm-shell">
+      <aside className="adm-rail">
+        <div className="rail-brand"><img src="/ddc.png" alt="DDC" /></div>
+        <nav className="rail-nav">
+          {items.map((it) => (
+            <button key={it.id} className={`rail-btn ${tab === it.id ? 'active' : ''}`} onClick={() => setTab(it.id)} title={TITLES[it.id]}>
+              <Ico name={it.id} /><span>{TITLES[it.id]}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="rail-foot">
+          <button className="rail-icon" onClick={toggleTheme} aria-label="Тема">{theme === 'dark' ? <IcoMoon size={18} /> : <IcoSun size={18} />}</button>
+          <a className="rail-icon" href="/" data-spa aria-label="На сайт">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+          </a>
+          <button className="rail-icon" onClick={doLogout} aria-label="Выйти">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
+          </button>
+        </div>
+      </aside>
 
-      <div className="adm-tabs">
-        <button className={`adm-tab ${tab === 'leads' ? 'active' : ''}`} onClick={() => setTab('leads')}>Заявки</button>
-        <button className={`adm-tab ${tab === 'analytics' ? 'active' : ''}`} onClick={() => setTab('analytics')}>Аналитика</button>
-        <button className={`adm-tab ${tab === 'news' ? 'active' : ''}`} onClick={() => setTab('news')}>Новости</button>
-        {isAdmin && <button className={`adm-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>Пользователи</button>}
+      <div className="adm-body">
+        <header className="adm-bar">
+          <h1 className="adm-bar-title">{TITLES[tab]}</h1>
+          <span className="sp" />
+          {me.username && <span className="who">{me.username} <span className={`us-role r-${role}`}>{ROLE_LABEL[role]}</span></span>}
+        </header>
+        <main className="adm-main">
+          {tab === 'leads' && <Leads onAuthLost={() => setState('login')} canEdit={canEdit} focusId={focusLead} />}
+          {tab === 'ai' && canEdit && <AiPanel onAuthLost={() => setState('login')} onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />}
+          {tab === 'analytics' && <Analytics onAuthLost={() => setState('login')} />}
+          {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEdit} />}
+          {tab === 'users' && isAdmin && <Users onAuthLost={() => setState('login')} me={me} />}
+        </main>
       </div>
-
-      <main className="adm-main">
-        {tab === 'leads' && <Leads onAuthLost={() => setState('login')} canEdit={canEdit} />}
-        {tab === 'analytics' && <Analytics onAuthLost={() => setState('login')} />}
-        {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEdit} />}
-        {tab === 'users' && isAdmin && <Users onAuthLost={() => setState('login')} me={me} />}
-      </main>
     </div>
   );
 }

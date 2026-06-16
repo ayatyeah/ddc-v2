@@ -3,9 +3,9 @@
 export const DICT = {
   ru: {
     'nav.services': 'Услуги', 'nav.about': 'О нас', 'nav.news': 'Новости', 'nav.contacts': 'Контакты',
-    'hero.eyebrow': 'Независимая ИТ-компания · Казахстан',
+    'hero.eyebrow': 'АО «Национальный Банк»',
     'hero.t1': 'Центр', 'hero.t2': 'цифрового развития',
-    'hero.sub': 'Мы — самостоятельная ИТ-компания, которая создаёт цифровые продукты и инфраструктуру для финансового сектора Казахстана. С 1996 года среди наших ключевых партнёров — Национальный Банк.',
+    'hero.sub': 'Цифровые продукты и инфраструктура для финансового сектора Казахстана.',
     'hero.cta1': 'Наши услуги', 'hero.cta2': 'Связаться',
     'hq.eyebrow': 'Штаб-квартира',
     'hq.title': 'Где рождаются цифровые продукты',
@@ -49,9 +49,9 @@ export const DICT = {
   },
   kk: {
     'nav.services': 'Қызметтер', 'nav.about': 'Біз туралы', 'nav.news': 'Жаңалықтар', 'nav.contacts': 'Байланыс',
-    'hero.eyebrow': 'Тәуелсіз IT-компания · Қазақстан',
+    'hero.eyebrow': '«Ұлттық Банк» АҚ',
     'hero.t1': 'Цифрлық', 'hero.t2': 'даму орталығы',
-    'hero.sub': 'Біз — Қазақстанның қаржы секторына арналған цифрлық өнімдер мен инфрақұрылым жасайтын дербес IT-компаниямыз. 1996 жылдан бері негізгі серіктестеріміздің бірі — Ұлттық Банк.',
+    'hero.sub': 'Қазақстанның қаржы секторына арналған цифрлық өнімдер мен инфрақұрылым.',
     'hero.cta1': 'Қызметтер', 'hero.cta2': 'Байланысу',
     'hq.eyebrow': 'Бас кеңсе',
     'hq.title': 'Цифрлық өнімдер осы жерде туады',
@@ -95,9 +95,9 @@ export const DICT = {
   },
   en: {
     'nav.services': 'Services', 'nav.about': 'About', 'nav.news': 'News', 'nav.contacts': 'Contacts',
-    'hero.eyebrow': 'Independent IT company · Kazakhstan',
+    'hero.eyebrow': 'National Bank JSC',
     'hero.t1': 'Digital', 'hero.t2': 'Development Center',
-    'hero.sub': 'We are an independent IT company building digital products and infrastructure for Kazakhstan\u2019s financial sector. Since 1996, the National Bank has been among our key partners.',
+    'hero.sub': 'Digital products and infrastructure for Kazakhstan\u2019s financial sector.',
     'hero.cta1': 'Our services', 'hero.cta2': 'Get in touch',
     'hq.eyebrow': 'Headquarters',
     'hq.title': 'Where digital products take shape',

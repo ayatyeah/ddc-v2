@@ -214,3 +214,85 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .an-rrow b { width: 26px; text-align: right; color: var(--ink); }
 .an-hint { font-size: 12px; color: var(--ink-faint); }
 @media (max-width: 760px) { .an-grid { grid-template-columns: 1fr; } }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Рестайл админки: левый рейл (Refero-стиль), светлые карточки, ИИ-панель
+   ════════════════════════════════════════════════════════════════════════════ */
+.adm-shell { display: flex; min-height: 100vh; background: var(--canvas); }
+
+.adm-rail {
+  position: sticky; top: 0; align-self: flex-start; height: 100vh;
+  width: 92px; flex: 0 0 92px; display: flex; flex-direction: column; align-items: center;
+  gap: 8px; padding: 18px 10px; background: #0e1116; color: #cfd6e2;
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+.rail-brand { width: 44px; height: 44px; border-radius: 13px; background: #fff; display: grid; place-items: center; margin-bottom: 14px; }
+.rail-brand img { width: 30px; height: 30px; object-fit: contain; }
+.rail-nav { display: flex; flex-direction: column; gap: 6px; width: 100%; align-items: stretch; }
+.rail-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 11px 4px;
+  border: none; background: transparent; color: #8a93a6; border-radius: 14px; cursor: pointer;
+  font-size: 10.5px; letter-spacing: 0.01em; transition: background 0.18s, color 0.18s;
+}
+.rail-btn span { line-height: 1; }
+.rail-btn:hover { color: #e8edf5; background: rgba(255,255,255,0.05); }
+.rail-btn.active { color: #fff; background: var(--blue); }
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.rail-icon {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255,255,255,0.05); color: #aab3c4; border: none; cursor: pointer; transition: background 0.18s, color 0.18s;
+}
+.rail-icon:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+.adm-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.adm-bar {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 14px;
+  padding: 22px 34px; background: color-mix(in srgb, var(--canvas) 78%, transparent);
+  backdrop-filter: saturate(160%) blur(14px); border-bottom: 1px solid var(--line);
+}
+.adm-bar-title { font-family: var(--display); font-weight: 700; font-size: 1.5rem; letter-spacing: -0.01em; }
+.adm-bar .sp { flex: 1; }
+.adm-bar .who { font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; }
+
+.adm-main { padding: 30px 34px 60px; max-width: 1280px; }
+
+@media (max-width: 720px) {
+  .adm-rail { width: 72px; flex-basis: 72px; }
+  .rail-btn span { display: none; }
+  .adm-bar, .adm-main { padding-left: 18px; padding-right: 18px; }
+}
+
+/* ── ИИ-панель ──────────────────────────────────────────────────────────────── */
+.ai-wrap { display: flex; flex-direction: column; gap: 18px; }
+.ai-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.ai-title { font-family: var(--display); font-weight: 700; font-size: 1.35rem; letter-spacing: -0.01em; }
+.ai-sub { margin-top: 6px; max-width: 60ch; font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; }
+.ai-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.ai-meta { font-size: 12px; color: var(--ink-faint); }
+.ai-note { font-size: 13px; color: var(--ink-soft); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.ai-err { font-size: 13px; color: #c0455a; background: rgba(192,69,90,0.08); border: 1px solid rgba(192,69,90,0.25); border-radius: 12px; padding: 10px 14px; }
+.ai-empty { color: var(--ink-faint); font-size: 14px; padding: 40px 0; text-align: center; }
+
+.ai-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.ai-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 20px; box-shadow: var(--shadow-card); }
+.ai-summary { grid-column: 1 / -1; }
+.ai-card-h { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 12px; }
+.ai-card p { font-size: 14.5px; line-height: 1.6; color: var(--ink); }
+
+.ai-clients { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.ai-clients li { display: flex; gap: 12px; align-items: flex-start; }
+.ai-pri { flex: 0 0 auto; font-size: 11px; font-weight: 600; color: #fff; padding: 3px 9px; border-radius: 999px; }
+.ai-cname { font-weight: 600; font-size: 14px; }
+.ai-id { color: var(--ink-faint); font-weight: 400; }
+.ai-reason { font-size: 13px; color: var(--ink-soft); margin-top: 2px; line-height: 1.45; }
+.ai-probs, .ai-recs { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.ai-probs li, .ai-recs li { font-size: 13.5px; line-height: 1.5; color: var(--ink); padding-left: 16px; position: relative; }
+.ai-probs li::before, .ai-recs li::before { content: ''; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+.ai-recs li::before { background: var(--gold); }
+
+/* Подсветка клиента при переходе из ИИ-аналитики */
+.lead-flash.flash-on > td, tr.flash-on > td { animation: leadFlash 1.8s var(--ease); }
+@keyframes leadFlash { 0%, 100% { background: transparent; } 20%, 60% { background: rgba(45,111,224,0.12); } }
+.ai-link { background: none; border: none; padding: 0; font: inherit; color: var(--blue); cursor: pointer; font-weight: 600; }
+.ai-link:hover { text-decoration: underline; }
+.ai-link .ai-id { color: var(--ink-faint); font-weight: 400; font-size: 12px; }
