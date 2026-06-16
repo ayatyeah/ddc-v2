@@ -1,109 +1,75 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTheme } from '../store.js';
+import { useRoute } from './router.js';
+import { ROUTES } from './pages.jsx';
 import Nav from './Nav.jsx';
 import Brand from './Brand.jsx';
-import Hero from './Hero.jsx';
-import BuildingShot from './BuildingShot.jsx';
-import Services from './Services.jsx';
-import Showcase from './Showcase.jsx';
-import Stats from './Stats.jsx';
-import Workstation from './Workstation.jsx';
-import About from './About.jsx';
-import News from './News.jsx';
-import Contact from './Contact.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Background3D from './Background3D.jsx';
 import Fog from './Fog.jsx';
 
-/* Мягкие палитры фона на ключевых точках прокрутки (0 → верх, 1 → низ).
-   top — пятно-подсветка сверху, a/b — вертикальный градиент. */
-const STOPS = {
-  light: [
-    { p: 0.00, top: '#cfe6ff', a: '#8fbdf0', b: '#e6f3ff' },
-    { p: 0.30, top: '#c7e0ff', a: '#84b4ec', b: '#e2f0ff' },
-    { p: 0.55, top: '#d8e9ff', a: '#9cc4f2', b: '#ecf5ff' },
-    { p: 0.78, top: '#cfe6ff', a: '#8fbdf0', b: '#e8f3ff' },
-    { p: 1.00, top: '#cfe6ff', a: '#8fbdf0', b: '#e6f3ff' },
-  ],
-  dark: [
-    { p: 0.00, top: '#0a1430', a: '#000000', b: '#05080f' },
-    { p: 0.30, top: '#0b1a38', a: '#02040a', b: '#070b16' },
-    { p: 0.55, top: '#251c08', a: '#050402', b: '#0f0c06' },
-    { p: 0.78, top: '#08231a', a: '#020503', b: '#06100b' },
-    { p: 1.00, top: '#0a1430', a: '#000000', b: '#05080f' },
-  ],
-};
-
-function hex(v) {
-  const n = parseInt(v.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function lerp(a, b, k) {
-  const ca = hex(a), cb = hex(b);
-  const r = Math.round(ca[0] + (cb[0] - ca[0]) * k);
-  const g = Math.round(ca[1] + (cb[1] - ca[1]) * k);
-  const bl = Math.round(ca[2] + (cb[2] - ca[2]) * k);
-  return `rgb(${r}, ${g}, ${bl})`;
-}
+function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 
 export default function Site() {
   const theme = useTheme();
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
+  const path = useRoute();
+  const route = ROUTES[path] || ROUTES['/'];
+  const Page = route.Comp;
 
+  const sceneRef = useRef(null);
+  const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); }, []); // eslint-disable-line
+
+  // 3D-фон: на главной здания «играют» при скролле (башни→планета→карта),
+  // на внутренних страницах — фиксированное состояние под маршрут (бесшовный лерп в сцене).
   useEffect(() => {
-    const bg = document.getElementById('scroll-bg');
-    if (!bg) return;
-    bg.style.transition = 'background 0.18s linear';
+    if (path === '/') {
+      const onScroll = () => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        const sp = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+        sceneRef.current?.setTarget(0.04 + sp * 0.56);
+      };
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+      return () => window.removeEventListener('scroll', onScroll);
+    }
+    sceneRef.current?.setTarget(route.prog);
+  }, [path, route.prog]);
+
+  // Палитра неба: плавный переход цвета под страницу
+  const curRef = useRef(null);
+  useEffect(() => {
+    const bg = document.getElementById('scroll-bg'); if (!bg) return;
+    const target = () => (theme === 'dark' ? route.dark : route.light);
+    if (!curRef.current) { const t = target(); curRef.current = { top: hex(t.top), a: hex(t.a), b: hex(t.b) }; }
     let raf = 0;
-
-    const apply = () => {
-      raf = 0;
-      const stops = STOPS[themeRef.current] || STOPS.light;
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      const p = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
-      let i = 0;
-      while (i < stops.length - 2 && p > stops[i + 1].p) i++;
-      const s0 = stops[i], s1 = stops[i + 1];
-      const k = s1.p === s0.p ? 0 : (p - s0.p) / (s1.p - s0.p);
-      bg.style.setProperty('--bg-top', lerp(s0.top, s1.top, k));
-      bg.style.setProperty('--bg-a', lerp(s0.a, s1.a, k));
-      bg.style.setProperty('--bg-b', lerp(s0.b, s1.b, k));
+    const set = (k, c) => bg.style.setProperty(k, `rgb(${c[0]|0}, ${c[1]|0}, ${c[2]|0})`);
+    const tick = () => {
+      const t = target(); const tg = { top: hex(t.top), a: hex(t.a), b: hex(t.b) };
+      const cur = curRef.current; let done = true;
+      for (const key of ['top', 'a', 'b']) {
+        for (let i = 0; i < 3; i++) {
+          const d = tg[key][i] - cur[key][i];
+          if (Math.abs(d) > 0.6) { cur[key][i] += d * 0.08; done = false; } else cur[key][i] = tg[key][i];
+        }
+      }
+      set('--bg-top', cur.top); set('--bg-a', cur.a); set('--bg-b', cur.b);
+      raf = done ? 0 : requestAnimationFrame(tick);
     };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-
-    apply();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  // Пересчёт палитры при переключении темы.
-  useEffect(() => { window.dispatchEvent(new Event('scroll')); }, [theme]);
+    tick();
+    return () => { if (raf) cancelAnimationFrame(raf); };
+  }, [route, theme]);
 
   return (
     <>
       <div id="scroll-bg" />
-      <Background3D />
+      <Background3D onReady={onReady} />
       <Fog />
       <div id="scroll-grain" />
       <Nav />
       <Brand />
-      <main>
-        <Hero />
-        <BuildingShot />
-        <Services />
-        <Showcase />
-        <Stats />
-        <Workstation />
-        <About />
-        <News />
-        <Contact />
+      <main key={path} className="page-enter">
+        <Page />
       </main>
       <Footer />
       <Assistant />

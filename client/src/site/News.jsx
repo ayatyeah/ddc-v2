@@ -22,6 +22,8 @@ export default function News() {
   const [active, setActive] = useState(null);
   const [idx, setIdx] = useState(0);
   const trackRef = useRef(null);
+  const [feed, setFeed] = useState([]);
+  const [feedAt, setFeedAt] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -29,7 +31,20 @@ export default function News() {
       .then((rows) => { if (alive) setItems(Array.isArray(rows) ? rows : []); })
       .catch(() => { if (alive) setItems([]); })
       .finally(() => { if (alive) setLoaded(true); });
-    return () => { alive = false; };
+
+    let tries = 0, timer = 0;
+    const loadFeed = () => {
+      getJSON('/api/news/aggregated')
+        .then((d) => {
+          if (!alive) return;
+          const arr = Array.isArray(d.items) ? d.items : [];
+          setFeed(arr); setFeedAt(d.updated_at || null);
+          if (arr.length === 0 && tries < 3) { tries += 1; timer = setTimeout(loadFeed, 6000); } // лента ещё собирается
+        })
+        .catch(() => {});
+    };
+    loadFeed();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
   }, []);
 
   useEffect(() => {
@@ -67,7 +82,8 @@ export default function News() {
           <h2 className="h2" style={{ marginTop: 14 }}>{t(lang, 'news.title')}</h2>
         </Reveal>
 
-        <div style={{ marginTop: 34 }}>
+        <h3 className="news-part">{t(lang, 'news.ours')}</h3>
+        <div style={{ marginTop: 20 }}>
           {loaded && items.length === 0 ? (
             <div className="news-empty">{t(lang, 'news.empty')}</div>
           ) : (
@@ -106,6 +122,23 @@ export default function News() {
               </div>
             </Reveal>
           )}
+        </div>
+
+        <h3 className="news-part news-part-ai">{t(lang, 'news.ai')} <span className="ai-tag">AI</span></h3>
+        <div className="news-ai-note">
+          {t(lang, 'news.aiNote')}{feedAt ? ` · ${t(lang, 'news.updated')} ${fmtDate(feedAt, lang)}` : ''}
+        </div>
+        <div className="ai-feed">
+          {feed.length === 0 ? (
+            <div className="news-empty">{t(lang, 'news.aiEmpty')}</div>
+          ) : feed.map((it, i) => (
+            <a className="af-card" key={i} href={it.url || '#'} target="_blank" rel="noopener noreferrer">
+              <div className="af-src">{it.source}{it.date ? ` · ${it.date}` : ''}</div>
+              <h4>{it.title}</h4>
+              {it.summary && <p>{it.summary}</p>}
+              <span className="more">{t(lang, 'news.read')} ↗</span>
+            </a>
+          ))}
         </div>
       </div>
 

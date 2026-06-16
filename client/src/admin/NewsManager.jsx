@@ -153,6 +153,20 @@ export default function NewsManager({ onAuthLost, canEdit = true }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState('');
+
+  const refreshAi = async () => {
+    setAiBusy(true); setAiMsg('');
+    try {
+      const d = await sendJSON('/api/admin/news/aggregate/refresh', 'POST', {});
+      const when = d.updated_at ? new Date(d.updated_at).toLocaleString('ru-RU') : '';
+      setAiMsg(`AI-лента обновлена: ${d.count} новостей${when ? ` · ${when}` : ''}.`);
+    } catch (e) {
+      if (e.status === 401) return onAuthLost?.();
+      setAiMsg(e.data?.error || 'Не удалось обновить AI-ленту.');
+    } finally { setAiBusy(false); }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -179,8 +193,10 @@ export default function NewsManager({ onAuthLost, canEdit = true }) {
       <div className="nm-head">
         <h2>Новости</h2>
         <span style={{ flex: 1 }} />
+        {canEdit && <button className="adm-ghost" onClick={refreshAi} disabled={aiBusy} title="Принудительно обновить AI-ленту (Профит.kz, Digital Business)">{aiBusy ? 'Обновляю ленту…' : '↻ Обновить AI-ленту'}</button>}
         {canEdit && <button className="adm-btn" onClick={() => setEditing({})}>+ Добавить новость</button>}
       </div>
+      {aiMsg && <div className="adm-note">{aiMsg}</div>}
       {!canEdit && <div className="adm-note">Режим просмотра: редактирование новостей недоступно для вашей роли.</div>}
 
       {loaded && items.length === 0 ? (

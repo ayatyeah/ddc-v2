@@ -1,38 +1,35 @@
 import { useEffect, useState } from 'react';
-import { useLang, useTheme, setLang, toggleTheme, LANGS } from '../store.js';
+import { useLang, setLang, LANGS } from '../store.js';
 import { t } from '../i18n.js';
-import { IcoSun, IcoMoon } from './icons.jsx';
+import { useRoute, navigate } from './router.js';
+
+const LINKS = [
+  { to: '/', k: 'nav.home' },
+  { to: '/uslugi', k: 'nav.services' },
+  { to: '/o-nas', k: 'nav.about' },
+  { to: '/kontakty', k: 'nav.contacts' },
+];
 
 export default function Nav() {
   const lang = useLang();
-  const theme = useTheme();
-  const [solid, setSolid] = useState(false);
+  const path = useRoute();
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    let cur = window.scrollY > 12; setSolid(cur);
-    const onScroll = () => { const next = window.scrollY > 12; if (next !== cur) { cur = next; setSolid(next); } };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  useEffect(() => { setOpen(false); }, [path]);
 
-  const go = (id) => (e) => {
-    e.preventDefault();
-    setOpen(false);
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
-  };
+  const go = (to) => (e) => { e.preventDefault(); setOpen(false); navigate(to); };
 
   return (
-    <nav className={`nav ${solid ? 'solid' : ''}`}>
+    <nav className="nav">
       <div className="wrap">
-        <div className={`nav-links ${open ? 'open' : ''}`}>
-          <a href="#services" onClick={go('services')}>{t(lang, 'nav.services')}</a>
-          <a href="#about" onClick={go('about')}>{t(lang, 'nav.about')}</a>
-          <a href="#news" onClick={go('news')}>{t(lang, 'nav.news')}</a>
-          <a href="#contacts" onClick={go('contacts')}>{t(lang, 'nav.contacts')}</a>
-        </div>
-        <div className="nav-right">
+        <div className="nav-island">
+          <div className={`nav-links ${open ? 'open' : ''}`}>
+            {LINKS.map((l) => (
+              <a key={l.to} href={l.to} onClick={go(l.to)} className={path === l.to ? 'active' : ''}>
+                {t(lang, l.k)}
+              </a>
+            ))}
+          </div>
           <div className="lang">
             {LANGS.map((l) => (
               <button key={l} className={l === lang ? 'active' : ''} onClick={() => setLang(l)}>
@@ -40,9 +37,6 @@ export default function Nav() {
               </button>
             ))}
           </div>
-          <button className="icon-btn" onClick={toggleTheme} aria-label="Тема">
-            {theme === 'dark' ? <IcoMoon size={17} /> : <IcoSun size={17} />}
-          </button>
           <button className="icon-btn nav-burger" onClick={() => setOpen((o) => !o)} aria-label="Меню">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M3 6h18M3 12h18M3 18h18" />

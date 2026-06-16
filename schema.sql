@@ -139,3 +139,13 @@ CREATE TABLE IF NOT EXISTS ai_analysis (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_ai_sig ON ai_analysis (leads_sig);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- feed_cache — кэш AI-агрегатора новостей (цифровой Казахстан / технологии).
+-- Обновляется не чаще раза в 24 часа; content — JSON-массив новостей.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS feed_cache (
+  id         SERIAL PRIMARY KEY,
+  content    JSONB       NOT NULL,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -139,15 +139,27 @@ export function initScene(canvas) {
   function placePlanet() { planet.scale.setScalar(L.kzS * 1.12); planet.position.set(0, L.cy, CZ - 9); }
   placePlanet();
 
+  // ── Облака: смягчают исчезновение зданий (здания «растворяются» в них) ───────
+  const cloudCv = document.createElement('canvas'); cloudCv.width = cloudCv.height = 128;
+  const cctx = cloudCv.getContext('2d');
+  const cgrad = cctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  cgrad.addColorStop(0, 'rgba(255,255,255,0.95)'); cgrad.addColorStop(0.5, 'rgba(255,255,255,0.45)'); cgrad.addColorStop(1, 'rgba(255,255,255,0)');
+  cctx.fillStyle = cgrad; cctx.fillRect(0, 0, 128, 128);
+  const cloudTex = new THREE.CanvasTexture(cloudCv);
+  const clouds = [];
+  const cloudDefs = [[-9, 31, -7, 15], [8, 34, -6, 14], [0, 27, -5, 13], [-5, 39, -9, 11], [6, 25, -8, 12], [-2, 35, -4, 10]];
+  for (const [cx, cyy, cz, cs] of cloudDefs) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
+    sp.position.set(cx, cyy, cz); sp.scale.set(cs, cs * 0.6, 1); sp.userData.bx = cx;
+    clouds.push(sp); scene.add(sp);
+  }
+
 
   // ── (3D-логотип убран — бренд показывается DOM-локапом) ─────────────────────
 
-  // ── Камера / скролл ──────────────────────────────────────────────────────────
+  // ── Камера / целевое состояние (задаётся маршрутом) ─────────────────────────
   let progress = 0, tx = 0, ty = 0, px = 0, py = 0, pState = -1;
-  const onScroll = () => { const max = document.documentElement.scrollHeight - window.innerHeight; progress = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0; };
   const onPointer = (e) => { tx = (e.clientX / window.innerWidth - 0.5) * 2; ty = (e.clientY / window.innerHeight - 0.5) * 2; };
-  onScroll();
-  window.addEventListener('scroll', onScroll, { passive: true });
   if (!reduce) window.addEventListener('pointermove', onPointer, { passive: true });
 
   function resize() {
@@ -164,7 +176,7 @@ export function initScene(canvas) {
     raf = requestAnimationFrame(loop);
     if (document.hidden) return;
     const t = clock.getElapsedTime();
-    disp += (progress - disp) * 0.12;          // сглаживание резкого скролла (меньше лагов)
+    disp += (progress - disp) * 0.05;          // плавный бесшовный переход между страницами
     const p = disp;
 
     // камера: фокус на верхних этажах / крышах (адаптивно)
@@ -178,6 +190,14 @@ export function initScene(canvas) {
     for (const mt of towerMats) mt.opacity = 1 - fade;
     gBuild.visible = fade < 0.999;
     if (beacon) beacon.material.emissiveIntensity = (0.7 + 0.6 * (0.5 + 0.5 * Math.sin(t * 3))) * (1 - fade);
+
+    // облака появляются, пока башни тают, и расходятся после — мягкое исчезновение
+    const cloudOp = smooth(p, 0.06, 0.16) * (1 - smooth(p, 0.26, 0.34));
+    for (const sp of clouds) {
+      sp.visible = cloudOp > 0.01;
+      sp.material.opacity = cloudOp * 0.92;
+      sp.position.x = sp.userData.bx + Math.sin(t * 0.14 + sp.userData.bx) * 1.4;
+    }
 
     // планета: вращается (быстрее при скролле), исчезает к моменту сборки DDC
     planet.rotation.y = t * 0.12 + p * 5.0;
@@ -204,18 +224,19 @@ export function initScene(canvas) {
       pGeo.attributes.position.needsUpdate = true; pState = -1;
     }
     pMat.uniforms.uTime.value = t;                            // горящие огоньки + блики
-    pMat.uniforms.uColor.value.setHex(isDark() ? 0x9fd0ff : 0x8fc4ff);
+    pMat.uniforms.uColor.value.setHex(0x9fd0ff);
 
-    scene.fog.color.setHex(isDark() ? 0x0f1626 : 0xdfe8f5);
+    scene.fog.color.setHex(0x0f1626);
     renderer.render(scene, camera);
   }
   loop();
 
   return {
+    setTarget(p) { progress = Math.min(1, Math.max(0, p)); },
     dispose() {
       cancelAnimationFrame(raf);
-      window.removeEventListener('scroll', onScroll); window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
-      pMat.dispose(); pGeo.dispose(); planetTex.dispose(); [facadeA, facadeB].forEach((x) => x.dispose());
+      window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
+      pMat.dispose(); pGeo.dispose(); planetTex.dispose(); cloudTex.dispose(); [facadeA, facadeB].forEach((x) => x.dispose());
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const mm = o.material; (Array.isArray(mm) ? mm : [mm]).forEach((x) => x.dispose()); } });
       pmrem.dispose(); renderer.dispose();
     },

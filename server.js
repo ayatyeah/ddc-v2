@@ -174,7 +174,7 @@ app.get('/api/news', async (req, res) => {
   }
 });
 
-app.get('/api/news/:id', async (req, res) => {
+app.get('/api/news/:id(\\d+)', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
   try {
@@ -558,6 +558,97 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (r
   }
 });
 
+// ── AI-агрегатор новостей: цифровая жизнь и технологии Казахстана ─────────────
+const FEED_SOURCES = [
+  { name: 'Profit.kz', url: 'https://profit.kz/rss/' },
+  { name: 'Digital Business', url: 'https://digitalbusiness.kz/feed/' },
+];
+const FEED_TTL_MS = 24 * 60 * 60 * 1000;
+let buildInFlight = null;
+function runBuild() {
+  if (!buildInFlight) {
+    buildInFlight = buildFeed().catch((e) => { console.error('buildFeed:', e.message); return null; }).finally(() => { buildInFlight = null; });
+  }
+  return buildInFlight; // конкурентные вызовы ждут один и тот же сбор
+}
+
+function stripTags(s) {
+  return String(s || '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+function parseRss(xml, source) {
+  const items = [];
+  const blocks = String(xml).split(/<item[\s>]/i).slice(1);
+  for (const b of blocks.slice(0, 12)) {
+    const get = (tag) => { const m = b.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i')); return m ? stripTags(m[1]) : ''; };
+    const title = get('title');
+    let link = get('link');
+    if (!link) { const m = b.match(/<link[^>]*>([\s\S]*?)<\/link>/i); link = m ? m[1].trim() : ''; }
+    const date = get('pubDate');
+    const desc = get('description').slice(0, 240);
+    if (title) items.push({ title, url: link, date, desc, source });
+  }
+  return items;
+}
+async function fetchRss(src) {
+  try {
+    const r = await fetch(src.url, { headers: { 'User-Agent': 'Mozilla/5.0 DDC-NewsBot' } });
+    if (!r.ok) return [];
+    return parseRss(await r.text(), src.name);
+  } catch (e) { console.error('RSS', src.name, e.message); return []; }
+}
+async function buildFeed() {
+  const all = (await Promise.all(FEED_SOURCES.map(fetchRss))).flat();
+  if (!all.length) return null;
+  let curated = null;
+  try {
+    const input = all.slice(0, 24).map((x) => ({ title: x.title, source: x.source, url: x.url, date: x.date, desc: (x.desc || '').slice(0, 150) }));
+    const prompt =
+`Ниже — новости из казахстанских порталов. Отбери до 6 самых релевантных к цифровой жизни Казахстана, новым технологиям, ИТ, финтеху и цифровизации госуслуг.
+Верни ТОЛЬКО JSON-массив: [{"title":"заголовок на русском","summary":"1-2 предложения по-русски","url":"ссылка из данных","source":"источник из данных","date":"дата как есть"}].
+Новости: ${JSON.stringify(input)}`;
+    const parsed = parseJsonLoose(await callGemini(prompt));
+    if (Array.isArray(parsed)) curated = parsed;
+    else if (parsed && Array.isArray(parsed.items)) curated = parsed.items;
+  } catch (e) { console.error('feed Gemini:', e.message); }
+  if (!curated) curated = all.slice(0, 6).map((x) => ({ title: x.title, summary: x.desc || '', url: x.url, source: x.source, date: x.date }));
+  await db.query(`INSERT INTO feed_cache (content) VALUES ($1)`, [JSON.stringify(curated)]);
+  return curated;
+}
+async function refreshFeedIfStale(force) {
+  try {
+    const { rows } = await db.query(`SELECT fetched_at FROM feed_cache ORDER BY id DESC LIMIT 1`);
+    const fresh = rows.length && (Date.now() - new Date(rows[0].fetched_at).getTime() < FEED_TTL_MS);
+    if (fresh && !force) return;
+    await runBuild();
+  } catch (e) { console.error('refreshFeed:', e.message); }
+}
+// Публичная лента (отдаём кэш мгновенно; обновление — не чаще раза в сутки, в фоне)
+app.get('/api/news/aggregated', async (req, res) => {
+  try {
+    let { rows } = await db.query(`SELECT content, fetched_at FROM feed_cache ORDER BY id DESC LIMIT 1`);
+    if (!rows.length) {
+      await refreshFeedIfStale(true);
+      ({ rows } = await db.query(`SELECT content, fetched_at FROM feed_cache ORDER BY id DESC LIMIT 1`));
+    } else {
+      refreshFeedIfStale(false); // фоном, не блокируя ответ
+    }
+    if (!rows.length) return res.json({ items: [], updated_at: null });
+    res.json({ items: rows[0].content, updated_at: rows[0].fetched_at });
+  } catch (e) { console.error('GET /api/news/aggregated:', e.message); res.json({ items: [], updated_at: null }); }
+});
+
+// Принудительное обновление ленты из админки (вне 24-часового лимита)
+app.post('/api/admin/news/aggregate/refresh', auth, requireRole('admin', 'editor'), async (req, res) => {
+  try {
+    const items = await runBuild();
+    const { rows } = await db.query(`SELECT fetched_at FROM feed_cache ORDER BY id DESC LIMIT 1`);
+    res.json({ ok: true, count: Array.isArray(items) ? items.length : 0, updated_at: rows[0] ? rows[0].fetched_at : null });
+  } catch (e) {
+    console.error('POST /api/admin/news/aggregate/refresh:', e.message);
+    res.status(500).json({ error: 'Не удалось обновить ленту: ' + e.message });
+  }
+});
+
 // Health-check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -572,4 +663,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`ЦЦР backend слушает http://localhost:${PORT}`);
   console.log(`Сайт:    http://localhost:${PORT}/`);
   console.log(`Админка: http://localhost:${PORT}/admin`);
+  // Прогрев AI-ленты новостей (не чаще раза в сутки)
+  setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);
 });

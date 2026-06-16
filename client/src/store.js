@@ -15,7 +15,7 @@ function read(key, fallback, allowed) {
 
 let state = {
   lang: read('ddc_lang', 'ru', LANGS),
-  theme: read('ddc_theme', 'light', ['light', 'dark']),
+  theme: 'dark',
 };
 
 const listeners = new Set();
@@ -31,19 +31,18 @@ export function setLang(lang) {
   emit();
 }
 
-export function setTheme(theme) {
-  if (theme !== 'light' && theme !== 'dark') return;
-  state = { ...state, theme };
-  try { localStorage.setItem('ddc_theme', theme); } catch {}
-  document.documentElement.setAttribute('data-theme', theme);
+export function setTheme() {
+  // Тема зафиксирована: только тёмная (строгая изумрудная).
+  state = { ...state, theme: 'dark' };
+  document.documentElement.setAttribute('data-theme', 'dark');
   emit();
 }
 
-export function toggleTheme() { setTheme(state.theme === 'dark' ? 'light' : 'dark'); }
+export function toggleTheme() { /* тема зафиксирована тёмной */ }
 
 // Применяем сохранённые значения к <html> сразу при загрузке модуля.
 document.documentElement.lang = state.lang;
-document.documentElement.setAttribute('data-theme', state.theme);
+document.documentElement.setAttribute('data-theme', 'dark');
 
 export function useStore() { return useSyncExternalStore(subscribe, snapshot); }
 export function useLang() { return useStore().lang; }

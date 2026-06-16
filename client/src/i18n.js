@@ -2,7 +2,7 @@
    Новости приходят из API с полями на каждый язык, поэтому здесь только статика. */
 export const DICT = {
   ru: {
-    'nav.services': 'Услуги', 'nav.about': 'О нас', 'nav.news': 'Новости', 'nav.contacts': 'Контакты',
+    'nav.home': 'Главная', 'nav.services': 'Услуги', 'nav.about': 'О нас', 'nav.news': 'Новости', 'nav.contacts': 'Контакты',
     'hero.eyebrow': 'АО «Национальный Банк»',
     'hero.t1': 'Центр', 'hero.t2': 'цифрового развития',
     'hero.sub': 'Цифровые продукты и инфраструктура для финансового сектора Казахстана.',
@@ -41,6 +41,7 @@ export const DICT = {
     'about.board': 'Совет директоров',
     'news.eyebrow': 'Хроника', 'news.title': 'Новости', 'news.empty': 'Пока нет опубликованных новостей.',
     'news.read': 'Читать', 'news.close': 'Закрыть',
+    'news.ours': 'Наши новости', 'news.ai': 'Цифровой Казахстан', 'news.aiNote': 'AI-лента · обновляется раз в сутки · Profit.kz, Digital Business', 'news.aiEmpty': 'Лента обновляется — загляните чуть позже.', 'news.updated': 'Обновлено',
     'contact.eyebrow': 'Обратная связь', 'contact.title': 'Напишите нам',
     'contact.sub': 'Оставьте сообщение — мы ответим. Заявка попадёт напрямую к команде центра.',
     'contact.name': 'ФИО', 'contact.email': 'Email', 'contact.phone': 'Телефон',
@@ -53,7 +54,7 @@ export const DICT = {
     'footer.rights': 'Все права защищены', 'footer.admin': 'Админ-панель',
   },
   kk: {
-    'nav.services': 'Қызметтер', 'nav.about': 'Біз туралы', 'nav.news': 'Жаңалықтар', 'nav.contacts': 'Байланыс',
+    'nav.home': 'Басты бет', 'nav.services': 'Қызметтер', 'nav.about': 'Біз туралы', 'nav.news': 'Жаңалықтар', 'nav.contacts': 'Байланыс',
     'hero.eyebrow': '«Ұлттық Банк» АҚ',
     'hero.t1': 'Цифрлық', 'hero.t2': 'даму орталығы',
     'hero.sub': 'Қазақстанның қаржы секторына арналған цифрлық өнімдер мен инфрақұрылым.',
@@ -92,6 +93,7 @@ export const DICT = {
     'about.board': 'Директорлар кеңесі',
     'news.eyebrow': 'Шежіре', 'news.title': 'Жаңалықтар', 'news.empty': 'Жарияланған жаңалықтар әзірге жоқ.',
     'news.read': 'Оқу', 'news.close': 'Жабу',
+    'news.ours': 'Біздің жаңалықтар', 'news.ai': 'Цифрлық Қазақстан', 'news.aiNote': 'AI-лента · тәулігіне бір рет жаңарады · Profit.kz, Digital Business', 'news.aiEmpty': 'Лента жаңартылуда — сәл кейінірек қараңыз.', 'news.updated': 'Жаңартылды',
     'contact.eyebrow': 'Кері байланыс', 'contact.title': 'Бізге жазыңыз',
     'contact.sub': 'Хабарлама қалдырыңыз — жауап береміз. Өтінім тікелей орталық командасына түседі.',
     'contact.name': 'Аты-жөні', 'contact.email': 'Email', 'contact.phone': 'Телефон',
@@ -104,7 +106,7 @@ export const DICT = {
     'footer.rights': 'Барлық құқықтар қорғалған', 'footer.admin': 'Әкімші панелі',
   },
   en: {
-    'nav.services': 'Services', 'nav.about': 'About', 'nav.news': 'News', 'nav.contacts': 'Contacts',
+    'nav.home': 'Home', 'nav.services': 'Services', 'nav.about': 'About', 'nav.news': 'News', 'nav.contacts': 'Contacts',
     'hero.eyebrow': 'National Bank JSC',
     'hero.t1': 'Digital', 'hero.t2': 'Development Center',
     'hero.sub': 'Digital products and infrastructure for Kazakhstan\u2019s financial sector.',
@@ -143,6 +145,7 @@ export const DICT = {
     'about.board': 'Board of Directors',
     'news.eyebrow': 'Timeline', 'news.title': 'News', 'news.empty': 'No published news yet.',
     'news.read': 'Read', 'news.close': 'Close',
+    'news.ours': 'Our news', 'news.ai': 'Digital Kazakhstan', 'news.aiNote': 'AI feed · updates once a day · Profit.kz, Digital Business', 'news.aiEmpty': 'Feed is updating — check back soon.', 'news.updated': 'Updated',
     'contact.eyebrow': 'Feedback', 'contact.title': 'Get in touch',
     'contact.sub': 'Leave a message — we will reply. Your request goes straight to the center’s team.',
     'contact.name': 'Full name', 'contact.email': 'Email', 'contact.phone': 'Phone',
