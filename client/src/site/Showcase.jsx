@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLang } from '../store.js';
 import { t } from '../i18n.js';
 import Reveal from './Reveal.jsx';
@@ -16,6 +16,8 @@ export default function Showcase() {
   const lang = useLang();
   const canvasRef = useRef(null);
   const sectionRef = useRef(null);
+  const [panel, setPanel] = useState('c1'); // последняя выбранная карточка (для плавного закрытия)
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const inst = initBuilding(canvasRef.current);
@@ -31,6 +33,19 @@ export default function Showcase() {
     return () => { window.removeEventListener('scroll', onScroll); inst.dispose(); };
   }, []);
 
+  const click = (k) => (e) => {
+    e?.preventDefault?.();
+    if (open && panel === k) { setOpen(false); }
+    else { setPanel(k); setOpen(true); }
+  };
+
+  const color = (CHIPS.find((c) => c.k === panel) || CHIPS[0]).c;
+  const active = CHIPS.find((c) => c.k === panel) || CHIPS[0];
+  const isLeft = 'left' in active.style;
+  const panelStyle = isLeft ? { right: '4%' } : { left: '4%' };   // кнопка слева → плашка справа, и наоборот
+  if ('top' in active.style) panelStyle.top = active.style.top;
+  if ('bottom' in active.style) panelStyle.bottom = active.style.bottom;
+
   return (
     <section className="section showcase" ref={sectionRef}>
       <div className="wrap">
@@ -41,18 +56,26 @@ export default function Showcase() {
             <p className="lede" style={{ marginTop: 18 }}>{t(lang, 'showcase.sub')}</p>
           </Reveal>
           <Reveal delay={120}>
-            <div className="stage">
+            <div className={`stage ${open ? 'panel-open' : ''}`}>
               <canvas ref={canvasRef} />
               {CHIPS.map((ch, i) => (
                 <button
                   key={ch.k}
-                  className="chip"
+                  type="button"
+                  className={`chip ${open && panel === ch.k ? 'active' : ''} ${open && panel !== ch.k ? 'dimmed' : ''}`}
                   style={{ ...ch.style, animationDelay: `${i * 0.7}s` }}
-                  onClick={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}
+                  onClick={click(ch.k)}
+                  aria-expanded={open && panel === ch.k}
                 >
                   <i style={{ background: ch.c }} />{t(lang, `showcase.${ch.k}`)}
                 </button>
               ))}
+
+              <div className={`chip-info ${open ? 'show' : ''}`} style={panelStyle} role="dialog">
+                <button type="button" className="ci-close" onClick={() => setOpen(false)} aria-label="Закрыть">×</button>
+                <div className="ci-title"><i style={{ background: color }} />{t(lang, `showcase.${panel}`)}</div>
+                <p>{t(lang, `showcase.${panel}d`)}</p>
+              </div>
             </div>
           </Reveal>
         </div>
