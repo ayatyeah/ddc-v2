@@ -287,6 +287,20 @@ app.patch('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, re
   }
 });
 
+// ── Админ: удаление заявки ────────────────────────────────────────────────────
+app.delete('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
+  try {
+    const { rowCount } = await db.query(`DELETE FROM leads WHERE id = $1`, [id]);
+    if (!rowCount) return res.status(404).json({ error: 'Заявка не найдена' });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /api/leads:', e.message);
+    res.status(500).json({ error: 'Не удалось удалить заявку' });
+  }
+});
+
 // ── Админ: новости (CRUD) ─────────────────────────────────────────────────────
 // Нормализация тела запроса новости → безопасные значения с обрезкой длины.
 function normalizeNews(body = {}) {
@@ -447,13 +461,29 @@ async function callGemini(prompt) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, responseMimeType: 'application/json' },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        responseMimeType: 'application/json',
+        maxOutputTokens: 2048,
+        thinkingConfig: { thinkingBudget: 0 }, // без «размышлений» — иначе бюджет уходит и ответ пустой
+      },
     }),
   });
   if (!r.ok) { const tx = await r.text(); throw new Error(`Gemini ${r.status}: ${tx.slice(0, 300)}`); }
   const j = await r.json();
-  return (j?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
+  const cand = j?.candidates?.[0];
+  const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+  if (!text) throw new Error('пустой ответ ИИ (' + (cand?.finishReason || 'нет кандидатов') + ')');
+  return text;
+}
+
+function parseJsonLoose(text) {
+  let t = String(text).replace(/```json|```/g, '').trim();
+  try { return JSON.parse(t); } catch {}
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
+  return null;
 }
 
 function leadsSignature(rows) {
@@ -503,16 +533,23 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (r
       status: l.status, rating: l.rating, note: (l.admin_comment || '').slice(0, 120),
     }));
     const prompt =
-`Проанализируй заявки клиентов IT-компании DDC. rating (0-5) — это оценка клиента сотрудником (важность/качество клиента), не отзыв клиента.
-Верни только JSON:
-{"summary":"2-3 предложения","important_clients":[{"id":число,"name":"имя","priority":"high|medium|low","reason":"кратко"}],"main_problems":[{"problem":"кратко","detail":"кратко"}],"recommendations":["шаг"]}
-До 6 важных клиентов. Кратко, по-русски. Заявки: ${JSON.stringify(compact)}`;
+`Ты аналитик по работе с клиентами IT-компании DDC. rating (0-5) — оценка клиента сотрудником (важность/качество клиента), не отзыв клиента.
+Проанализируй заявки и верни ТОЛЬКО JSON такого вида:
+{"summary":"2-3 предложения: состояние клиентской базы","important_clients":[{"id":число,"name":"имя","priority":"high|medium|low","reason":"почему важен","action":"что конкретно сделать с этим клиентом"}],"main_problems":[{"problem":"кратко","action":"что предпринять, чтобы решить"}],"recommendations":["конкретный следующий шаг для команды"]}
+До 6 важных клиентов. В action и recommendations — конкретные действия (а не общие слова). Кратко, по-русски. Заявки: ${JSON.stringify(compact)}`;
 
-    const text = await callGemini(prompt);
-    let analysis;
-    try { analysis = JSON.parse(text.replace(/```json|```/g, '').trim()); }
-    catch { analysis = { summary: text.slice(0, 1200), important_clients: [], main_problems: [], recommendations: [] }; }
-
+    let analysis = null, lastErr = null;
+    for (let attempt = 0; attempt < 3 && !analysis; attempt++) {
+      try {
+        const text = await callGemini(prompt);
+        analysis = parseJsonLoose(text);
+        if (!analysis) lastErr = new Error('не удалось разобрать ответ ИИ');
+      } catch (e) { lastErr = e; }
+      if (!analysis && attempt < 2) await new Promise((r) => setTimeout(r, 700));
+    }
+    if (!analysis) {
+      return res.status(502).json({ error: 'ИИ-анализ недоступен: ' + (lastErr ? lastErr.message : 'неизвестная ошибка') });
+    }
     await db.query(`INSERT INTO ai_analysis (leads_sig, content) VALUES ($1, $2)`, [sig, JSON.stringify(analysis)]);
     res.json({ analysis, fromCache: false });
   } catch (e) {

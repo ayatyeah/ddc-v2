@@ -68,6 +68,7 @@ export default function AiPanel({ onAuthLost, onOpenLead }) {
                         {c.id ? <button className="ai-link" onClick={() => onOpenLead?.(c.id)}>{c.name} <span className="ai-id">#{c.id} ↗</span></button> : <span>{c.name}</span>}
                       </div>
                       <div className="ai-reason">{c.reason}</div>
+                      {c.action && <div className="ai-action">→ {c.action}</div>}
                     </div>
                   </li>
                 ))}
@@ -80,7 +81,7 @@ export default function AiPanel({ onAuthLost, onOpenLead }) {
               <div className="ai-card-h">Главные проблемы</div>
               <ul className="ai-probs">
                 {a.main_problems.map((p, i) => (
-                  <li key={i}><b>{p.problem}</b>{p.detail ? <span> — {p.detail}</span> : null}</li>
+                  <li key={i}><b>{p.problem}</b>{(p.action || p.detail) ? <div className="ai-action">→ {p.action || p.detail}</div> : null}</li>
                 ))}
               </ul>
             </section>

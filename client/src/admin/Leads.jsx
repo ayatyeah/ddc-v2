@@ -11,7 +11,7 @@ function fmtDate(iso) {
   } catch { return iso || ''; }
 }
 
-function Row({ row, onPatch, canEdit, highlight }) {
+function Row({ row, onPatch, canEdit, highlight, onDelete }) {
   const [comment, setComment] = useState(row.admin_comment || '');
   const [saved, setSaved] = useState(false);
 
@@ -67,7 +67,10 @@ function Row({ row, onPatch, canEdit, highlight }) {
           )}
         </div>
       </td>
-      <td data-label="Дата" className="nowrap">{fmtDate(row.created_at)}</td>
+      <td data-label="Дата" className="nowrap">
+        <div>{fmtDate(row.created_at)}</div>
+        {canEdit && <button className="lead-del" onClick={() => onDelete(row.id, row.full_name)}>Удалить</button>}
+      </td>
     </tr>
   );
 }
@@ -124,6 +127,17 @@ export default function Leads({ onAuthLost, canEdit = true, focusId = null }) {
     }
   };
 
+  const del = async (id, name) => {
+    if (!window.confirm(`Удалить заявку от «${name || 'клиента'}»? Действие необратимо.`)) return;
+    try {
+      await sendJSON(`/api/leads/${id}`, 'DELETE');
+      setRows((rs) => rs.filter((r) => r.id !== id));
+      loadStats();
+    } catch (e) {
+      if (e.status === 401) onAuthLost?.();
+    }
+  };
+
   return (
     <>
       <div className="adm-stats">
@@ -152,7 +166,7 @@ export default function Leads({ onAuthLost, canEdit = true, focusId = null }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => <Row key={row.id} row={row} onPatch={patch} canEdit={canEdit} highlight={focusId === row.id} />)}
+            {rows.map((row) => <Row key={row.id} row={row} onPatch={patch} canEdit={canEdit} highlight={focusId === row.id} onDelete={del} />)}
           </tbody>
         </table>
         {empty && <div className="adm-empty">Заявок пока нет.</div>}

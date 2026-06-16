@@ -16,13 +16,24 @@ export default function Brand() {
 
     const apply = () => {
       raf = 0;
-      const vh = window.innerHeight;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const mobile = vw < 760;
       const t = reduce ? 1 : Math.min(1, Math.max(0, window.scrollY / (vh * 0.55)));
       const e = ease(t);
-      const ty = vh * 0.15 + (8 - vh * 0.15) * e;     // верхняя зона → к шапке
-      const sc = 1 + (0.36 - 1) * e;                  // крупно → мелко (влезает в навбар)
-      el.style.transform = `translate(-50%, ${ty}px) scale(${sc})`;
-      el.style.setProperty('--fade', String(1 - t));  // подпись/капция тают
+      const w = el.offsetWidth || 140, h = el.offsetHeight || 140;
+      const navH = 64;
+      const scDock = mobile ? 0.42 : 0.36;
+      const sc = 1 + (scDock - 1) * e;
+      // по горизонтали: старт — по центру; в доке — центр (десктоп) или слева (мобайл)
+      const centerX = (vw - w) / 2;
+      const dockX = mobile ? 14 : (vw - w * scDock) / 2;
+      const x = centerX + (dockX - centerX) * e;
+      // по вертикали: из верхней зоны в центр шапки
+      const startY = vh * 0.15;
+      const dockY = Math.max(6, (navH - h * scDock) / 2);
+      const ty = startY + (dockY - startY) * e;
+      el.style.transform = `translate(${x}px, ${ty}px) scale(${sc})`;
+      el.style.setProperty('--fade', String(1 - t));
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
 

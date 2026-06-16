@@ -226,13 +226,13 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ── Интро-локап (логотип + DDC) ─────────────────────────────────────────────── */
 .brandlock {
-  position: fixed; top: 0; left: 50%; z-index: 110;
-  transform: translate(-50%, 15vh) scale(1); transform-origin: top center;
+  position: fixed; top: 0; left: 0; z-index: 110;
+  transform: translate(0, 15vh) scale(1); transform-origin: top left;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   pointer-events: none; text-align: center; will-change: transform;
 }
 .brandlock .bl-cap {
-  position: absolute; top: -26px; white-space: nowrap;
+  position: absolute; top: -26px; left: 50%; transform: translateX(-50%); white-space: nowrap;
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.34em; text-transform: uppercase;
   color: var(--ink-faint); opacity: var(--fade, 1);
 }
@@ -241,7 +241,7 @@ button { font-family: inherit; cursor: pointer; }
   font-family: var(--display); font-weight: 500; font-size: 52px; line-height: 1; letter-spacing: 0.05em; color: var(--ink);
 }
 .brandlock .bl-sub {
-  position: absolute; bottom: -24px; white-space: nowrap;
+  position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); white-space: nowrap;
   font-size: 14px; color: var(--ink-soft); letter-spacing: 0.01em; opacity: var(--fade, 1);
 }
 
