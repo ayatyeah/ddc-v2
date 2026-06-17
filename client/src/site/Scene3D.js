@@ -195,10 +195,9 @@ export function initScene(canvas) {
   }
   window.addEventListener('resize', resize); resize();
 
-  const clock = new THREE.Clock(); let raf = 0, disp = progress;
+  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false;
   function loop() {
-    raf = requestAnimationFrame(loop);
-    if (document.hidden) return;
+    raf = 0;
     const t = clock.getElapsedTime();
     disp += (progress - disp) * 0.05;          // плавный бесшовный переход между страницами
     const p = disp;
@@ -262,13 +261,21 @@ export function initScene(canvas) {
 
     scene.fog.color.setHex(0x0f1626);
     renderer.render(scene, camera);
+
+    if (running) raf = requestAnimationFrame(loop);
   }
-  loop();
+
+  function start() { if (!running) { running = true; clock.getDelta(); if (!raf) raf = requestAnimationFrame(loop); } }
+  function stop() { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+  const onVisibility = () => { document.hidden ? stop() : start(); };
+  document.addEventListener('visibilitychange', onVisibility);
+  start();
 
   return {
-    setTarget(p) { progress = Math.min(1, Math.max(0, p)); },
+    setTarget(p) { progress = Math.min(1, Math.max(0, p)); if (!running && !document.hidden) start(); },
     dispose() {
-      cancelAnimationFrame(raf);
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
       window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);
       window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);

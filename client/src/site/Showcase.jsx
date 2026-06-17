@@ -21,16 +21,19 @@ export default function Showcase() {
 
   useEffect(() => {
     const inst = initBuilding(canvasRef.current);
-    const onScroll = () => {
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
       const el = sectionRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
       const p = 1 - (r.bottom) / (window.innerHeight + r.height);
       inst.setProgress(p);
     };
-    onScroll();
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    apply();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => { window.removeEventListener('scroll', onScroll); inst.dispose(); };
+    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); inst.dispose(); };
   }, []);
 
   const click = (k) => (e) => {

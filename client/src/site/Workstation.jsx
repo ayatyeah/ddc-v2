@@ -16,15 +16,18 @@ export default function Workstation() {
       brand: 'DDC · ЦЦР',
     });
     apiRef.current = inst;
-    const onScroll = () => {
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
       const el = sectionRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
       inst.setProgress(1 - r.bottom / (window.innerHeight + r.height));
     };
-    onScroll();
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    apply();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => { window.removeEventListener('scroll', onScroll); inst.dispose(); apiRef.current = null; };
+    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); inst.dispose(); apiRef.current = null; };
   }, []);
 
   // Смена языка — обновляем факты на экране без пересборки сцены.

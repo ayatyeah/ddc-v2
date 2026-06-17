@@ -642,11 +642,15 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (r
 });
 
 // ── AI-агрегатор новостей: цифровая жизнь и технологии Казахстана ─────────────
+// Несколько источников грузятся параллельно; дубли по URL/заголовку отсеиваются,
+// затем Gemini отбирает самое релевантное. Поддерживаются RSS (<item>) и Atom (<entry>).
 const FEED_SOURCES = [
   { name: 'Profit.kz', url: 'https://profit.kz/rss/' },
   { name: 'Digital Business', url: 'https://digitalbusiness.kz/feed/' },
+  { name: 'Kapital.kz', url: 'https://kapital.kz/rss' },
 ];
 const FEED_TTL_MS = 24 * 60 * 60 * 1000;
+const FEED_TIMEOUT_MS = 8000;            // не ждём зависший источник дольше 8 с
 let buildInFlight = null;
 function runBuild() {
   if (!buildInFlight) {
@@ -660,34 +664,54 @@ function stripTags(s) {
 }
 function parseRss(xml, source) {
   const items = [];
-  const blocks = String(xml).split(/<item[\s>]/i).slice(1);
+  const str = String(xml);
+  // RSS: <item>…</item>; Atom: <entry>…</entry>
+  const isAtom = /<entry[\s>]/i.test(str) && !/<item[\s>]/i.test(str);
+  const blocks = str.split(isAtom ? /<entry[\s>]/i : /<item[\s>]/i).slice(1);
   for (const b of blocks.slice(0, 12)) {
     const get = (tag) => { const m = b.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i')); return m ? stripTags(m[1]) : ''; };
     const title = get('title');
     let link = get('link');
-    if (!link) { const m = b.match(/<link[^>]*>([\s\S]*?)<\/link>/i); link = m ? m[1].trim() : ''; }
-    const date = get('pubDate');
-    const desc = get('description').slice(0, 240);
+    if (!link) {
+      // Atom: <link href="…"/>; RSS без CDATA: <link>…</link>
+      const mh = b.match(/<link[^>]*href=["']([^"']+)["']/i);
+      if (mh) link = mh[1].trim();
+      else { const m = b.match(/<link[^>]*>([\s\S]*?)<\/link>/i); link = m ? m[1].trim() : ''; }
+    }
+    const date = get('pubDate') || get('published') || get('updated');
+    const desc = (get('description') || get('summary') || get('content')).slice(0, 240);
     if (title) items.push({ title, url: link, date, desc, source });
   }
   return items;
 }
 async function fetchRss(src) {
   try {
-    const r = await fetch(src.url, { headers: { 'User-Agent': 'Mozilla/5.0 DDC-NewsBot' } });
-    if (!r.ok) return [];
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FEED_TIMEOUT_MS);
+    const r = await fetch(src.url, { headers: { 'User-Agent': 'Mozilla/5.0 DDC-NewsBot' }, signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!r.ok) { console.error('RSS', src.name, 'HTTP', r.status); return []; }
     return parseRss(await r.text(), src.name);
   } catch (e) { console.error('RSS', src.name, e.message); return []; }
 }
 async function buildFeed() {
-  const all = (await Promise.all(FEED_SOURCES.map(fetchRss))).flat();
+  const raw = (await Promise.all(FEED_SOURCES.map(fetchRss))).flat();
+  // дедупликация по URL и нормализованному заголовку (один сюжет в разных СМИ)
+  const seen = new Set();
+  const all = [];
+  for (const x of raw) {
+    const key = (x.url || '').split('?')[0].toLowerCase() || x.title.toLowerCase().slice(0, 60);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    all.push(x);
+  }
   if (!all.length) return null;
   let result = null;
   try {
     // экономия токенов: меньше элементов на входе, короткие описания
-    const input = all.slice(0, 16).map((x) => ({ title: x.title, source: x.source, url: x.url, date: x.date, desc: (x.desc || '').slice(0, 140) }));
+    const input = all.slice(0, 24).map((x) => ({ title: x.title, source: x.source, url: x.url, date: x.date, desc: (x.desc || '').slice(0, 140) }));
     const prompt =
-`Ты — редактор новостей о цифровом Казахстане. Из списка ниже отбери до 6 самых релевантных новостей про цифровую жизнь Казахстана, новые технологии, ИТ, финтех и цифровизацию госуслуг.
+`Ты — редактор новостей о цифровом Казахстане. Из списка ниже (новости с нескольких источников) отбери до 6 самых релевантных новостей про цифровую жизнь Казахстана, новые технологии, ИТ, финтех и цифровизацию госуслуг. По возможности бери новости из разных источников для разнообразия.
 Сделай так, чтобы их можно было прочитать прямо у нас на сайте, не переходя на источник.
 Верни ТОЛЬКО JSON-объект вида:
 {"digest":"2-3 предложения — общий обзор главного за день по-русски","items":[{"title":"заголовок на русском","summary":"краткий пересказ новости в 2-3 предложениях по-русски, своими словами","url":"ссылка из данных","source":"источник из данных","date":"дата как есть"}]}

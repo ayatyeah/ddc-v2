@@ -8,6 +8,7 @@ import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Background3D from './Background3D.jsx';
 import Fog from './Fog.jsx';
+import Particles from './Particles.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
@@ -37,18 +38,32 @@ export default function Site() {
 
   // 3D-фон: на главной здания «играют» при скролле (башни→планета→карта),
   // на внутренних страницах — фиксированное состояние под маршрут (бесшовный лерп в сцене).
+  // Единственный scroll-слушатель на весь фон: одно чтение layout за кадр, отсюда же
+  // кормится туман (--fog) — чтобы не плодить параллельные reflow-хендлеры.
   useEffect(() => {
+    const root = document.documentElement;
+    const fogEl = document.getElementById('fog');
     if (path === '/') {
-      const onScroll = () => {
-        const max = document.documentElement.scrollHeight - window.innerHeight;
+      let raf = 0;
+      const apply = () => {
+        raf = 0;
+        const max = root.scrollHeight - window.innerHeight;
         const sp = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
         sceneRef.current?.setTarget(0.04 + sp * 0.56);
+        if (fogEl) fogEl.style.setProperty('--fog', Math.min(0.85, sp * 1.25).toFixed(3));
       };
-      onScroll();
+      const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+      apply();
       window.addEventListener('scroll', onScroll, { passive: true });
-      return () => window.removeEventListener('scroll', onScroll);
+      window.addEventListener('resize', onScroll, { passive: true });
+      return () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+        if (raf) cancelAnimationFrame(raf);
+      };
     }
     sceneRef.current?.setTarget(route.prog);
+    if (fogEl) fogEl.style.setProperty('--fog', '0');
   }, [path, route.prog]);
 
   // Палитра неба: плавный переход цвета под страницу
@@ -84,6 +99,7 @@ export default function Site() {
       <ErrorBoundary fallback={null}>
         <Background3D onReady={onReady} />
       </ErrorBoundary>
+      <Particles />
       <Fog />
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
