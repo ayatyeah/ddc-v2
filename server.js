@@ -120,6 +120,16 @@ app.use(express.static(STATIC_DIR, {
   },
 }));
 
+// Динамические данные не должны кешироваться ни браузером, ни CDN/прокси
+// (иначе на сайте показывается устаревшая лента/новости, хотя сервер отдаёт свежие).
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store'); // для CDN App Platform
+  next();
+});
+
 // Ограничение частоты на чувствительные маршруты
 const limiterOpts = { standardHeaders: true, legacyHeaders: false };
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, ...limiterOpts });
@@ -647,7 +657,7 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (r
 const FEED_SOURCES = [
   { name: 'Profit.kz', url: 'https://profit.kz/rss/' },
   { name: 'Digital Business', url: 'https://digitalbusiness.kz/feed/' },
-  { name: 'Kapital.kz', url: 'https://kapital.kz/rss' },
+  { name: 'Bluescreen.kz', url: 'https://bluescreen.kz/feed/' },
 ];
 const FEED_TTL_MS = 24 * 60 * 60 * 1000;
 const FEED_TIMEOUT_MS = 8000;            // не ждём зависший источник дольше 8 с
@@ -690,12 +700,17 @@ async function fetchRss(src) {
     const timer = setTimeout(() => ctrl.abort(), FEED_TIMEOUT_MS);
     const r = await fetch(src.url, { headers: { 'User-Agent': 'Mozilla/5.0 DDC-NewsBot' }, signal: ctrl.signal });
     clearTimeout(timer);
-    if (!r.ok) { console.error('RSS', src.name, 'HTTP', r.status); return []; }
-    return parseRss(await r.text(), src.name);
-  } catch (e) { console.error('RSS', src.name, e.message); return []; }
+    if (!r.ok) { console.error('RSS', src.name, 'HTTP', r.status, src.url); return []; }
+    const items = parseRss(await r.text(), src.name);
+    if (!items.length) console.warn('RSS', src.name, '— 0 новостей (проверьте формат/URL):', src.url);
+    return items;
+  } catch (e) { console.error('RSS', src.name, e.message, src.url); return []; }
 }
 async function buildFeed() {
-  const raw = (await Promise.all(FEED_SOURCES.map(fetchRss))).flat();
+  const perSource = await Promise.all(FEED_SOURCES.map(fetchRss));
+  // сводка по источникам — видно в логах, какой фид сколько дал
+  console.log('Лента новостей: ' + FEED_SOURCES.map((s, i) => `${s.name}=${perSource[i].length}`).join(', '));
+  const raw = perSource.flat();
   // дедупликация по URL и нормализованному заголовку (один сюжет в разных СМИ)
   const seen = new Set();
   const all = [];

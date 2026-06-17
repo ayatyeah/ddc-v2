@@ -30,14 +30,15 @@ export default function News() {
 
   useEffect(() => {
     let alive = true;
-    getJSON('/api/news')
+    const bust = () => `_=${Date.now()}`;
+    getJSON('/api/news?' + bust())
       .then((rows) => { if (alive) setItems(Array.isArray(rows) ? rows : []); })
       .catch(() => { if (alive) setItems([]); })
       .finally(() => { if (alive) setLoaded(true); });
 
     let tries = 0, timer = 0;
     const loadFeed = () => {
-      getJSON('/api/news/aggregated')
+      getJSON('/api/news/aggregated?' + bust())
         .then((d) => {
           if (!alive) return;
           const arr = Array.isArray(d.items) ? d.items : [];
