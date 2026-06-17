@@ -20,25 +20,29 @@ export default function Nav() {
   const go = (to) => (e) => { e.preventDefault(); setOpen(false); navigate(to); };
 
   return (
-    <nav className="nav">
+    <nav className="nav" aria-label="Основная навигация">
       <div className="wrap">
         <div className="nav-island">
-          <div className={`nav-links ${open ? 'open' : ''}`}>
+          <div className={`nav-links ${open ? 'open' : ''}`} id="nav-menu">
             {LINKS.map((l) => (
-              <a key={l.to} href={l.to} onClick={go(l.to)} className={path === l.to ? 'active' : ''}>
+              <a key={l.to} href={l.to} onClick={go(l.to)}
+                className={path === l.to ? 'active' : ''}
+                aria-current={path === l.to ? 'page' : undefined}>
                 {t(lang, l.k)}
               </a>
             ))}
           </div>
-          <div className="lang">
+          <div className="lang" role="group" aria-label="Язык / Тіл / Language">
             {LANGS.map((l) => (
-              <button key={l} className={l === lang ? 'active' : ''} onClick={() => setLang(l)}>
+              <button key={l} className={l === lang ? 'active' : ''} onClick={() => setLang(l)}
+                aria-pressed={l === lang} aria-label={l === 'kk' ? 'Қазақша' : l === 'ru' ? 'Русский' : 'English'}>
                 {l === 'kk' ? 'KZ' : l.toUpperCase()}
               </button>
             ))}
           </div>
-          <button className="icon-btn nav-burger" onClick={() => setOpen((o) => !o)} aria-label="Меню">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <button className="icon-btn nav-burger" onClick={() => setOpen((o) => !o)}
+            aria-label="Меню" aria-expanded={open} aria-controls="nav-menu">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
           </button>

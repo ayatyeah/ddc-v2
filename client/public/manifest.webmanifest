@@ -1,0 +1,14 @@
+{
+  "name": "Центр цифрового развития · НБРК",
+  "short_name": "ЦЦР DDC",
+  "description": "Цифровые продукты и IT-инфраструктура для финансового сектора Казахстана.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1224",
+  "theme_color": "#0a1224",
+  "lang": "ru",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/ddc.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

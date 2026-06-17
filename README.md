@@ -45,9 +45,58 @@ npm run dev:client         # фронт на :5173 (проксирует /api н
   (`build` ставит зависимости клиента и собирает Vite в `public/`)
 - **Run command:** `npm start`
 - **Перед первым запуском** один раз выполните `npm run init-db`, чтобы создать
-  таблицу `news` (таблица `leads` уже существует — `init-db` идемпотентен).
-- Переменные окружения берутся из `.env`. Для прода смените `ADMIN_PASSWORD`
-  и `JWT_SECRET`, укажите боевой `CORS_ORIGIN`.
+  таблицы (идемпотентно — существующие не трогает).
+- Переменные окружения задаются в панели App Platform (НЕ в `.env`, который не
+  коммитится). Обязательно установите `NODE_ENV=production`.
+
+### Обязательные переменные окружения на проде
+
+| Переменная | Назначение |
+|---|---|
+| `NODE_ENV` | `production` — включает HSTS, secure-cookie, скрытие стектрейсов |
+| `JWT_SECRET` | Длинная случайная строка (32+ симв.). Без неё сервер не стартует в проде |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Учётка суперадмина. Смените дефолтный `admin` |
+| `CORS_ORIGIN` | Боевой домен фронта (через запятую, если их несколько) |
+| `PG*` | Доступ к PostgreSQL (см. `.env.example`) |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | ИИ-аналитика заявок |
+
+Сгенерировать секрет:
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
+
+### Перед публикацией обязательно замените плейсхолдер `https://ddc-v2-56jns.ondigitalocean.app`
+на реальный домен в файлах: `client/index.html` (canonical, og:url, JSON-LD),
+`client/public/robots.txt`, `client/public/sitemap.xml`.
+
+## Безопасность
+
+- **Helmet** — заголовки CSP, HSTS, X-Frame-Options, X-Content-Type-Options; `x-powered-by` скрыт.
+- **JWT в httpOnly + secure + sameSite=strict cookie**, срок жизни 8 ч.
+- **bcrypt** для паролей пользователей из таблицы `users`.
+- **Rate-limit**: вход — 20 запросов / 15 мин, форма заявки — 10 / мин.
+- **trust proxy** — корректная работа за reverse-proxy DigitalOcean.
+- Параметризованные SQL-запросы (защита от инъекций), серверная валидация и
+  обрезка длины всех входных полей; лимит тела запроса 1 МБ.
+- Глобальный error-handler не отдаёт стектрейс наружу в проде; graceful shutdown
+  по SIGTERM/SIGINT (корректно для zero-downtime деплоя).
+
+## Доступность и SEO
+
+- Skip-link, `aria-current`/`aria-expanded`, видимый фокус, `aria-hidden` на
+  декоративных слоях, поддержка `prefers-reduced-motion`.
+- favicon, web manifest, robots.txt, sitemap.xml, Open Graph / Twitter / JSON-LD,
+  динамические `title`/`description` на каждый раздел.
+- ErrorBoundary: сбой UI (в т.ч. падение WebGL-сцены) не роняет сайт в белый экран.
+
+## Production-чеклист
+
+- [ ] `NODE_ENV=production` и стойкий `JWT_SECRET` заданы в окружении
+- [ ] `ADMIN_PASSWORD` изменён с дефолтного
+- [ ] `CORS_ORIGIN` указывает на боевой домен
+- [ ] Плейсхолдер `ddc-v2-56jns.ondigitalocean.app` заменён на реальный домен (3 файла выше)
+- [ ] `npm run init-db` выполнен на боевой БД
+- [ ] HTTPS включён на уровне App Platform (для secure-cookie и HSTS)
 
 ## Новости
 

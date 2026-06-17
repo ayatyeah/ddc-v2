@@ -8,6 +8,7 @@ import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Background3D from './Background3D.jsx';
 import Fog from './Fog.jsx';
+import ErrorBoundary from '../ErrorBoundary.jsx';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 
@@ -19,6 +20,20 @@ export default function Site() {
 
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); }, []); // eslint-disable-line
+
+  // SEO: обновляем заголовок и meta-описание при смене страницы (SPA-навигация)
+  useEffect(() => {
+    if (route.title) document.title = route.title;
+    const setMeta = (sel, attr, val) => { const el = document.querySelector(sel); if (el) el.setAttribute(attr, val); };
+    if (route.desc) {
+      setMeta('meta[name="description"]', 'content', route.desc);
+      setMeta('meta[property="og:description"]', 'content', route.desc);
+    }
+    if (route.title) setMeta('meta[property="og:title"]', 'content', route.title);
+    const url = window.location.origin + path;
+    setMeta('link[rel="canonical"]', 'href', url);
+    setMeta('meta[property="og:url"]', 'content', url);
+  }, [route, path]);
 
   // 3D-фон: на главной здания «играют» при скролле (башни→планета→карта),
   // на внутренних страницах — фиксированное состояние под маршрут (бесшовный лерп в сцене).
@@ -62,15 +77,18 @@ export default function Site() {
 
   return (
     <>
-      <div id="scroll-bg" />
-      <div id="scroll-aurora" />
-      <div id="scroll-depth" />
-      <Background3D onReady={onReady} />
+      <a href="#main" className="skip-link">К основному содержимому</a>
+      <div id="scroll-bg" aria-hidden="true" />
+      <div id="scroll-aurora" aria-hidden="true" />
+      <div id="scroll-depth" aria-hidden="true" />
+      <ErrorBoundary fallback={null}>
+        <Background3D onReady={onReady} />
+      </ErrorBoundary>
       <Fog />
-      <div id="scroll-grain" />
+      <div id="scroll-grain" aria-hidden="true" />
       <Nav />
       <Brand />
-      <main key={path} className="page-enter">
+      <main key={path} id="main" className="page-enter">
         <Page />
       </main>
       <Footer />

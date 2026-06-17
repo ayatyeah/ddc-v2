@@ -14,9 +14,13 @@ export default function Contact() {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const submit = async () => {
+  const submit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     if (state === 'sending') return;
     if (!form.full_name.trim()) { setErr(t(lang, 'contact.err.name')); setState('error'); return; }
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setErr(t(lang, 'contact.err.email')); setState('error'); return;
+    }
     setState('sending'); setErr('');
     try {
       await sendJSON('/api/leads', 'POST', {
@@ -57,16 +61,24 @@ export default function Contact() {
           </Reveal>
 
           <Reveal delay={120}>
-            <div className="form">
-              <input className="inp" placeholder={t(lang, 'contact.name')} value={form.full_name} onChange={set('full_name')} />
+            <form className="form" onSubmit={submit} noValidate aria-label={t(lang, 'contact.title')}>
+              <input className="inp" placeholder={t(lang, 'contact.name')} aria-label={t(lang, 'contact.name')}
+                value={form.full_name} onChange={set('full_name')} required autoComplete="name" />
               <div className="row2">
-                <input className="inp" type="email" placeholder={t(lang, 'contact.email')} value={form.email} onChange={set('email')} />
-                <input className="inp" placeholder={t(lang, 'contact.phone')} value={form.phone} onChange={set('phone')} />
+                <input className="inp" type="email" placeholder={t(lang, 'contact.email')} aria-label={t(lang, 'contact.email')}
+                  value={form.email} onChange={set('email')} autoComplete="email" inputMode="email" />
+                <input className="inp" type="tel" placeholder={t(lang, 'contact.phone')} aria-label={t(lang, 'contact.phone')}
+                  value={form.phone} onChange={set('phone')} autoComplete="tel" inputMode="tel" />
               </div>
-              <input className="inp" placeholder={t(lang, 'contact.subject')} value={form.subject} onChange={set('subject')} />
-              <textarea className="inp" placeholder={t(lang, 'contact.message')} value={form.message} onChange={set('message')} />
-              <button className={btnClass} onClick={submit} disabled={state === 'sending'}>{btnLabel}</button>
-            </div>
+              <input className="inp" placeholder={t(lang, 'contact.subject')} aria-label={t(lang, 'contact.subject')}
+                value={form.subject} onChange={set('subject')} />
+              <textarea className="inp" placeholder={t(lang, 'contact.message')} aria-label={t(lang, 'contact.message')}
+                value={form.message} onChange={set('message')} />
+              <button type="submit" className={btnClass} disabled={state === 'sending'} aria-busy={state === 'sending'}>{btnLabel}</button>
+              <span className="form-status" role="status" aria-live="polite">
+                {state === 'error' ? err : state === 'sent' ? t(lang, 'contact.sent') : ''}
+              </span>
+            </form>
           </Reveal>
         </div>
       </div>

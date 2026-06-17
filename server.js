@@ -32,44 +32,105 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const compression = require('compression');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 
 const app = express();
+const PROD = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT) || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+
+// JWT_SECRET обязателен в проде — иначе сессии можно подделать. Падаем на старте, а не молча используем дефолт.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 16) {
+  if (PROD) {
+    console.error('FATAL: JWT_SECRET не задан или слишком короткий. Установите длинную случайную строку в переменных окружения.');
+    process.exit(1);
+  } else {
+    console.warn('⚠ JWT_SECRET не задан — использую небезопасный dev-секрет. НЕ ДЛЯ ПРОДА.');
+  }
+}
+const SECRET = JWT_SECRET || 'dev-secret-change-me-not-for-prod';
+
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
+if (PROD && ADMIN_PASSWORD === 'admin') {
+  console.warn('⚠ ADMIN_PASSWORD = "admin" в проде — смените на стойкий пароль через переменные окружения.');
+}
 
 const ALLOWED_STATUSES = ['new', 'in_progress', 'on_hold', 'served', 'rejected'];
+
+// Опции cookie сессии. Same-origin (фронт и API на одном домене) → strict.
+const COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: 'strict',
+  secure: PROD,
+  path: '/',
+};
 
 // Папка с собранным React-приложением (vite build → ../public)
 const STATIC_DIR = path.join(__dirname, 'public');
 
+// За reverse-proxy (DigitalOcean App Platform) — доверяем заголовкам X-Forwarded-*,
+// иначе rate-limit видит один IP на всех и secure-cookie не выставляется.
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
 // ── Middleware ────────────────────────────────────────────────────────────────
+// Security-заголовки. CSP настроен под наш фронт: инлайновые стили (Vite), шрифты Google,
+// канвас/воркеры three.js, обращения к Gemini-прокси (через наш же бэкенд).
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      connectSrc: ["'self'"],
+      workerSrc: ["'self'", 'blob:'],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'self'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: PROD ? [] : null,
+    },
+  },
+  crossOriginEmbedderPolicy: false, // three.js/textures из data:/blob: иначе блокируются
+  hsts: PROD ? { maxAge: 15552000, includeSubDomains: true } : false,
+}));
+app.use(compression());
+
 const origins = (process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({
   origin: origins.length ? origins : true,   // в dev можно true; на проде укажи домены
   credentials: true,
 }));
-app.use(express.json({ limit: '8mb' }));
+app.use(express.json({ limit: '1mb' }));   // 8mb был избыточен и расширял поверхность DoS
 app.use(cookieParser());
 
-// Раздаём собранный фронт как статику
-app.use(express.static(STATIC_DIR));
+// Раздаём собранный фронт как статику (с кешем для иммутабельных ассетов)
+app.use(express.static(STATIC_DIR, {
+  maxAge: PROD ? '1y' : 0,
+  setHeaders: (res, filePath) => {
+    if (/\.(html)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 
 // Ограничение частоты на чувствительные маршруты
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
-const formLimiter  = rateLimit({ windowMs: 60 * 1000, max: 10 });
+const limiterOpts = { standardHeaders: true, legacyHeaders: false };
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, ...limiterOpts });
+const formLimiter  = rateLimit({ windowMs: 60 * 1000, max: 10, ...limiterOpts });
 
 // ── Авторизация ───────────────────────────────────────────────────────────────
 function auth(req, res, next) {
   const token = req.cookies && req.cookies.ddc_token;
   if (!token) return res.status(401).json({ error: 'Не авторизован' });
   try {
-    req.admin = jwt.verify(token, JWT_SECRET);
+    req.admin = jwt.verify(token, SECRET);
     next();
   } catch {
     return res.status(401).json({ error: 'Сессия истекла' });
@@ -101,13 +162,8 @@ async function logAudit(req, entity, entityId, action, summary) {
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   const issue = (u, role) => {
-    const token = jwt.sign({ u, role }, JWT_SECRET, { expiresIn: '8h' });
-    res.cookie('ddc_token', token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 8 * 60 * 60 * 1000,
-    });
+    const token = jwt.sign({ u, role }, SECRET, { expiresIn: '8h' });
+    res.cookie('ddc_token', token, { ...COOKIE_OPTS, maxAge: 8 * 60 * 60 * 1000 });
     return res.json({ ok: true, username: u, role });
   };
 
@@ -132,7 +188,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('ddc_token');
+  res.clearCookie('ddc_token', COOKIE_OPTS);
   res.json({ ok: true });
 });
 
@@ -145,6 +201,10 @@ app.post('/api/leads', formLimiter, async (req, res) => {
   const { full_name, email, phone, subject, message } = req.body || {};
   if (!full_name || !String(full_name).trim()) {
     return res.status(400).json({ error: 'Укажите ФИО' });
+  }
+  const mail = (email || '').trim();
+  if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+    return res.status(400).json({ error: 'Некорректный email' });
   }
   try {
     const { rows } = await db.query(
@@ -747,6 +807,9 @@ app.get('/api/admin/audit', auth, async (req, res) => {
 // Health-check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Неизвестные API-маршруты — честный 404 JSON (а не SPA-страница)
+app.use('/api', (req, res) => res.status(404).json({ error: 'Не найдено' }));
+
 // ── SPA-fallback: любой не-API маршрут отдаёт index.html (React-роутинг) ──────
 app.get(/^(?!\/api\/).*/, (req, res) => {
   res.sendFile(path.join(STATIC_DIR, 'index.html'), (err) => {
@@ -754,10 +817,30 @@ app.get(/^(?!\/api\/).*/, (req, res) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`ЦЦР backend слушает http://localhost:${PORT}`);
-  console.log(`Сайт:    http://localhost:${PORT}/`);
-  console.log(`Админка: http://localhost:${PORT}/admin`);
+// Глобальный обработчик ошибок — не отдаём стек наружу в проде
+app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+  console.error('Необработанная ошибка:', err.stack || err.message || err);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: PROD ? 'Внутренняя ошибка сервера' : String(err.message || err) });
+});
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`ЦЦР backend слушает на :${PORT} (${PROD ? 'production' : 'development'})`);
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);
 });
+
+// Не валим процесс молча — логируем и корректно завершаем
+process.on('unhandledRejection', (reason) => console.error('unhandledRejection:', reason));
+process.on('uncaughtException', (err) => { console.error('uncaughtException:', err); });
+
+// Грейсфул-шатдаун: даём активным запросам и пулу БД закрыться (важно для zero-downtime деплоя)
+function shutdown(signal) {
+  console.log(`${signal} — завершаю работу…`);
+  server.close(() => {
+    if (db.pool && db.pool.end) db.pool.end().catch(() => {});
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10000).unref();
+}
+['SIGTERM', 'SIGINT'].forEach((s) => process.on(s, () => shutdown(s)));
