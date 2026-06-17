@@ -63,6 +63,8 @@ export default function Site() {
   return (
     <>
       <div id="scroll-bg" />
+      <div id="scroll-aurora" />
+      <div id="scroll-depth" />
       <Background3D onReady={onReady} />
       <Fog />
       <div id="scroll-grain" />

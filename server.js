@@ -86,6 +86,18 @@ function requireRole(...roles) {
   };
 }
 
+// Запись в историю изменений (кто, что, когда)
+async function logAudit(req, entity, entityId, action, summary) {
+  try {
+    const actor = (req && req.admin && req.admin.u) || 'system';
+    const role = (req && req.admin && req.admin.role) || '';
+    await db.query(
+      `INSERT INTO audit_log (actor, actor_role, entity, entity_id, action, summary) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [actor, role, entity, entityId == null ? null : Number(entityId), action, (summary || '').slice(0, 500)]
+    );
+  } catch (e) { console.error('audit:', e.message); }
+}
+
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   const issue = (u, role) => {
@@ -280,6 +292,11 @@ app.patch('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, re
       params
     );
     if (!rows.length) return res.status(404).json({ error: 'Клиент не найден' });
+    const ch = [];
+    if (status !== undefined) ch.push(`статус → ${status}`);
+    if (rating !== undefined) ch.push(`оценка → ${rating}`);
+    if (admin_comment !== undefined) ch.push('комментарий изменён');
+    logAudit(req, 'lead', id, status !== undefined ? 'status' : 'update', `Заявка #${id}: ${ch.join(', ')}`);
     res.json(rows[0]);
   } catch (e) {
     console.error('PATCH /api/leads:', e.message);
@@ -294,6 +311,7 @@ app.delete('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, r
   try {
     const { rowCount } = await db.query(`DELETE FROM leads WHERE id = $1`, [id]);
     if (!rowCount) return res.status(404).json({ error: 'Заявка не найдена' });
+    logAudit(req, 'lead', id, 'delete', `Удалена заявка #${id}`);
     res.json({ ok: true });
   } catch (e) {
     console.error('DELETE /api/leads:', e.message);
@@ -348,6 +366,7 @@ app.post('/api/admin/news', auth, requireRole('admin', 'editor'), async (req, re
       [n.title_ru,n.title_kk,n.title_en,n.excerpt_ru,n.excerpt_kk,n.excerpt_en,
        n.body_ru,n.body_kk,n.body_en,n.color,n.image,n.news_date,n.published]
     );
+    logAudit(req, 'news', rows[0].id, 'create', `Создана новость: ${rows[0].title_ru || rows[0].title_en || rows[0].title_kk || ('#'+rows[0].id)}`);
     res.status(201).json(rows[0]);
   } catch (e) {
     console.error('POST /api/admin/news:', e.message);
@@ -372,6 +391,7 @@ app.put('/api/admin/news/:id', auth, requireRole('admin', 'editor'), async (req,
        n.body_ru,n.body_kk,n.body_en,n.color,n.image,n.news_date,n.published, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Новость не найдена' });
+    logAudit(req, 'news', id, 'update', `Изменена новость: ${rows[0].title_ru || rows[0].title_en || rows[0].title_kk || ('#'+id)}`);
     res.json(rows[0]);
   } catch (e) {
     console.error('PUT /api/admin/news:', e.message);
@@ -383,8 +403,11 @@ app.delete('/api/admin/news/:id', auth, requireRole('admin', 'editor'), async (r
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
   try {
+    const pre = await db.query(`SELECT title_ru, title_en, title_kk FROM news WHERE id = $1`, [id]);
     const { rowCount } = await db.query(`DELETE FROM news WHERE id = $1`, [id]);
     if (!rowCount) return res.status(404).json({ error: 'Новость не найдена' });
+    const tt = pre.rows[0] ? (pre.rows[0].title_ru || pre.rows[0].title_en || pre.rows[0].title_kk) : ('#'+id);
+    logAudit(req, 'news', id, 'delete', `Удалена новость: ${tt}`);
     res.json({ ok: true });
   } catch (e) {
     console.error('DELETE /api/admin/news:', e.message);
@@ -454,7 +477,7 @@ app.delete('/api/admin/users/:id', auth, requireRole('admin'), async (req, res) 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-async function callGemini(prompt) {
+async function callGemini(prompt, maxTokens = 2048) {
   if (!GEMINI_KEY) throw new Error('GEMINI_API_KEY не задан в .env');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
   const r = await fetch(url, {
@@ -465,7 +488,7 @@ async function callGemini(prompt) {
       generationConfig: {
         temperature: 0.3,
         responseMimeType: 'application/json',
-        maxOutputTokens: 2048,
+        maxOutputTokens: maxTokens,
         thinkingConfig: { thinkingBudget: 0 }, // без «размышлений» — иначе бюджет уходит и ответ пустой
       },
     }),
@@ -599,20 +622,25 @@ async function fetchRss(src) {
 async function buildFeed() {
   const all = (await Promise.all(FEED_SOURCES.map(fetchRss))).flat();
   if (!all.length) return null;
-  let curated = null;
+  let result = null;
   try {
-    const input = all.slice(0, 24).map((x) => ({ title: x.title, source: x.source, url: x.url, date: x.date, desc: (x.desc || '').slice(0, 150) }));
+    // экономия токенов: меньше элементов на входе, короткие описания
+    const input = all.slice(0, 16).map((x) => ({ title: x.title, source: x.source, url: x.url, date: x.date, desc: (x.desc || '').slice(0, 140) }));
     const prompt =
-`Ниже — новости из казахстанских порталов. Отбери до 6 самых релевантных к цифровой жизни Казахстана, новым технологиям, ИТ, финтеху и цифровизации госуслуг.
-Верни ТОЛЬКО JSON-массив: [{"title":"заголовок на русском","summary":"1-2 предложения по-русски","url":"ссылка из данных","source":"источник из данных","date":"дата как есть"}].
-Новости: ${JSON.stringify(input)}`;
-    const parsed = parseJsonLoose(await callGemini(prompt));
-    if (Array.isArray(parsed)) curated = parsed;
-    else if (parsed && Array.isArray(parsed.items)) curated = parsed.items;
+`Ты — редактор новостей о цифровом Казахстане. Из списка ниже отбери до 6 самых релевантных новостей про цифровую жизнь Казахстана, новые технологии, ИТ, финтех и цифровизацию госуслуг.
+Сделай так, чтобы их можно было прочитать прямо у нас на сайте, не переходя на источник.
+Верни ТОЛЬКО JSON-объект вида:
+{"digest":"2-3 предложения — общий обзор главного за день по-русски","items":[{"title":"заголовок на русском","summary":"краткий пересказ новости в 2-3 предложениях по-русски, своими словами","url":"ссылка из данных","source":"источник из данных","date":"дата как есть"}]}
+Не копируй текст дословно — пиши пересказ своими словами. Новости: ${JSON.stringify(input)}`;
+    const parsed = parseJsonLoose(await callGemini(prompt, 1600));
+    if (parsed && Array.isArray(parsed.items)) result = { digest: String(parsed.digest || ''), items: parsed.items };
+    else if (Array.isArray(parsed)) result = { digest: '', items: parsed };
   } catch (e) { console.error('feed Gemini:', e.message); }
-  if (!curated) curated = all.slice(0, 6).map((x) => ({ title: x.title, summary: x.desc || '', url: x.url, source: x.source, date: x.date }));
-  await db.query(`INSERT INTO feed_cache (content) VALUES ($1)`, [JSON.stringify(curated)]);
-  return curated;
+  if (!result) {
+    result = { digest: '', items: all.slice(0, 6).map((x) => ({ title: x.title, summary: x.desc || '', url: x.url, source: x.source, date: x.date })) };
+  }
+  await db.query(`INSERT INTO feed_cache (content) VALUES ($1)`, [JSON.stringify(result)]);
+  return result;
 }
 async function refreshFeedIfStale(force) {
   try {
@@ -632,21 +660,88 @@ app.get('/api/news/aggregated', async (req, res) => {
     } else {
       refreshFeedIfStale(false); // фоном, не блокируя ответ
     }
-    if (!rows.length) return res.json({ items: [], updated_at: null });
-    res.json({ items: rows[0].content, updated_at: rows[0].fetched_at });
-  } catch (e) { console.error('GET /api/news/aggregated:', e.message); res.json({ items: [], updated_at: null }); }
+    if (!rows.length) return res.json({ items: [], digest: '', updated_at: null });
+    const c = rows[0].content;
+    const items = Array.isArray(c) ? c : (c && Array.isArray(c.items) ? c.items : []);
+    const digest = (c && !Array.isArray(c) && c.digest) ? c.digest : '';
+    res.json({ items, digest, updated_at: rows[0].fetched_at });
+  } catch (e) { console.error('GET /api/news/aggregated:', e.message); res.json({ items: [], digest: '', updated_at: null }); }
 });
 
 // Принудительное обновление ленты из админки (вне 24-часового лимита)
 app.post('/api/admin/news/aggregate/refresh', auth, requireRole('admin', 'editor'), async (req, res) => {
   try {
-    const items = await runBuild();
+    const result = await runBuild();
+    const cnt = result && Array.isArray(result.items) ? result.items.length : (Array.isArray(result) ? result.length : 0);
+    logAudit(req, 'feed', null, 'update', `AI-лента обновлена вручную (${cnt})`);
     const { rows } = await db.query(`SELECT fetched_at FROM feed_cache ORDER BY id DESC LIMIT 1`);
-    res.json({ ok: true, count: Array.isArray(items) ? items.length : 0, updated_at: rows[0] ? rows[0].fetched_at : null });
+    res.json({ ok: true, count: cnt, updated_at: rows[0] ? rows[0].fetched_at : null });
   } catch (e) {
     console.error('POST /api/admin/news/aggregate/refresh:', e.message);
     res.status(500).json({ error: 'Не удалось обновить ленту: ' + e.message });
   }
+});
+
+// ── Админ: дашборд (сводка) ───────────────────────────────────────────────────
+app.get('/api/admin/dashboard', auth, async (req, res) => {
+  try {
+    const [lt, ln, lw, nt, np, fc, au] = await Promise.all([
+      db.query(`SELECT count(*)::int c FROM leads`),
+      db.query(`SELECT count(*)::int c FROM leads WHERE status='new'`),
+      db.query(`SELECT count(*)::int c FROM leads WHERE status='in_progress'`),
+      db.query(`SELECT count(*)::int c FROM news`),
+      db.query(`SELECT count(*)::int c FROM news WHERE published=true`),
+      db.query(`SELECT content, fetched_at FROM feed_cache ORDER BY id DESC LIMIT 1`),
+      db.query(`SELECT actor, actor_role, entity, entity_id, action, summary, created_at FROM audit_log ORDER BY id DESC LIMIT 8`),
+    ]);
+
+    // Доп-агрегации для графиков — не должны ронять весь дашборд при ошибке
+    let by_status = [];
+    let by_day = [];
+    try {
+      const bs = await db.query(`SELECT status, count(*)::int AS c FROM leads GROUP BY status`);
+      by_status = bs.rows;
+    } catch (e) { console.error('dashboard by_status:', e.message); }
+    try {
+      const bd = await db.query(`
+        SELECT to_char(gs.d, 'YYYY-MM-DD') AS day,
+               count(l.id)::int AS leads
+        FROM generate_series(
+               (current_date - 13)::timestamp,
+               current_date::timestamp,
+               interval '1 day'
+             ) AS gs(d)
+        LEFT JOIN leads l
+          ON l.created_at >= gs.d
+         AND l.created_at <  gs.d + interval '1 day'
+        GROUP BY gs.d
+        ORDER BY gs.d
+      `);
+      by_day = bd.rows;
+    } catch (e) { console.error('dashboard by_day:', e.message); }
+
+    const feedContent = fc.rows[0] ? fc.rows[0].content : null;
+    const feedItems = Array.isArray(feedContent) ? feedContent : (feedContent && Array.isArray(feedContent.items) ? feedContent.items : []);
+    res.json({
+      leads_total: lt.rows[0].c, leads_new: ln.rows[0].c, leads_progress: lw.rows[0].c,
+      news_total: nt.rows[0].c, news_published: np.rows[0].c,
+      feed_count: feedItems.length, feed_updated: fc.rows[0] ? fc.rows[0].fetched_at : null,
+      recent: au.rows,
+      by_status,
+      by_day,
+    });
+  } catch (e) { console.error('GET /api/admin/dashboard:', e.message); res.status(500).json({ error: 'Не удалось загрузить дашборд' }); }
+});
+
+// ── Админ: история изменений ──────────────────────────────────────────────────
+app.get('/api/admin/audit', auth, async (req, res) => {
+  try {
+    const params = []; let where = '';
+    if (req.query.entity && ['lead', 'news', 'feed'].includes(req.query.entity)) { params.push(req.query.entity); where = `WHERE entity = $1`; }
+    const { rows } = await db.query(
+      `SELECT actor, actor_role, entity, entity_id, action, summary, created_at FROM audit_log ${where} ORDER BY id DESC LIMIT 200`, params);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/admin/audit:', e.message); res.status(500).json({ error: 'Не удалось загрузить историю' }); }
 });
 
 // Health-check

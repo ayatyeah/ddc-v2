@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLang } from '../store.js';
 import { t } from '../i18n.js';
 import { getJSON } from '../api.js';
@@ -24,6 +25,8 @@ export default function News() {
   const trackRef = useRef(null);
   const [feed, setFeed] = useState([]);
   const [feedAt, setFeedAt] = useState(null);
+  const [feedDigest, setFeedDigest] = useState('');
+  const [aiActive, setAiActive] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -38,7 +41,7 @@ export default function News() {
         .then((d) => {
           if (!alive) return;
           const arr = Array.isArray(d.items) ? d.items : [];
-          setFeed(arr); setFeedAt(d.updated_at || null);
+          setFeed(arr); setFeedAt(d.updated_at || null); setFeedDigest(d.digest || '');
           if (arr.length === 0 && tries < 3) { tries += 1; timer = setTimeout(loadFeed, 6000); } // лента ещё собирается
         })
         .catch(() => {});
@@ -48,11 +51,14 @@ export default function News() {
   }, []);
 
   useEffect(() => {
-    if (!active) return;
-    const onKey = (e) => { if (e.key === 'Escape') setActive(null); };
+    const open = active || aiActive;
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') { setActive(null); setAiActive(null); } };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [active]);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [active, aiActive]);
 
   // Шаг прокрутки = ширина карточки + gap
   const step = () => {
@@ -128,21 +134,40 @@ export default function News() {
         <div className="news-ai-note">
           {t(lang, 'news.aiNote')}{feedAt ? ` · ${t(lang, 'news.updated')} ${fmtDate(feedAt, lang)}` : ''}
         </div>
+        {feedDigest && <div className="ai-digest"><span className="ai-digest-lbl">{t(lang, 'news.digest')}</span>{feedDigest}</div>}
         <div className="ai-feed">
           {feed.length === 0 ? (
             <div className="news-empty">{t(lang, 'news.aiEmpty')}</div>
           ) : feed.map((it, i) => (
-            <a className="af-card" key={i} href={it.url || '#'} target="_blank" rel="noopener noreferrer">
+            <button className="af-card" key={i} onClick={() => setAiActive(it)}>
               <div className="af-src">{it.source}{it.date ? ` · ${it.date}` : ''}</div>
               <h4>{it.title}</h4>
               {it.summary && <p>{it.summary}</p>}
-              <span className="more">{t(lang, 'news.read')} ↗</span>
-            </a>
+              <span className="more">{t(lang, 'news.read')} →</span>
+            </button>
           ))}
         </div>
       </div>
 
-      {active && (
+      {aiActive && createPortal(
+        <div className="modal-ov" onClick={() => setAiActive(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="bar" style={{ background: 'linear-gradient(120deg,#13245a,#0a1a3e)' }}>
+              <span className="ai-tag" style={{ position: 'absolute', left: 20, bottom: 16 }}>AI</span>
+            </div>
+            <div className="inner">
+              <button className="x" onClick={() => setAiActive(null)} aria-label={t(lang, 'news.close')}>×</button>
+              <time>{aiActive.source}{aiActive.date ? ` · ${aiActive.date}` : ''}</time>
+              <h2>{aiActive.title}</h2>
+              <p>{aiActive.summary}</p>
+              {aiActive.url && <a className="btn btn-ghost" href={aiActive.url} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: 'inline-flex' }}>{t(lang, 'news.source')} ↗</a>}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {active && createPortal(
         <div className="modal-ov" onClick={() => setActive(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             {active.image
@@ -155,7 +180,8 @@ export default function News() {
               <p>{pick(active, 'body', lang) || pick(active, 'excerpt', lang)}</p>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </section>
   );

@@ -1,6 +1,9 @@
 /* Админка ЦЦР — использует глобальные токены из styles.css (тема light/dark). */
 .adm { min-height: 100vh; background: var(--canvas); color: var(--ink); }
 
+/* Изоляция: глобальный декоративный .chip из styles.css не должен протекать в админку */
+.adm .chip { position: static; animation: none; box-shadow: none; backdrop-filter: none; max-width: none; }
+
 /* — Экран входа — */
 .adm-login { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
 .adm-login-card {
@@ -254,12 +257,50 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .adm-bar .sp { flex: 1; }
 .adm-bar .who { font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; }
 
-.adm-main { padding: 30px 34px 60px; max-width: 1280px; }
+.adm-main { padding: 30px 34px 60px; max-width: 1280px; margin: 0; }
 
-@media (max-width: 720px) {
-  .adm-rail { width: 72px; flex-basis: 72px; }
-  .rail-btn span { display: none; }
-  .adm-bar, .adm-main { padding-left: 18px; padding-right: 18px; }
+@media (max-width: 860px) {
+  .adm-shell { flex-direction: column; }
+  /* Рейл превращается в нижнюю навигацию */
+  .adm-rail {
+    position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+    width: 100%; height: auto; flex: none; align-self: stretch;
+    flex-direction: row; align-items: stretch; gap: 0;
+    padding: 6px max(8px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom));
+    border-right: none; border-top: 1px solid rgba(255,255,255,0.08);
+    background: rgba(14,17,22,0.96); backdrop-filter: blur(16px);
+    z-index: 60;
+  }
+  .rail-brand { display: none; }
+  /* Прокручиваемая лента пунктов */
+  .rail-nav {
+    flex-direction: row; gap: 4px; width: auto; flex: 1 1 auto;
+    overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    padding-right: 8px; mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
+  }
+  .rail-nav::-webkit-scrollbar { display: none; }
+  .rail-btn { flex: 0 0 auto; padding: 7px 12px; border-radius: 12px; font-size: 10px; min-width: 58px; gap: 4px; }
+  .rail-btn span { display: block; }
+  /* Foot-иконки закреплены справа, не уезжают со скроллом */
+  .rail-foot {
+    margin-top: 0; flex-direction: row; gap: 4px; align-items: center;
+    flex: 0 0 auto; padding-left: 8px; border-left: 1px solid rgba(255,255,255,0.08);
+  }
+  .rail-icon { width: 36px; height: 36px; }
+  /* Контент не должен прятаться под нижней панелью */
+  .adm-body { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+  .adm-bar { padding: 16px 18px; }
+  .adm-bar-title { font-size: 1.25rem; }
+  .adm-main { padding: 20px 16px 40px; }
+}
+
+@media (max-width: 520px) {
+  .rail-btn { min-width: 50px; padding: 7px 9px; font-size: 9.5px; }
+  .rail-btn svg { width: 18px; height: 18px; }
+  .rail-foot { gap: 2px; }
+  .rail-icon { width: 34px; height: 34px; }
+  .adm-bar .who { font-size: 12px; }
+  .adm-bar .who .us-role { display: none; }
 }
 
 /* ── ИИ-панель ──────────────────────────────────────────────────────────────── */
@@ -307,3 +348,110 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 
 /* Действие в ИИ-анализе («что сделать») */
 .ai-action { margin-top: 4px; font-size: 13px; color: var(--blue); line-height: 1.45; }
+
+/* ── Дашборд + история изменений ──────────────────────────────────────────────── */
+.dash-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.dash-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+  padding: 20px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink); box-shadow: var(--shadow-card);
+  cursor: pointer; position: relative; overflow: hidden;
+  font-family: inherit; transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.dash-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--blue); opacity: .9; }
+.dash-card.dc-news::before { background: var(--gold); }
+.dash-card.dc-feed::before { background: #5fd1a0; }
+.dash-card.dc-static { cursor: default; }
+.dash-card.dc-static::before { background: linear-gradient(180deg, var(--blue), var(--gold)); }
+button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px); box-shadow: var(--shadow-pop); }
+.dc-num { font-size: 30px; font-weight: 700; line-height: 1; color: var(--ink); }
+.dc-lbl { font-size: 14px; font-weight: 600; margin-top: 6px; color: var(--ink); }
+.dc-sub { font-size: 12px; color: var(--ink-soft); }
+
+/* — Графики — */
+.dash-charts { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-top: 22px; }
+.chart-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow-card); min-width: 0; }
+.chart-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.chart-head h3 { font-size: 15px; font-weight: 600; color: var(--ink); }
+.chart-sub { font-size: 12px; color: var(--ink-faint); }
+.chart-svg { width: 100%; height: auto; display: block; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-axis { fill: var(--ink-faint); font-size: 10px; font-family: var(--mono, monospace); }
+.chart-line { stroke: var(--blue); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { fill: var(--card); stroke: var(--blue); stroke-width: 2; }
+.donut-wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.donut-svg { width: 140px; height: 140px; flex: 0 0 auto; }
+.donut-num { fill: var(--ink); font-size: 26px; font-weight: 700; }
+.donut-cap { fill: var(--ink-faint); font-size: 11px; }
+.donut-legend { list-style: none; display: flex; flex-direction: column; gap: 7px; flex: 1 1 120px; min-width: 120px; }
+.donut-legend li { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+.dl-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.dl-lbl { color: var(--ink-soft); flex: 1; }
+.dl-val { color: var(--ink); font-weight: 600; }
+
+.dash-recent { margin-top: 26px; }
+.dash-recent-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.dash-recent-head h3 { font-size: 16px; }
+.audit-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.audit-list li {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+  padding: 11px 12px; border-radius: 10px; border: 1px solid transparent;
+}
+.audit-list li:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); border-color: var(--line); }
+.au-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 980px; white-space: nowrap; text-align: center; min-width: 76px; }
+.au-lead, .au-badge.au-lead { background: rgba(110,160,255,0.18); color: #9cc0ff; }
+.au-news, .au-badge.au-news { background: rgba(216,178,90,0.18); color: #e2c478; }
+.au-feed, .au-badge.au-feed { background: rgba(120,210,180,0.18); color: #8fe3c8; }
+.au-sum { font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
+.au-meta { font-size: 12px; opacity: 0.55; white-space: nowrap; }
+.audit-list.big li { grid-template-columns: auto 1fr auto; padding: 13px 12px; }
+
+/* История — выровнена по левому краю */
+.hist-wrap { display: flex; flex-direction: column; align-items: flex-start; }
+
+/* Сегментированный переключатель: фиксированная панель слева, активный сегмент подсвечивается скользящим thumb. Кнопки никуда не «прыгают». */
+.seg {
+  position: relative; display: grid; width: max-content; margin-right: auto;
+  grid-template-columns: repeat(var(--seg-count, 4), 96px);
+  gap: 0; padding: 4px; margin-bottom: 20px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow-card); isolation: isolate;
+}
+.seg-thumb {
+  position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 4px;
+  width: calc((100% - 8px) / var(--seg-count, 4));
+  transform: translateX(calc(var(--seg-active, 0) * 100%));
+  background: var(--blue); border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(29,84,214,0.28);
+  transition: transform 0.26s cubic-bezier(0.22,1,0.36,1);
+}
+.seg-btn {
+  position: relative; z-index: 1; appearance: none; border: none; background: transparent;
+  font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1;
+  padding: 9px 14px; border-radius: 10px; cursor: pointer; white-space: nowrap;
+  color: var(--ink-soft); transition: color 0.2s;
+}
+.seg-btn:hover { color: var(--ink); }
+.seg-btn.on { color: #fff; }
+[data-theme='dark'] .seg-btn.on { color: #04122e; }
+.seg-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .seg-thumb { transition: none; } }
+
+@media (max-width: 980px) { .dash-charts { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .dash-cards { grid-template-columns: 1fr 1fr; }
+  /* Аудит: бейдж + текст в строку, мета — на отдельной строке снизу */
+  .audit-list li, .audit-list.big li {
+    grid-template-columns: auto 1fr; gap: 6px 10px; padding: 12px 12px; align-items: start;
+  }
+  .au-sum { align-self: center; }
+  .au-meta { grid-column: 1 / -1; white-space: normal; opacity: 0.5; padding-left: 2px; }
+  /* Переключатель на всю ширину */
+  .seg { display: grid; width: 100%; }
+  .seg-btn { padding: 9px 8px; font-size: 12.5px; }
+}
+@media (max-width: 400px) {
+  .au-badge { min-width: 64px; font-size: 10.5px; padding: 3px 7px; }
+  .seg-btn { font-size: 11.5px; padding: 9px 4px; }
+}
+@media (max-width: 440px) { .dash-cards { grid-template-columns: 1fr; } }

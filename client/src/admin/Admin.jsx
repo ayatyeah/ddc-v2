@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
 import { useTheme, toggleTheme } from '../store.js';
 import { IcoSun, IcoMoon } from '../site/icons.jsx';
+import Dashboard from './Dashboard.jsx';
+import History from './History.jsx';
 import Leads from './Leads.jsx';
 import NewsManager from './NewsManager.jsx';
 import Analytics from './Analytics.jsx';
@@ -10,10 +12,12 @@ import AiPanel from './AiPanel.jsx';
 import './admin.css';
 
 const ROLE_LABEL = { admin: 'Администратор', editor: 'Редактор', viewer: 'Просмотр' };
-const TITLES = { leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', news: 'Новости', users: 'Пользователи' };
+const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', news: 'Новости', history: 'История', users: 'Пользователи' };
 
 function Ico({ name, size = 20 }) {
   const p = {
+    dashboard: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
+    history: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     leads: <><path d="M4 6h16M4 12h16M4 18h10" /></>,
     ai: <><circle cx="12" cy="12" r="3.2" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>,
     analytics: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
@@ -27,7 +31,7 @@ export default function Admin() {
   const theme = useTheme();
   const [state, setState] = useState('checking');
   const [me, setMe] = useState({ username: '', role: 'viewer' });
-  const [tab, setTab] = useState('leads');
+  const [tab, setTab] = useState('dashboard');
   const [focusLead, setFocusLead] = useState(null);
 
   const [login, setLogin] = useState('');
@@ -56,7 +60,7 @@ export default function Admin() {
 
   const doLogout = async () => {
     try { await apiFetch('/api/logout', { method: 'POST' }); } catch {}
-    setState('login'); setLogin(''); setPass(''); setTab('leads');
+    setState('login'); setLogin(''); setPass(''); setTab('dashboard');
   };
 
   if (state === 'checking') {
@@ -97,10 +101,12 @@ export default function Admin() {
   const isAdmin = role === 'admin';
 
   const items = [
+    { id: 'dashboard', show: true },
     { id: 'leads', show: true },
     { id: 'ai', show: canEdit },
     { id: 'analytics', show: true },
     { id: 'news', show: true },
+    { id: 'history', show: true },
     { id: 'users', show: isAdmin },
   ].filter((x) => x.show);
 
@@ -133,10 +139,12 @@ export default function Admin() {
           {me.username && <span className="who">{me.username} <span className={`us-role r-${role}`}>{ROLE_LABEL[role]}</span></span>}
         </header>
         <main className="adm-main">
+          {tab === 'dashboard' && <Dashboard onAuthLost={() => setState('login')} onGoTab={setTab} />}
           {tab === 'leads' && <Leads onAuthLost={() => setState('login')} canEdit={canEdit} focusId={focusLead} />}
           {tab === 'ai' && canEdit && <AiPanel onAuthLost={() => setState('login')} onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />}
           {tab === 'analytics' && <Analytics onAuthLost={() => setState('login')} />}
           {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEdit} />}
+          {tab === 'history' && <History onAuthLost={() => setState('login')} />}
           {tab === 'users' && isAdmin && <Users onAuthLost={() => setState('login')} me={me} />}
         </main>
       </div>

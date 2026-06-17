@@ -62,6 +62,7 @@ export function initScene(canvas) {
     beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0xff4040, 1.2)); beacon.position.set(7.5, 42.2, 0); gBuild.add(beacon);
     gBuild.traverse((o) => { if (o.material) { o.material.transparent = true; towerMats.push(o.material); } });
   })();
+  gBuild.rotation.y = 0.78;   // стартовый разворот: передняя башня чуть прикрывает заднюю
 
   // ── Звёзды-частицы: Казахстан ↔ DDC (адаптивно под экран) ───────────────────
   const CZ = -26;
@@ -132,11 +133,20 @@ export function initScene(canvas) {
   }
   const planetTex = new THREE.CanvasTexture(planetCv); planetTex.colorSpace = THREE.SRGBColorSpace;
   const planet = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 48, 48),
-    new THREE.MeshBasicMaterial({ map: planetTex, transparent: true, opacity: 1 })
+    new THREE.SphereGeometry(1, 64, 64),
+    new THREE.MeshStandardMaterial({
+      map: planetTex, bumpMap: planetTex, bumpScale: 0.06,
+      roughness: 0.92, metalness: 0.05,
+      emissive: 0xffffff, emissiveMap: planetTex, emissiveIntensity: 0.14,
+      transparent: true, opacity: 1,
+    })
   );
+  planet.rotation.z = 0.34;                       // наклон оси — объёмнее смотрится
   scene.add(planet);
-  function placePlanet() { planet.scale.setScalar(L.kzS * 1.12); planet.position.set(0, L.cy, CZ - 9); }
+
+  function placePlanet() {
+    planet.scale.setScalar(L.kzS * 1.12); planet.position.set(0, L.cy, CZ - 9);
+  }
   placePlanet();
 
   // ── Облака: смягчают исчезновение зданий (здания «растворяются» в них) ───────
@@ -161,6 +171,20 @@ export function initScene(canvas) {
   let progress = 0, tx = 0, ty = 0, px = 0, py = 0, pState = -1;
   const onPointer = (e) => { tx = (e.clientX / window.innerWidth - 0.5) * 2; ty = (e.clientY / window.innerHeight - 0.5) * 2; };
   if (!reduce) window.addEventListener('pointermove', onPointer, { passive: true });
+
+  // ── Перетаскивание здания: только по горизонтали (рыскание), без наклона ─────
+  let dragging = false, lastX = 0, yawVel = 0;
+  const isUi = (el) => el && el.closest && el.closest('button, a, input, textarea, select, label, .modal, .nav-island, .af-card, .chip, .chip-info, .news-track');
+  const onDown = (e) => {
+    if ((e.button != null && e.button !== 0) || progress > 0.4 || isUi(e.target)) return; // только когда здание видно и не на UI
+    dragging = true; lastX = e.clientX; yawVel = 0;
+  };
+  const onDrag = (e) => { if (!dragging) return; const d = (e.clientX - lastX) * 0.006; lastX = e.clientX; gBuild.rotation.y += d; yawVel = d; };
+  const onUp = () => { dragging = false; };
+  window.addEventListener('pointerdown', onDown, { passive: true });
+  window.addEventListener('pointermove', onDrag, { passive: true });
+  window.addEventListener('pointerup', onUp, { passive: true });
+  window.addEventListener('pointercancel', onUp, { passive: true });
 
   function resize() {
     const w = window.innerWidth, h = window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -190,6 +214,7 @@ export function initScene(canvas) {
     for (const mt of towerMats) mt.opacity = 1 - fade;
     gBuild.visible = fade < 0.999;
     if (beacon) beacon.material.emissiveIntensity = (0.7 + 0.6 * (0.5 + 0.5 * Math.sin(t * 3))) * (1 - fade);
+    if (!dragging && Math.abs(yawVel) > 0.00001) { gBuild.rotation.y += yawVel; yawVel *= 0.93; } // инерция вращения
 
     // облака появляются, пока башни тают, и расходятся после — мягкое исчезновение
     const cloudOp = smooth(p, 0.06, 0.16) * (1 - smooth(p, 0.26, 0.34));
@@ -200,9 +225,10 @@ export function initScene(canvas) {
     }
 
     // планета: вращается (быстрее при скролле), исчезает к моменту сборки DDC
-    planet.rotation.y = t * 0.12 + p * 5.0;
-    planet.material.opacity = 1 - smooth(p, 0.62, 0.82);
-    planet.visible = planet.material.opacity > 0.02;
+    planet.rotation.y = t * 0.3 + p * 4.0;          // постоянное 3D-вращение глобуса
+    const pop = 1 - smooth(p, 0.62, 0.82);
+    planet.material.opacity = pop;
+    planet.visible = pop > 0.02;
 
     // частицы появляются по мере исчезновения башен, затем Казахстан → DDC
     pMat.uniforms.uOpacity.value = smooth(p, 0.10, 0.26);
@@ -236,6 +262,8 @@ export function initScene(canvas) {
     dispose() {
       cancelAnimationFrame(raf);
       window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
+      window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);
+      window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
       pMat.dispose(); pGeo.dispose(); planetTex.dispose(); cloudTex.dispose(); [facadeA, facadeB].forEach((x) => x.dispose());
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const mm = o.material; (Array.isArray(mm) ? mm : [mm]).forEach((x) => x.dispose()); } });
       pmrem.dispose(); renderer.dispose();

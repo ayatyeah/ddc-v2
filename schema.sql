@@ -149,3 +149,18 @@ CREATE TABLE IF NOT EXISTS feed_cache (
   content    JSONB       NOT NULL,
   fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- audit_log — история изменений (кто, что и когда менял: заявки, новости).
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         SERIAL PRIMARY KEY,
+  actor      TEXT        NOT NULL,
+  actor_role TEXT,
+  entity     TEXT        NOT NULL,   -- lead | news | feed
+  entity_id  INTEGER,
+  action     TEXT        NOT NULL,   -- create | update | delete | status
+  summary    TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at DESC);
