@@ -224,9 +224,17 @@ export function initScene(canvas) {
       sp.position.x = sp.userData.bx + Math.sin(t * 0.14 + sp.userData.bx) * 1.4;
     }
 
-    // планета: вращается (быстрее при скролле), исчезает к моменту сборки DDC
-    planet.rotation.y = t * 0.3 + p * 4.0;          // постоянное 3D-вращение глобуса
+    // планета: постоянно вращается и «дышит», даже без скролла; исчезает к моменту сборки DDC
+    const spin = reduce ? 0 : t * 0.12;             // постоянное автовращение глобуса
+    planet.rotation.y = spin + t * 0.3 + p * 4.0;
+    if (!reduce) {
+      planet.rotation.z = 0.34 + Math.sin(t * 0.18) * 0.05;   // лёгкое покачивание оси наклона
+      planet.rotation.x = Math.sin(t * 0.13) * 0.03;
+    }
     const pop = 1 - smooth(p, 0.62, 0.82);
+    const breathe = reduce ? 1 : 1 + Math.sin(t * 0.5) * 0.012; // мягкое «дыхание» размера
+    planet.scale.setScalar(L.kzS * 1.12 * breathe);
+    planet.position.y = L.cy + (reduce ? 0 : Math.sin(t * 0.4) * 0.18); // парение
     planet.material.opacity = pop;
     planet.visible = pop > 0.02;
 

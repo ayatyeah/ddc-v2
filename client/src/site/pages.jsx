@@ -22,10 +22,11 @@ export function ContactPage() {
 }
 
 /* Каждая страница — своё состояние 3D-фона + свой мягкий оттенок неба.
-   Главная остаётся «небесной», остальные — другие пастельные тона. */
+   Светлая тема: посветлее и с заметно разными оттенками по разделам.
+   Тёмная тема: глубокие, но различимые тона. */
 export const ROUTES = {
-  '/':         { prog: 0.06, Comp: HomePage,     light: { top: '#cfe6ff', a: '#8fbdf0', b: '#e6f3ff' }, dark: { top: '#12244e', a: '#05080f', b: '#03060c' } },
-  '/uslugi':   { prog: 0.34, Comp: ServicesPage, light: { top: '#d4f2ea', a: '#a6dccd', b: '#e9faf4' }, dark: { top: '#0e2a4a', a: '#04070f', b: '#03060c' } },
-  '/o-nas':    { prog: 0.52, Comp: AboutPage,    light: { top: '#e4e4ff', a: '#b4b6ef', b: '#eeefff' }, dark: { top: '#1a2050', a: '#05070f', b: '#04060c' } },
-  '/kontakty': { prog: 0.92, Comp: ContactPage,  light: { top: '#ffe7da', a: '#f0bda6', b: '#fff1ea' }, dark: { top: '#102a52', a: '#05080f', b: '#03060c' } },
+  '/':         { prog: 0.06, Comp: HomePage,     light: { top: '#dcefff', a: '#a9d4f7', b: '#f2f9ff' }, dark: { top: '#16306a', a: '#070d1c', b: '#04070f' } },
+  '/uslugi':   { prog: 0.34, Comp: ServicesPage, light: { top: '#d6f7ec', a: '#aee6d3', b: '#f0fdf8' }, dark: { top: '#0c3a44', a: '#06120f', b: '#04080a' } },
+  '/o-nas':    { prog: 0.52, Comp: AboutPage,    light: { top: '#e7e6ff', a: '#c2c2f6', b: '#f4f3ff' }, dark: { top: '#241a5c', a: '#0a0820', b: '#05060f' } },
+  '/kontakty': { prog: 0.92, Comp: ContactPage,  light: { top: '#ffe9dc', a: '#f6c8b1', b: '#fff5ee' }, dark: { top: '#3a1f2c', a: '#170a12', b: '#0a050a' } },
 };
