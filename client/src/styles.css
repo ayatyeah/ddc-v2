@@ -174,13 +174,13 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--blue);
 }
 .h2 {
-  font-size: clamp(2rem, 4.6vw, 3.4rem);
-  font-weight: 300; letter-spacing: -0.025em; line-height: 1.08;
+  font-size: clamp(1.75rem, 3.4vw, 2.7rem);
+  font-weight: 300; letter-spacing: -0.025em; line-height: 1.12;
 }
 .lede {
-  font-size: clamp(1.06rem, 1.6vw, 1.35rem);
-  color: var(--ink-soft); font-weight: 400; line-height: 1.45;
-  max-width: 40ch;
+  font-size: clamp(1rem, 1.3vw, 1.18rem);
+  color: var(--ink-soft); font-weight: 400; line-height: 1.5;
+  max-width: 42ch;
 }
 /* В тёмной теме крупные заголовки и заголовки новостей — фирменный синий. */
 [data-theme='dark'] h1,
@@ -311,14 +311,14 @@ button { font-family: inherit; cursor: pointer; }
 .orb.o3 { width: 520px; height: 520px; left: 30%; bottom: -180px; background: radial-gradient(circle, var(--blue-bright), transparent 70%); opacity: 0.3; }
 .hero-inner { position: relative; z-index: 1; max-width: 920px; }
 .hero h1 {
-  font-size: clamp(2.9rem, 8vw, 6.2rem); font-weight: 300; letter-spacing: -0.035em;
-  line-height: 1.02; margin: 18px 0 0;
+  font-size: clamp(2.5rem, 6vw, 4.8rem); font-weight: 300; letter-spacing: -0.035em;
+  line-height: 1.06; margin: 18px 0 0;
 }
 .hero h1 .grad {
   background: linear-gradient(120deg, var(--blue), var(--gold)); -webkit-background-clip: text;
   background-clip: text; color: transparent;
 }
-.hero-sub { margin: 26px auto 0; max-width: 46ch; font-size: clamp(1.06rem, 1.7vw, 1.4rem); color: var(--ink-soft); }
+.hero-sub { margin: 24px auto 0; max-width: 48ch; font-size: clamp(1.02rem, 1.4vw, 1.22rem); color: var(--ink-soft); line-height: 1.5; }
 .hero-cta { margin-top: 36px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .scroll-cue {
   position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 1;
@@ -347,8 +347,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .svc:hover { transform: translateY(-6px); box-shadow: var(--shadow-pop); }
 .svc-ico { width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; color: #fff; margin-bottom: 20px; }
-.svc h3 { font-size: 1.32rem; font-weight: 600; letter-spacing: -0.01em; }
-.svc p { margin-top: 10px; color: var(--ink-soft); font-size: 1rem; }
+.svc h3 { font-size: 1.18rem; font-weight: 600; letter-spacing: -0.01em; }
+.svc p { margin-top: 10px; color: var(--ink-soft); font-size: 0.98rem; line-height: 1.55; }
 .svc .num { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); float: right; }
 @media (max-width: 920px) { .svc-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 600px) { .svc-grid { grid-template-columns: 1fr; } }
@@ -442,13 +442,13 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ── Цифры ───────────────────────────────────────────────────────────────────── */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; text-align: center; }
-.stat .n { font-size: clamp(2.6rem, 5vw, 4rem); font-weight: 700; letter-spacing: -0.04em; line-height: 1; background: linear-gradient(135deg, var(--blue), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stat .n { font-size: clamp(2.1rem, 3.8vw, 3.1rem); font-weight: 700; letter-spacing: -0.04em; line-height: 1; background: linear-gradient(135deg, var(--blue), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .stat .l { margin-top: 10px; color: var(--ink-soft); font-size: 0.98rem; }
 @media (max-width: 700px) { .stats { grid-template-columns: repeat(2, 1fr); gap: 32px 16px; } }
 
 /* ── О нас ───────────────────────────────────────────────────────────────────── */
-.about-text { font-size: clamp(1.3rem, 2.6vw, 2.1rem); font-weight: 500; letter-spacing: -0.02em; line-height: 1.32; max-width: 22ch; }
-.about-body { color: var(--ink-soft); font-size: 1.1rem; line-height: 1.6; max-width: 46ch; }
+.about-text { font-size: clamp(1.2rem, 2vw, 1.7rem); font-weight: 500; letter-spacing: -0.02em; line-height: 1.38; max-width: 24ch; }
+.about-body { color: var(--ink-soft); font-size: 1.04rem; line-height: 1.65; max-width: 48ch; }
 .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: start; }
 @media (max-width: 800px) { .about-grid { grid-template-columns: 1fr; gap: 28px; } }
 .board { margin-top: 60px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }

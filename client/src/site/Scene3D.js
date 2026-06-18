@@ -57,13 +57,14 @@ export function initScene(canvas) {
       const crown = box(w + 0.4, 1.2, d + 0.4, matte(0xdfe4ec), 0.1); crown.position.y = h + 0.6; tg.add(crown);
       tg.position.x = x; return tg;
     };
-    gBuild.add(tower(8, 8, 24, -7, facadeA));
-    gBuild.add(tower(9, 9, 28, 6.5, facadeB));
+    // Башни с уверенным широким силуэтом (h/w ≈ 2.7) — не вытянутые «спички».
+    gBuild.add(tower(9.5, 9.5, 26, -7, facadeA));
+    gBuild.add(tower(10.5, 10.5, 29, 6.5, facadeB));
     // Синий подиум, посаженный прямо на карту (тонкая плита у поверхности)
     const podium = box(26, 1.6, 14, matte(0x1c4f8e), 0.2); podium.position.y = 0.8; gBuild.add(podium);
     const podiumTop = box(22, 0.4, 11, emis(0x3a7fd6, 0.35), 0.2); podiumTop.position.y = 1.7; gBuild.add(podiumTop);
-    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 3, 10), metal()); mast.position.set(6.5, 29.5, 0); gBuild.add(mast);
-    beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0xe6c789, 0.9)); beacon.position.set(6.5, 31.4, 0); gBuild.add(beacon);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 3, 10), metal()); mast.position.set(6.5, 30.6, 0); gBuild.add(mast);
+    beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0xe6c789, 0.9)); beacon.position.set(6.5, 32.4, 0); gBuild.add(beacon);
     gBuild.traverse((o) => { if (o.material) { o.material.transparent = true; towerMats.push(o.material); } });
   })();
   gBuild.rotation.y = -0.62;   // разворот как на фото: видно фронт + правый бок башен
@@ -77,7 +78,7 @@ export function initScene(canvas) {
   const lineMats = [];
   let nodeMat = null, mapMats = [];
   (() => {
-    const MAP_S = 58;                 // масштаб карты в мире (ширина ~2*MAP_S) — крупная карта, узлы/линии с запасом
+    const MAP_S = 60;                 // карта пошире, чтобы не выглядела узкой полоской под башнями
     const hub2 = { x: KZ_HUB[0] * MAP_S, z: -KZ_HUB[1] * MAP_S };   // куда поставить хаб
 
     // контур -> Shape (lon->x, lat->-z так, чтобы север был «вперёд/вглубь»)
@@ -133,16 +134,21 @@ export function initScene(canvas) {
       sp.material.userData = { baseOp: 0.95 };
       mapMats.push(sp.material);
 
-      // сияющая изогнутая линия от основания башен к узлу (QuadraticBezier, приподнят)
-      const end = new THREE.Vector3(nx, 0.5, nz);
+      // сияющая изогнутая линия от основания башен к узлу (QuadraticBezier, приподнят).
+      // end.y приподнят над поверхностью (карта сверху на y≈0), чтобы дуга не «ложилась» в текстуру.
+      const end = new THREE.Vector3(nx, 1.0, nz);
       const mid = origin.clone().add(end).multiplyScalar(0.5);
-      mid.y += Math.min(9, origin.distanceTo(end) * 0.22);   // выпуклость вверх
+      // Невысокая дуга: линии стелются НАД картой от здания к узлу, а не улетают в небо
+      // над дальними (западными) узлами. Поэтому подъём небольшой и жёстко ограничен.
+      mid.y += Math.min(4, origin.distanceTo(end) * 0.10);
       const curve = new THREE.QuadraticBezierCurve3(origin.clone(), mid, end);
       const pts = curve.getPoints(40);
       const lGeo = new THREE.BufferGeometry().setFromPoints(pts);
-      // сияние: толстая мягкая линия + яркое ядро (две линии)
-      const glowMat = new THREE.LineBasicMaterial({ color: 0x5fc8ea, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false });
-      const coreMat = new THREE.LineBasicMaterial({ color: 0xd6f6ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+      // сияние: толстая мягкая линия + яркое ядро (две линии).
+      // depthTest:false — дуги рисуются ПОВЕРХ карты (как и точки-узлы), иначе наклонённая
+      // толстая плита перекрывает их и они «уходят за/внутрь карты».
+      const glowMat = new THREE.LineBasicMaterial({ color: 0x5fc8ea, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+      const coreMat = new THREE.LineBasicMaterial({ color: 0xd6f6ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
       glowMat.userData = { glow: true, baseOp: 0.22 };
       coreMat.userData = { baseOp: 0.85 };
       gMap.add(new THREE.Line(lGeo, glowMat));
@@ -176,10 +182,10 @@ export function initScene(canvas) {
       // а планету сажаем ниже (planetY < cy), чтобы она целиком влезала.
       const s = Math.max(0.78, Math.min(1, w / 430));
       // cy === planetY: «DDC» центрируется ровно по планете (и камера смотрит туда же).
-      return { mobile: 1, camZ: 150, eyeY: 70, lookY: 6, cy: 17, planetY: 17,
+      return { mobile: 1, camZ: 126, eyeY: 64, lookY: 6, cy: 17, planetY: 17,
                kzCX: 0, kzS: 11.5 * s, ddcCX: 0, ddcS: 9 * s };
     }
-    return { mobile: 0, camZ: 140, eyeY: 62, lookY: 5, cy: 20, planetY: 20,
+    return { mobile: 0, camZ: 112, eyeY: 56, lookY: 5, cy: 20, planetY: 20,
              kzCX: 0, kzS: 18, ddcCX: 0, ddcS: 15 };
   }
   let L = layout();
@@ -266,8 +272,9 @@ export function initScene(canvas) {
   planet.rotation.z = 0.34;                       // наклон оси — объёмнее смотрится
   scene.add(planet);
 
+  const PLANET_K = 0.98;             // планета — сдержанный фон, а не во весь экран
   function placePlanet() {
-    planet.scale.setScalar(L.kzS * 1.12); planet.position.set(0, L.planetY, CZ - 9);
+    planet.scale.setScalar(L.kzS * PLANET_K); planet.position.set(0, L.planetY, CZ - 9);
   }
   placePlanet();
 
@@ -396,7 +403,7 @@ export function initScene(canvas) {
     }
     const pop = 1 - smooth(p, 0.62, 0.82);
     const breathe = reduce ? 1 : 1 + Math.sin(t * 0.5) * 0.012; // мягкое «дыхание» размера
-    planet.scale.setScalar(L.kzS * 1.12 * breathe);
+    planet.scale.setScalar(L.kzS * PLANET_K * breathe);
     planet.position.y = L.planetY + (reduce ? 0 : Math.sin(t * 0.4) * 0.18); // парение
     planet.material.opacity = pop;
     planet.visible = pop > 0.02;
