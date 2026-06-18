@@ -43,6 +43,7 @@ export default function Site() {
   useEffect(() => {
     const root = document.documentElement;
     const fogEl = document.getElementById('fog');
+    sceneRef.current?.setPage?.();          // при смене страницы узор планеты (DDC) слегка меняется
     if (path === '/') {
       let raf = 0;
       const apply = () => {
