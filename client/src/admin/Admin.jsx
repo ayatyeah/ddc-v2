@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
-import { useTheme, toggleTheme } from '../store.js';
-import { IcoSun, IcoMoon } from '../site/icons.jsx';
 import Dashboard from './Dashboard.jsx';
 import History from './History.jsx';
 import Leads from './Leads.jsx';
@@ -28,7 +26,6 @@ function Ico({ name, size = 20 }) {
 }
 
 export default function Admin() {
-  const theme = useTheme();
   const [state, setState] = useState('checking');
   const [me, setMe] = useState({ username: '', role: 'viewer' });
   const [tab, setTab] = useState('dashboard');
@@ -122,7 +119,6 @@ export default function Admin() {
           ))}
         </nav>
         <div className="rail-foot">
-          <button className="rail-icon" onClick={toggleTheme} aria-label="Тема">{theme === 'dark' ? <IcoMoon size={18} /> : <IcoSun size={18} />}</button>
           <a className="rail-icon" href="/" data-spa aria-label="На сайт">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </a>

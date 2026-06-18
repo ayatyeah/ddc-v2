@@ -823,6 +823,24 @@ html, body { overflow-x: hidden; }
 }
 .skip-link:focus { top: 12px; outline: 2px solid #fff; outline-offset: 2px; }
 
+/* ── Мобильная оптимизация: убираем дорогие размытия → нет лагов и «мыла» ──────
+   На телефонах backdrop-filter переразмывает фон на КАЖДОМ кадре скролла — это
+   главный источник тормозов; крупные filter:blur дают «мыло». Поэтому «стекло»
+   заменяем почти непрозрачным фоном без размытия, мягкие свечения-орбы убираем,
+   а полноэкранные размытые слои перестаём анимировать. */
+@media (max-width: 760px) {
+  :root            { --card-glass: rgba(255, 255, 255, 0.94); --nav-glass: rgba(251, 251, 253, 0.95); }
+  [data-theme='dark'] { --card-glass: rgba(14, 20, 38, 0.94); --nav-glass: rgba(6, 10, 20, 0.96); }
+
+  .nav-island, .nav-links.open, .hero-loc, .chip, .chip-info, .nc-arrow, .modal-ov {
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+
+  .orb { display: none; }                       /* крупные мягкие свечения — основной источник «мыла» */
+  #scroll-aurora, #fog .cloud { animation: none; }  /* без постоянной перекомпоновки больших размытых слоёв */
+  #fog .cloud { filter: blur(26px); opacity: 0.4; }
+}
+
 /* Видимый фокус для всех интерактивных элементов сайта (клавиатурная навигация) */
 a:focus-visible, button:focus-visible, input:focus-visible,
 textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible {

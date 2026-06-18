@@ -19,7 +19,8 @@ export default function Particles() {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const ctx = canvas.getContext('2d', { alpha: true });
     let w = 0, h = 0, raf = 0, running = false;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const mobile = window.innerWidth < 760;
+    const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 2);  // дешевле на телефоне
     let pts = [];
 
     // Офскрин-спрайт искорки (ядро + ореол) — рисуется один раз на тему
@@ -64,7 +65,7 @@ export default function Particles() {
       canvas.width = w * dpr; canvas.height = h * dpr;
       canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.min(110, Math.round((w * h) / 15000));
+      const count = Math.min(mobile ? 40 : 110, Math.round((w * h) / (mobile ? 26000 : 15000)));
       pts = Array.from({ length: count }, make);
     };
 

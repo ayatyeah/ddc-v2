@@ -17,7 +17,7 @@ export function initScene(canvas) {
   // не виден — на узких экранах отключаем, на десктопе оставляем.
   const initMobile = window.innerWidth < 760 || (window.innerWidth / window.innerHeight) < 0.95;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !initMobile, alpha: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, initMobile ? 1 : 1.25));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, initMobile ? 1.5 : 1.25));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
@@ -318,8 +318,8 @@ export function initScene(canvas) {
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     L = layout();
-    // На мобильных рисуем в 1× (экономит до ~4× пикселей на retina), на десктопе до 1.25×.
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, L.mobile ? 1 : 1.25));
+    // Баланс резкости/нагрузки: мобильный 1.5× (без «мыла», но не полный retina), десктоп 1.25×.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, L.mobile ? 1.5 : 1.25));
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
     pMat.uniforms.uSize.value = L.mobile ? 2.2 : 3.0;   // меньше размер искорок на мобильном → меньше перерисовки
     buildTargets();
