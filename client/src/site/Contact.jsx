@@ -81,6 +81,28 @@ export default function Contact() {
             </form>
           </Reveal>
         </div>
+
+        <Reveal delay={200}>
+          <div className="contact-map">
+            <iframe
+              title={t(lang, 'contact.addr')}
+              src="https://yandex.ru/map-widget/v1/?um=constructor%3A559caa52e2037f65fed187374363c14995a318f4efb2819fb2b67e6e893013ac&source=constructor"
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              loading="lazy"
+              allowFullScreen
+            />
+            <a
+              className="contact-map-link"
+              href="https://yandex.kz/maps/163/astana/house/manggilik_el_dangghyly_57a/Y0gYcgVjTkIEQFtrfXx5eHRgbA==/?ll=71.423773%2C51.089838&pt=71.423773%2C51.089838&z=17"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Мәңгілік Ел, 57А → Карта
+            </a>
+          </div>
+        </Reveal>
       </div>
     </section>
   );

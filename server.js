@@ -92,6 +92,7 @@ app.use(helmet({
       connectSrc: ["'self'"],
       workerSrc: ["'self'", 'blob:'],
       objectSrc: ["'none'"],
+      frameSrc: ["'self'", 'https://yandex.ru', 'https://yandex.kz'],
       frameAncestors: ["'self'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
