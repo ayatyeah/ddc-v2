@@ -10,14 +10,17 @@ import { KZ_OUTLINE, KZ_NODES, KZ_HUB } from './kzGeo.js';
 
 export function initScene(canvas) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mobile = window.matchMedia('(max-width: 760px)').matches;
+  const DPR_CAP = 2;          // макс качество и на телефоне (по выбору) — полное 2× разрешение
+  const FRAME_MS = 0;         // без ограничения кадров — 60fps везде
   const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
   const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, DPR_CAP));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
+  renderer.toneMappingExposure = 1.13;        // чуть больше свечения/«воздуха» в кадре
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0xdfe8f5, 0.004);
@@ -28,7 +31,7 @@ export function initScene(canvas) {
 
   scene.add(new THREE.HemisphereLight(0xeaf2ff, 0xc4ccdb, 1.05));
   const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(14, 28, 20); scene.add(key);
-  const rim = new THREE.DirectionalLight(0x9fc0ff, 0.7); rim.position.set(-16, 12, 8); scene.add(rim);
+  const rim = new THREE.DirectionalLight(0x9fc0ff, 0.92); rim.position.set(-16, 12, 8); scene.add(rim);  // холодный контровой свет — чётче кромки стеклянных башен
 
   const metal = (c = 0xd8dde6) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.8, roughness: 0.3, envMapIntensity: 1.2 });
   const matte = (c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.2, roughness: 0.65 });
@@ -301,31 +304,56 @@ export function initScene(canvas) {
   window.addEventListener('pointerup', onUp, { passive: true });
   window.addEventListener('pointercancel', onUp, { passive: true });
 
-  function resize() {
+  let lastW = 0;
+  function doResize() {
     const w = window.innerWidth, h = window.innerHeight;
     L = layout();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, DPR_CAP));
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
     pMat.uniforms.uSize.value = 3.0;
     buildTargets();
     if (pState === 1) pos.set(ddc); else pos.set(kz);
     pGeo.attributes.position.needsUpdate = true;
     placePlanet();
+    lastW = w;
   }
-  window.addEventListener('resize', resize); resize();
+  // На мобильных скролл прячет/показывает адресную строку и сыплет resize'ами ТОЛЬКО по высоте.
+  // Реаллокация WebGL-буфера (setSize) на каждом таком кадре — главный источник фризов при скролле.
+  // Поэтому изменения только-по-высоте обрабатываем с дебаунсом (фон чуть растянется на доли секунды —
+  // для размытого заднего плана незаметно), а на смену ширины/ориентации реагируем сразу.
+  let rzT = 0;
+  function resize() {
+    if (mobile && window.innerWidth === lastW) {
+      clearTimeout(rzT); rzT = setTimeout(doResize, 250); return;
+    }
+    clearTimeout(rzT); doResize();
+  }
+  window.addEventListener('resize', resize); doResize();
 
   scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
 
-  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false;
+  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, lastFrame = -1e9, prevT = 0;
   function loop() {
     raf = 0;
     if (running) raf = requestAnimationFrame(loop);
+    // Ограничение кадров (опционально, для слабых устройств): быстро выходим из колбэка,
+    // не трогая GPU, оставляя main-thread компоновщику скролла. Сейчас выключено (FRAME_MS=0).
+    if (FRAME_MS) {
+      const ms = clock.getElapsedTime() * 1000;
+      if (ms - lastFrame < FRAME_MS) return;
+      lastFrame = ms;
+    }
     const t = clock.getElapsedTime();
-    disp += (progress - disp) * 0.05;          // плавный бесшовный переход между страницами
+    // Сглаживание по реальному времени кадра (а не фикс-шаг): переходы одинаково
+    // плавные на 60/90/120 Гц и не «дёргаются» при просадках fps. dt ограничен,
+    // чтобы после возврата из фоновой вкладки не было рывка.
+    const dt = Math.min(0.05, Math.max(0.001, t - prevT)); prevT = t;
+    const kSmooth = 1 - Math.exp(-dt * 3.0);    // эквивалент ~0.05/кадр на 60fps, но кадронезависимо
+    disp += (progress - disp) * kSmooth;        // плавный бесшовный переход между страницами/скроллом
     const p = disp;
 
     // камера: фокус на верхних этажах / крышах (адаптивно)
-    px += (tx - px) * 0.05; py += (ty - py) * 0.05;
+    px += (tx - px) * kSmooth; py += (ty - py) * kSmooth;
     // На hero (p~0) кадр охватывает башни + 3D-карту (низкий взгляд, дальше отъезд).
     // Единый объект «башни + карта» тает целиком при скролле (без подъёма башен),
     // освобождая сцену для частиц/надписи DDC. Камера на hero охватывает весь
@@ -421,6 +449,7 @@ export function initScene(canvas) {
     setPage() { pageVar++; drawPlanet(pageVar); if (!running && !document.hidden) start(); },
     dispose() {
       stop();
+      clearTimeout(rzT);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
       window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);
