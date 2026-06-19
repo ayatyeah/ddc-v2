@@ -13,11 +13,8 @@ export function initScene(canvas) {
   const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
   const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-  // MSAA дорог на слабых/мобильных GPU; на мягком фоне (туман, свечение) почти
-  // не виден — на узких экранах отключаем, на десктопе оставляем.
-  const initMobile = window.innerWidth < 760 || (window.innerWidth / window.innerHeight) < 0.95;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !initMobile, alpha: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, initMobile ? 1.5 : 1.25));
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
@@ -174,17 +171,6 @@ export function initScene(canvas) {
   const zoff = new Float32Array(N);
   for (let i = 0; i < N; i++) zoff[i] = (Math.random() - 0.5) * 4;
   function layout() {
-    const w = window.innerWidth, h = window.innerHeight, a = w / h;
-    const mobile = w < 760 || a < 0.95;
-    if (mobile) {
-      // Узкий/портретный экран: горизонтальный FOV мал, поэтому планету и «DDC»
-      // дополнительно сжимаем под ширину (s), кадр держим чуть дальше и выше,
-      // а планету сажаем ниже (planetY < cy), чтобы она целиком влезала.
-      const s = Math.max(0.78, Math.min(1, w / 430));
-      // cy === planetY: «DDC» центрируется ровно по планете (и камера смотрит туда же).
-      return { mobile: 1, camZ: 126, eyeY: 64, lookY: 6, cy: 17, planetY: 17,
-               kzCX: 0, kzS: 11.5 * s, ddcCX: 0, ddcS: 9 * s };
-    }
     return { mobile: 0, camZ: 112, eyeY: 56, lookY: 5, cy: 20, planetY: 20,
              kzCX: 0, kzS: 18, ddcCX: 0, ddcS: 15 };
   }
@@ -318,10 +304,9 @@ export function initScene(canvas) {
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     L = layout();
-    // Баланс резкости/нагрузки: мобильный 1.5× (без «мыла», но не полный retina), десктоп 1.25×.
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, L.mobile ? 1.5 : 1.25));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-    pMat.uniforms.uSize.value = L.mobile ? 2.2 : 3.0;   // меньше размер искорок на мобильном → меньше перерисовки
+    pMat.uniforms.uSize.value = 3.0;
     buildTargets();
     if (pState === 1) pos.set(ddc); else pos.set(kz);
     pGeo.attributes.position.needsUpdate = true;
@@ -331,18 +316,11 @@ export function initScene(canvas) {
 
   scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
 
-  // Ограничение ~60 кадров/с: на дисплеях 120 Гц это вдвое снижает нагрузку на GPU
-  // и убирает троттлинг/«провисание»; на 60 Гц проходит каждый кадр. Анимации
-  // на основе времени (sin(t*…)) остаются плавными, а пошаговые приращения
-  // (disp, u.t) рассчитаны как раз на 60 к/с.
-  const MIN_DT = 1 / 62;
-  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, lastFrame = -1;
+  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false;
   function loop() {
     raf = 0;
-    if (running) raf = requestAnimationFrame(loop);   // планируем следующий кадр заранее
+    if (running) raf = requestAnimationFrame(loop);
     const t = clock.getElapsedTime();
-    if (t - lastFrame < MIN_DT) return;               // кадр пришёл слишком рано — пропускаем
-    lastFrame = t;
     disp += (progress - disp) * 0.05;          // плавный бесшовный переход между страницами
     const p = disp;
 
