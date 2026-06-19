@@ -170,12 +170,43 @@ async function logAudit(req, entity, entityId, action, summary) {
   } catch (e) { console.error('audit:', e.message); }
 }
 
+// Создать in-app уведомление пользователю (доставляется поллингом с фронта).
+// userId может быть null (напр. суперадмин без записи в users) — тогда тихо пропускаем.
+async function notify(userId, type, leadId, title, body) {
+  if (!userId) return;
+  try {
+    await db.query(
+      `INSERT INTO notifications (user_id, type, lead_id, title, body) VALUES ($1,$2,$3,$4,$5)`,
+      [userId, type, leadId == null ? null : Number(leadId), (title || '').slice(0, 200), (body || '').slice(0, 500)]
+    );
+  } catch (e) { console.error('notify:', e.message); }
+}
+
+// Полная строка лида (с исполнителем, скором и флагом оценочного листа) — чтобы
+// после PATCH/назначения фронт получал тот же набор полей, что и в списке.
+async function fetchLeadRow(id) {
+  const { rows } = await db.query(
+    `SELECT l.id, l.full_name, l.email, l.phone, l.subject, l.message, l.status,
+            l.admin_comment, l.rating, l.assignee_id, l.assigned_by, l.assigned_at,
+            l.score, l.score_json, l.score_at,
+            u.username AS assignee_username, u.full_name AS assignee_name,
+            (e.lead_id IS NOT NULL) AS has_evaluation,
+            l.created_at, l.updated_at
+     FROM leads l
+     LEFT JOIN users u ON u.id = l.assignee_id
+     LEFT JOIN evaluations e ON e.lead_id = l.id
+     WHERE l.id = $1`, [id]);
+  return rows[0] || null;
+}
+
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
-  const issue = (u, role) => {
-    const token = jwt.sign({ u, role }, SECRET, { expiresIn: '8h' });
+  // id — идентификатор записи в users (нужен для привязки лидов к сотруднику).
+  // У суперадмина из .env записи в users нет → id = null.
+  const issue = (u, role, id = null) => {
+    const token = jwt.sign({ u, role, id }, SECRET, { expiresIn: '8h' });
     res.cookie('ddc_token', token, { ...COOKIE_OPTS, maxAge: 8 * 60 * 60 * 1000 });
-    return res.json({ ok: true, username: u, role });
+    return res.json({ ok: true, username: u, role, id });
   };
 
   // 1) Суперадмин из .env
@@ -185,12 +216,13 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   // 2) Пользователь из таблицы users (bcrypt)
   try {
     const { rows } = await db.query(
-      `SELECT username, password_hash, role FROM users WHERE username = $1`,
+      `SELECT id, username, password_hash, role, active FROM users WHERE username = $1`,
       [String(username || '').trim()]
     );
     if (rows.length) {
+      if (!rows[0].active) return res.status(403).json({ error: 'Учётная запись отключена' });
       const ok = await bcrypt.compare(String(password || ''), rows[0].password_hash);
-      if (ok) return issue(rows[0].username, rows[0].role);
+      if (ok) return issue(rows[0].username, rows[0].role, rows[0].id);
     }
   } catch (e) {
     console.error('POST /api/login:', e.message);
@@ -204,7 +236,7 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', auth, (req, res) => {
-  res.json({ username: req.admin.u, role: req.admin.role });
+  res.json({ username: req.admin.u, role: req.admin.role, id: req.admin.id ?? null });
 });
 
 // ── Публичный приём заявки с формы сайта ──────────────────────────────────────
@@ -277,22 +309,35 @@ app.get('/api/leads', auth, async (req, res) => {
   const { status, q } = req.query;
   const where = [];
   const params = [];
+  // Изоляция сотрудника: staff видит ТОЛЬКО назначенные ему лиды (проверка на бэкенде,
+  // а не только скрытием в UI). Остальные роли видят всё.
+  if (req.admin.role === 'staff') {
+    params.push(req.admin.id || 0);
+    where.push(`l.assignee_id = $${params.length}`);
+  }
   if (status && ALLOWED_STATUSES.includes(status)) {
     params.push(status);
-    where.push(`status = $${params.length}`);
+    where.push(`l.status = $${params.length}`);
   }
   if (q && String(q).trim()) {
     params.push(`%${String(q).trim().toLowerCase()}%`);
     const i = params.length;
-    where.push(`(LOWER(full_name) LIKE $${i} OR LOWER(email) LIKE $${i} OR LOWER(phone) LIKE $${i})`);
+    where.push(`(LOWER(l.full_name) LIKE $${i} OR LOWER(l.email) LIKE $${i} OR LOWER(l.phone) LIKE $${i})`);
   }
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
   try {
     const { rows } = await db.query(
-      `SELECT id, full_name, email, phone, subject, message, status,
-              admin_comment, rating, created_at, updated_at
-       FROM leads ${clause}
-       ORDER BY created_at DESC
+      `SELECT l.id, l.full_name, l.email, l.phone, l.subject, l.message, l.status,
+              l.admin_comment, l.rating, l.assignee_id, l.assigned_by, l.assigned_at,
+              l.score, l.score_json, l.score_at,
+              u.username AS assignee_username, u.full_name AS assignee_name,
+              (e.lead_id IS NOT NULL) AS has_evaluation,
+              l.created_at, l.updated_at
+       FROM leads l
+       LEFT JOIN users u ON u.id = l.assignee_id
+       LEFT JOIN evaluations e ON e.lead_id = l.id
+       ${clause}
+       ORDER BY l.created_at DESC
        LIMIT 500`,
       params
     );
@@ -327,9 +372,18 @@ app.get('/api/stats', auth, async (req, res) => {
 });
 
 // ── Админ: обновление клиента (статус / комментарий / оценка) ─────────────────
-app.patch('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, res) => {
+app.patch('/api/leads/:id', auth, requireRole('admin', 'editor', 'manager', 'staff'), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
+
+  // staff может менять только назначенные ему лиды
+  if (req.admin.role === 'staff') {
+    const own = await db.query(`SELECT assignee_id FROM leads WHERE id = $1`, [id]);
+    if (!own.rows.length) return res.status(404).json({ error: 'Клиент не найден' });
+    if (own.rows[0].assignee_id !== req.admin.id) {
+      return res.status(403).json({ error: 'Это не ваш лид' });
+    }
+  }
 
   const sets = [];
   const params = [];
@@ -357,9 +411,7 @@ app.patch('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, re
   params.push(id);
   try {
     const { rows } = await db.query(
-      `UPDATE leads SET ${sets.join(', ')} WHERE id = $${params.length}
-       RETURNING id, full_name, email, phone, subject, message, status,
-                 admin_comment, rating, created_at, updated_at`,
+      `UPDATE leads SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING id`,
       params
     );
     if (!rows.length) return res.status(404).json({ error: 'Клиент не найден' });
@@ -368,15 +420,53 @@ app.patch('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, re
     if (rating !== undefined) ch.push(`оценка → ${rating}`);
     if (admin_comment !== undefined) ch.push('комментарий изменён');
     logAudit(req, 'lead', id, status !== undefined ? 'status' : 'update', `Заявка #${id}: ${ch.join(', ')}`);
-    res.json(rows[0]);
+    res.json(await fetchLeadRow(id));
   } catch (e) {
     console.error('PATCH /api/leads:', e.message);
     res.status(500).json({ error: 'Не удалось обновить' });
   }
 });
 
+// ── Начальник/админ: назначить исполнителя на лид (один исполнитель) ──────────
+app.patch('/api/leads/:id/assign', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
+  const raw = req.body ? req.body.assignee_id : undefined;
+  try {
+    let assignee = null;
+    if (raw !== null && raw !== undefined && raw !== '') {
+      const aid = Number(raw);
+      if (!Number.isInteger(aid)) return res.status(400).json({ error: 'Некорректный сотрудник' });
+      const u = await db.query(`SELECT id, username, full_name, active FROM users WHERE id = $1`, [aid]);
+      if (!u.rows.length) return res.status(400).json({ error: 'Сотрудник не найден' });
+      if (!u.rows[0].active) return res.status(400).json({ error: 'Сотрудник отключён' });
+      assignee = u.rows[0];
+    }
+    const upd = await db.query(
+      `UPDATE leads SET assignee_id = $1, assigned_by = $2,
+              assigned_at = CASE WHEN $1::int IS NULL THEN NULL ELSE now() END
+       WHERE id = $3 RETURNING id`,
+      [assignee ? assignee.id : null, assignee ? req.admin.u : '', id]
+    );
+    if (!upd.rows.length) return res.status(404).json({ error: 'Лид не найден' });
+    const who = assignee ? (assignee.full_name || assignee.username) : '—';
+    logAudit(req, 'lead', id, 'assign', assignee ? `Лид #${id} назначен: ${who}` : `Снято назначение с лида #${id}`);
+    // Уведомление сотруднику о новой задаче (не уведомляем сам себя).
+    if (assignee && assignee.id !== req.admin.id) {
+      const out0 = await db.query(`SELECT full_name, subject FROM leads WHERE id = $1`, [id]);
+      const lead0 = out0.rows[0] || {};
+      await notify(assignee.id, 'assignment', id, 'Новая задача',
+        `Вам назначен лид: ${lead0.full_name || ('#' + id)}${lead0.subject ? ' — ' + lead0.subject : ''}`);
+    }
+    res.json(await fetchLeadRow(id));
+  } catch (e) {
+    console.error('PATCH /api/leads/:id/assign:', e.message);
+    res.status(500).json({ error: 'Не удалось назначить' });
+  }
+});
+
 // ── Админ: удаление заявки ────────────────────────────────────────────────────
-app.delete('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, res) => {
+app.delete('/api/leads/:id', auth, requireRole('admin', 'editor', 'manager'), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
   try {
@@ -388,6 +478,78 @@ app.delete('/api/leads/:id', auth, requireRole('admin', 'editor'), async (req, r
     console.error('DELETE /api/leads:', e.message);
     res.status(500).json({ error: 'Не удалось удалить заявку' });
   }
+});
+
+// ── Уведомления (in-app, доставка поллингом с фронта) ─────────────────────────
+app.get('/api/notifications', auth, async (req, res) => {
+  if (!req.admin.id) return res.json({ items: [], unread: 0 }); // суперадмин без записи в users
+  try {
+    const unreadOnly = req.query.unread === '1';
+    const { rows } = await db.query(
+      `SELECT id, type, lead_id, title, body, read, created_at
+       FROM notifications WHERE user_id = $1 ${unreadOnly ? 'AND read = FALSE' : ''}
+       ORDER BY id DESC LIMIT 50`, [req.admin.id]);
+    const u = await db.query(`SELECT count(*)::int c FROM notifications WHERE user_id = $1 AND read = FALSE`, [req.admin.id]);
+    res.json({ items: rows, unread: u.rows[0].c });
+  } catch (e) { console.error('GET /api/notifications:', e.message); res.status(500).json({ error: 'Ошибка чтения уведомлений' }); }
+});
+
+app.post('/api/notifications/read', auth, async (req, res) => {
+  if (!req.admin.id) return res.json({ ok: true });
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isInteger) : null;
+  try {
+    if (ids && ids.length) {
+      await db.query(`UPDATE notifications SET read = TRUE WHERE user_id = $1 AND id = ANY($2::int[])`, [req.admin.id, ids]);
+    } else {
+      await db.query(`UPDATE notifications SET read = TRUE WHERE user_id = $1 AND read = FALSE`, [req.admin.id]);
+    }
+    res.json({ ok: true });
+  } catch (e) { console.error('POST /api/notifications/read:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
+});
+
+// ── Оценочный лист по лиду (заполняет сотрудник после обслуживания) ───────────
+// staff — только по своим лидам; admin/manager — по любым.
+async function leadOwnedOrManager(req, id) {
+  if (req.admin.role !== 'staff') return true;
+  const r = await db.query(`SELECT assignee_id FROM leads WHERE id = $1`, [id]);
+  return r.rows.length > 0 && r.rows[0].assignee_id === req.admin.id;
+}
+
+app.get('/api/leads/:id/evaluation', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
+  try {
+    if (!(await leadOwnedOrManager(req, id))) return res.status(403).json({ error: 'Это не ваш лид' });
+    const { rows } = await db.query(`SELECT * FROM evaluations WHERE lead_id = $1`, [id]);
+    res.json(rows[0] || null);
+  } catch (e) { console.error('GET evaluation:', e.message); res.status(500).json({ error: 'Ошибка чтения' }); }
+});
+
+app.post('/api/leads/:id/evaluation', auth, requireRole('admin', 'manager', 'staff'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
+  try {
+    if (!(await leadOwnedOrManager(req, id))) return res.status(403).json({ error: 'Это не ваш лид' });
+    const b = req.body || {};
+    const s = (v, n) => String(v ?? '').slice(0, n);
+    const willReturn = ['yes', 'maybe', 'no', ''].includes(b.will_return) ? b.will_return : '';
+    const rev = Math.max(0, Math.min(999, Number(b.revisions_count) || 0));
+    const comm = Math.max(0, Math.min(5, Number(b.comm_quality) || 0));
+    const { rows } = await db.query(
+      `INSERT INTO evaluations
+         (lead_id, accepted_by, performed_by, will_return, revisions_count, had_conflict, comm_quality, q_budget, q_clarity, q_extra, notes, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (lead_id) DO UPDATE SET
+         accepted_by=EXCLUDED.accepted_by, performed_by=EXCLUDED.performed_by, will_return=EXCLUDED.will_return,
+         revisions_count=EXCLUDED.revisions_count, had_conflict=EXCLUDED.had_conflict, comm_quality=EXCLUDED.comm_quality,
+         q_budget=EXCLUDED.q_budget, q_clarity=EXCLUDED.q_clarity, q_extra=EXCLUDED.q_extra, notes=EXCLUDED.notes
+       RETURNING *`,
+      [id, s(b.accepted_by, 120), s(b.performed_by, 120), willReturn, rev, !!b.had_conflict, comm,
+       s(b.q_budget, 500), s(b.q_clarity, 500), s(b.q_extra, 500), s(b.notes, 2000), req.admin.u]
+    );
+    logAudit(req, 'lead', id, 'evaluation', `Оценочный лист по лиду #${id} сохранён`);
+    res.json(rows[0]);
+  } catch (e) { console.error('POST evaluation:', e.message); res.status(500).json({ error: 'Не удалось сохранить лист' }); }
 });
 
 // ── Админ: новости (CRUD) ─────────────────────────────────────────────────────
@@ -487,12 +649,12 @@ app.delete('/api/admin/news/:id', auth, requireRole('admin', 'editor'), async (r
 });
 
 // ── Админ: пользователи (только роль admin) ───────────────────────────────────
-const ALLOWED_ROLES = ['admin', 'editor', 'viewer'];
+const ALLOWED_ROLES = ['admin', 'manager', 'staff', 'editor', 'viewer'];
 
 app.get('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, username, role, created_at FROM users ORDER BY created_at ASC`
+      `SELECT id, username, full_name, department, role, active, created_at FROM users ORDER BY created_at ASC`
     );
     res.json(rows);
   } catch (e) {
@@ -501,10 +663,27 @@ app.get('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
+// Список сотрудников/начальников для дропдауна назначения (admin и manager).
+app.get('/api/admin/staff', auth, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, username, full_name, department, role FROM users
+       WHERE role IN ('manager','staff') AND active = TRUE
+       ORDER BY full_name NULLS LAST, username`
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error('GET /api/admin/staff:', e.message);
+    res.status(500).json({ error: 'Ошибка чтения сотрудников' });
+  }
+});
+
 app.post('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
   const username = String(req.body?.username || '').trim().slice(0, 60);
   const password = String(req.body?.password || '');
-  const role = ALLOWED_ROLES.includes(req.body?.role) ? req.body.role : 'editor';
+  const full_name = String(req.body?.full_name || '').trim().slice(0, 120);
+  const department = String(req.body?.department || '').trim().slice(0, 120);
+  const role = ALLOWED_ROLES.includes(req.body?.role) ? req.body.role : 'staff';
   if (!username || password.length < 4) {
     return res.status(400).json({ error: 'Логин и пароль (от 4 символов) обязательны' });
   }
@@ -514,10 +693,12 @@ app.post('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
-      `INSERT INTO users (username, password_hash, role) VALUES ($1,$2,$3)
-       RETURNING id, username, role, created_at`,
-      [username, hash, role]
+      `INSERT INTO users (username, password_hash, full_name, department, role)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING id, username, full_name, department, role, active, created_at`,
+      [username, hash, full_name, department, role]
     );
+    logAudit(req, 'user', rows[0].id, 'create', `Создан пользователь ${username} (${role})`);
     res.status(201).json(rows[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Такой логин уже есть' });
@@ -545,31 +726,74 @@ app.delete('/api/admin/users/:id', auth, requireRole('admin'), async (req, res) 
 });
 
 // ── ИИ-аналитика клиентов (Gemini) с кэшированием ────────────────────────────
-const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-async function callGemini(prompt, maxTokens = 2048) {
-  if (!GEMINI_KEY) throw new Error('GEMINI_API_KEY не задан в .env');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+// Пул ключей: список через GEMINI_API_KEYS (запятая) + отдельные GEMINI_API_KEY/_2/_3.
+// Дубли убираем. Несколько ключей дают ротацию и фейловер при достижении лимита.
+const GEMINI_KEYS = [
+  ...String(process.env.GEMINI_API_KEYS || '').split(','),
+  process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2, process.env.GEMINI_API_KEY_3,
+].map((s) => (s || '').trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+console.log(`Gemini: ключей в пуле — ${GEMINI_KEYS.length} (ротация/фейловер при лимитах)`);
+
+let geminiKeyIdx = 0;                       // round-robin указатель (липкий на успешном ключе)
+const geminiCooldown = {};                  // idx -> до какого времени ключ пропускаем (после лимита)
+const KEY_COOLDOWN_MS = 5 * 60 * 1000;      // после 429/403 ключ отдыхает 5 минут
+const geminiInflight = new Map();           // дедуп: одинаковый промпт не уходит в ИИ дважды параллельно
+
+function geminiUrl(key) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+}
+async function geminiFetch(key, prompt, maxTokens) {
+  return fetch(geminiUrl(key), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.3,
-        responseMimeType: 'application/json',
-        maxOutputTokens: maxTokens,
-        thinkingConfig: { thinkingBudget: 0 }, // без «размышлений» — иначе бюджет уходит и ответ пустой
+        temperature: 0.3, responseMimeType: 'application/json', maxOutputTokens: maxTokens,
+        thinkingConfig: { thinkingBudget: 0 }, // без «размышлений» — экономит токены и не пустеет ответ
       },
     }),
   });
-  if (!r.ok) { const tx = await r.text(); throw new Error(`Gemini ${r.status}: ${tx.slice(0, 300)}`); }
-  const j = await r.json();
-  const cand = j?.candidates?.[0];
-  const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
-  if (!text) throw new Error('пустой ответ ИИ (' + (cand?.finishReason || 'нет кандидатов') + ')');
-  return text;
+}
+
+async function callGeminiInner(prompt, maxTokens) {
+  if (!GEMINI_KEYS.length) throw new Error('Не задан ни один GEMINI_API_KEY в .env');
+  // Порядок обхода: с текущего указателя по кругу; ключи на кулдауне пропускаем.
+  const order = GEMINI_KEYS.map((_, i) => (geminiKeyIdx + i) % GEMINI_KEYS.length);
+  let avail = order.filter((i) => !(geminiCooldown[i] && geminiCooldown[i] > Date.now()));
+  if (!avail.length) avail = order;          // все «отдыхают» — всё равно пробуем по кругу
+  let lastErr = null;
+  for (const idx of avail) {
+    try {
+      const r = await geminiFetch(GEMINI_KEYS[idx], prompt, maxTokens);
+      if (r.status === 429 || r.status === 403) {     // лимит/квота → кулдаун и следующий ключ
+        geminiCooldown[idx] = Date.now() + KEY_COOLDOWN_MS;
+        lastErr = new Error(`Gemini ${r.status} на ключе #${idx + 1} (лимит) — переключаюсь`);
+        console.warn(lastErr.message);
+        continue;
+      }
+      if (!r.ok) { const tx = await r.text(); lastErr = new Error(`Gemini ${r.status}: ${tx.slice(0, 200)}`); continue; }
+      const j = await r.json();
+      const cand = j?.candidates?.[0];
+      const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+      if (!text) { lastErr = new Error('пустой ответ ИИ (' + (cand?.finishReason || 'нет кандидатов') + ')'); continue; }
+      geminiKeyIdx = idx;                     // успешный ключ делаем текущим (липкость → меньше переключений)
+      return text;
+    } catch (e) { lastErr = e; }
+  }
+  geminiKeyIdx = (geminiKeyIdx + 1) % GEMINI_KEYS.length; // сдвигаем старт на след. раз
+  throw lastErr || new Error('Все ключи Gemini недоступны (лимиты/ошибки)');
+}
+
+// Обёртка с in-flight дедупом: параллельные одинаковые запросы делят один вызов к ИИ.
+function callGemini(prompt, maxTokens = 2048) {
+  const key = maxTokens + ' ' + prompt;
+  const cached = geminiInflight.get(key);
+  if (cached) return cached;
+  const p = callGeminiInner(prompt, maxTokens).finally(() => geminiInflight.delete(key));
+  geminiInflight.set(key, p);
+  return p;
 }
 
 function parseJsonLoose(text) {
@@ -599,12 +823,14 @@ app.get('/api/admin/ai/analysis', auth, async (req, res) => {
 });
 
 // Запуск анализа. Если заявки не менялись (та же подпись) — отдаём кэш без вызова ИИ.
-app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (req, res) => {
+app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor', 'manager'), async (req, res) => {
   const force = !!(req.body && req.body.force);
   try {
+    // ИИ-анализ воронки — только по активным заявкам. Обслуженные и отказанные
+    // исключаем: по ним работа завершена (обслуженные оцениваются скорингом отдельно).
     const { rows: leads } = await db.query(
       `SELECT id, full_name, email, phone, subject, message, status, admin_comment, rating, created_at, updated_at
-       FROM leads ORDER BY created_at DESC LIMIT 200`
+       FROM leads WHERE status NOT IN ('served','rejected') ORDER BY created_at DESC LIMIT 200`
     );
     const sig = leadsSignature(leads);
 
@@ -616,15 +842,15 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (r
     }
 
     if (!leads.length) {
-      const empty = { summary: 'Заявок пока нет — анализировать нечего.', important_clients: [], main_problems: [], recommendations: [] };
+      const empty = { summary: 'Активных заявок нет — анализировать нечего (обслуженные и отказы не анализируются).', important_clients: [], main_problems: [], recommendations: [] };
       await db.query(`INSERT INTO ai_analysis (leads_sig, content) VALUES ($1, $2)`, [sig, JSON.stringify(empty)]);
       return res.json({ analysis: empty, fromCache: false });
     }
 
-    const compact = leads.slice(0, 80).map((l) => ({
+    const compact = leads.slice(0, 60).map((l) => ({
       id: l.id, name: l.full_name,
-      subject: l.subject, message: (l.message || '').slice(0, 160),
-      status: l.status, rating: l.rating, note: (l.admin_comment || '').slice(0, 120),
+      subject: l.subject, message: (l.message || '').slice(0, 120),
+      status: l.status, rating: l.rating, note: (l.admin_comment || '').slice(0, 100),
     }));
     const prompt =
 `Ты аналитик по работе с клиентами IT-компании DDC. rating (0-5) — оценка клиента сотрудником (важность/качество клиента), не отзыв клиента.
@@ -633,13 +859,13 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (r
 До 6 важных клиентов. В action и recommendations — конкретные действия (а не общие слова). Кратко, по-русски. Заявки: ${JSON.stringify(compact)}`;
 
     let analysis = null, lastErr = null;
-    for (let attempt = 0; attempt < 3 && !analysis; attempt++) {
+    for (let attempt = 0; attempt < 2 && !analysis; attempt++) {
       try {
         const text = await callGemini(prompt);
         analysis = parseJsonLoose(text);
         if (!analysis) lastErr = new Error('не удалось разобрать ответ ИИ');
       } catch (e) { lastErr = e; }
-      if (!analysis && attempt < 2) await new Promise((r) => setTimeout(r, 700));
+      if (!analysis && attempt < 1) await new Promise((r) => setTimeout(r, 700));
     }
     if (!analysis) {
       return res.status(502).json({ error: 'ИИ-анализ недоступен: ' + (lastErr ? lastErr.message : 'неизвестная ошибка') });
@@ -649,6 +875,94 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor'), async (r
   } catch (e) {
     console.error('POST /api/admin/ai/analyze:', e.message);
     res.status(502).json({ error: 'ИИ-анализ недоступен: ' + e.message });
+  }
+});
+
+// ── AI-скоринг лидов по 7 осям (Gemini) ──────────────────────────────────────
+// Композит считаем В КОДЕ (модели не доверяем арифметику). Веса настраиваемые.
+const SCORE_AXES = ['value_ltv', 'lead_quality', 'conversion_prob', 'satisfaction', 'repeat_potential', 'risk', 'urgency'];
+// Веса 7 осей суммируются в 1.0 → итог = средневзвешенная оценка (0..100).
+// Ось risk входит ИНВЕРТИРОВАННОЙ (вклад = 100 − risk): чем НИЖЕ риск, тем ВЫШЕ средняя оценка.
+const SCORE_W = { value_ltv: 0.24, conversion_prob: 0.18, repeat_potential: 0.13, lead_quality: 0.12, satisfaction: 0.08, urgency: 0.05, risk: 0.20 };
+function computeComposite(axes) {
+  let total = 0;
+  for (const k in SCORE_W) {
+    let v = Number(axes?.[k]?.score);
+    if (!Number.isFinite(v)) v = 50;            // нет данных по оси → нейтрально
+    v = Math.max(0, Math.min(100, v));
+    if (k === 'risk') v = 100 - v;              // инверсия риска: низкий риск → высокий вклад
+    total += v * SCORE_W[k];
+  }
+  return Math.max(0, Math.min(100, Math.round(total)));
+}
+
+app.post('/api/admin/ai/score', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const force = !!(req.body && req.body.force);
+  try {
+    // Скоринг доступен ТОЛЬКО когда есть достаточно данных для оценки:
+    //  • status='served' и заполнен оценочный лист, ЛИБО
+    //  • status='rejected' и указана причина (admin_comment не пуст).
+    const { rows: leads } = await db.query(
+      `SELECT l.id, l.full_name, l.subject, l.message, l.status, l.rating, l.admin_comment, l.updated_at, l.score, l.score_at,
+              e.will_return, e.revisions_count, e.had_conflict, e.comm_quality, e.q_budget, e.q_clarity, e.q_extra, e.notes AS eval_notes
+       FROM leads l LEFT JOIN evaluations e ON e.lead_id = l.id
+       WHERE (l.status = 'served'   AND e.lead_id IS NOT NULL)
+          OR (l.status = 'rejected' AND btrim(coalesce(l.admin_comment, '')) <> '')
+       ORDER BY l.created_at DESC LIMIT 120`);
+    if (!leads.length) return res.json({ scored: 0, total: 0, message: 'Нет лидов для скоринга: нужен оценочный лист (Обслужен) или причина отказа (Отказ).' });
+    // Пересчитываем только новые/изменённые лиды (или все при force) — экономим токены.
+    const need = force ? leads : leads.filter((l) => l.score == null || !l.score_at || new Date(l.updated_at) > new Date(l.score_at));
+    if (!need.length) return res.json({ scored: 0, total: leads.length, message: 'Все лиды уже оценены' });
+    const batch = need.slice(0, 40);
+    const compact = batch.map((l) => ({
+      id: l.id, name: l.full_name, subject: l.subject, message: (l.message || '').slice(0, 140), status: l.status, internal_rating: l.rating,
+      reason_or_note: (l.admin_comment || '').slice(0, 150) || null,   // для отказанных — причина отказа
+      evaluation: (l.will_return || l.comm_quality || l.revisions_count || l.q_budget) ? {
+        will_return: l.will_return, revisions: l.revisions_count, conflict: l.had_conflict, comm_quality: l.comm_quality,
+        budget: l.q_budget, clarity: l.q_clarity, extra: l.q_extra, notes: l.eval_notes,
+      } : null,
+    }));
+    const prompt =
+`Ты — аналитик по клиентам IT-компании DDC. Оцени КАЖДЫЙ лид по 7 осям (0-100). Где данных нет — ставь умеренные 50 и отметь это в reason. Если у лида есть evaluation (оценочный лист сотрудника) — используй его для осей satisfaction/repeat_potential/risk. Если status='rejected' — в reason_or_note причина отказа: учитывай её (это повышает risk и снижает conversion_prob/repeat_potential).
+Оси:
+- value_ltv: потенциальная ценность/LTV (масштаб проекта, бюджет, повторный доход)
+- lead_quality: качество заявки (конкретика, адекватность; спам→низко)
+- conversion_prob: вероятность стать оплатой
+- satisfaction: удовлетворённость/качество взаимодействия (конфликт, правки, коммуникация)
+- repeat_potential: потенциал повторного сотрудничества
+- risk: проблемность клиента (ВЫШЕ = ХУЖЕ; токсичность, хаос, спам)
+- urgency: срочность
+Верни ТОЛЬКО JSON: {"scores":[{"id":число,"value_ltv":{"score":0-100,"reason":"кратко"},"lead_quality":{"score":..,"reason":".."},"conversion_prob":{"score":..,"reason":".."},"satisfaction":{"score":..,"reason":".."},"repeat_potential":{"score":..,"reason":".."},"risk":{"score":..,"reason":".."},"urgency":{"score":..,"reason":".."}}]}
+reason — очень кратко по-русски. Лиды: ${JSON.stringify(compact)}`;
+
+    let parsed = null, lastErr = null;
+    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      try { parsed = parseJsonLoose(await callGemini(prompt, 4096)); if (!parsed) lastErr = new Error('не удалось разобрать ответ ИИ'); }
+      catch (e) { lastErr = e; }
+      if (!parsed && attempt < 1) await new Promise((r) => setTimeout(r, 700));
+    }
+    const arr = parsed && Array.isArray(parsed.scores) ? parsed.scores : (Array.isArray(parsed) ? parsed : null);
+    if (!arr) return res.status(502).json({ error: 'ИИ-скоринг недоступен: ' + (lastErr ? lastErr.message : 'неизвестная ошибка') });
+
+    let scored = 0;
+    for (const it of arr) {
+      const id = Number(it.id);
+      if (!Number.isInteger(id)) continue;
+      const axes = {};
+      for (const k of SCORE_AXES) {
+        axes[k] = { score: Math.max(0, Math.min(100, Number(it?.[k]?.score) || 0)), reason: String(it?.[k]?.reason || '').slice(0, 300) };
+      }
+      const total = computeComposite(axes);
+      // score_at = now() = updated_at (транзакционное время) → лид не считается «изменённым» снова.
+      await db.query(`UPDATE leads SET score = $1, score_json = $2, score_at = now() WHERE id = $3`,
+        [total, JSON.stringify({ axes, total, weights: SCORE_W }), id]);
+      scored++;
+    }
+    logAudit(req, 'lead', null, 'score', `AI-скоринг: оценено ${scored} лид(ов)`);
+    res.json({ scored, total: leads.length });
+  } catch (e) {
+    console.error('POST /api/admin/ai/score:', e.message);
+    res.status(502).json({ error: 'ИИ-скоринг недоступен: ' + e.message });
   }
 });
 

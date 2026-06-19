@@ -164,3 +164,76 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at DESC);
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Фаза 1 (CRM): роли manager/staff, профиль пользователя, назначение лида.
+-- Весь блок идемпотентен — безопасно прогонять повторно через `npm run init-db`.
+-- ═════════════════════════════════════════════════════════════════════════════
+
+-- Новые роли: manager (начальник отдела) и staff (сотрудник). editor/viewer сохраняем.
+-- Констрейнт пересоздаём (единственное не-IF-NOT-EXISTS место схемы).
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD  CONSTRAINT users_role_check
+  CHECK (role IN ('admin','manager','staff','editor','viewer'));
+
+-- Профиль пользователя
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name  TEXT    NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT    NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS active     BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Назначение лида конкретному исполнителю (один исполнитель на лид)
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_by TEXT DEFAULT '';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_leads_assignee ON leads (assignee_id);
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Фаза 2 (CRM): уведомления сотрудникам (in-app, доставка поллингом с фронта).
+-- ═════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS notifications (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type       TEXT        NOT NULL,                 -- assignment | eval_request | ...
+  lead_id    INTEGER     REFERENCES leads(id) ON DELETE CASCADE,
+  title      TEXT        NOT NULL,
+  body       TEXT        NOT NULL DEFAULT '',
+  read       BOOLEAN     NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notif_user_unread ON notifications (user_id, read);
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Фаза 3 (CRM): оценочный лист по лиду (заполняет сотрудник после обслуживания).
+-- Один лист на лид (UNIQUE lead_id) → POST делает upsert.
+-- ═════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS evaluations (
+  id              SERIAL PRIMARY KEY,
+  lead_id         INTEGER     NOT NULL UNIQUE REFERENCES leads(id) ON DELETE CASCADE,
+  accepted_by     TEXT        NOT NULL DEFAULT '',   -- кто принял заказ
+  performed_by    TEXT        NOT NULL DEFAULT '',   -- кто выполнял
+  will_return     TEXT        NOT NULL DEFAULT '' CHECK (will_return IN ('yes','maybe','no','')),
+  revisions_count SMALLINT    NOT NULL DEFAULT 0,
+  had_conflict    BOOLEAN     NOT NULL DEFAULT FALSE,
+  comm_quality    SMALLINT    NOT NULL DEFAULT 0 CHECK (comm_quality BETWEEN 0 AND 5),
+  q_budget        TEXT        NOT NULL DEFAULT '',   -- бюджет/масштаб (для оси Value/LTV)
+  q_clarity       TEXT        NOT NULL DEFAULT '',   -- чёткость запроса
+  q_extra         TEXT        NOT NULL DEFAULT '',   -- свободный вопрос
+  notes           TEXT        NOT NULL DEFAULT '',
+  created_by      TEXT        NOT NULL DEFAULT '',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_eval_lead ON evaluations (lead_id);
+DROP TRIGGER IF EXISTS trg_eval_updated_at ON evaluations;
+CREATE TRIGGER trg_eval_updated_at
+  BEFORE UPDATE ON evaluations
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Фаза 4 (CRM): AI-скоринг лида по 7 осям.
+--   score      — итоговый композит 0..100 (NULL = ещё не считался)
+--   score_json — разбивка по осям + пояснения от ИИ
+-- ═════════════════════════════════════════════════════════════════════════════
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS score      SMALLINT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS score_json JSONB;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS score_at   TIMESTAMPTZ;

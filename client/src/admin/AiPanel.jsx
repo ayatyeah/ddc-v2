@@ -28,16 +28,29 @@ export default function AiPanel({ onAuthLost, onOpenLead }) {
     } finally { setBusy(false); }
   };
 
+  const score = async (force) => {
+    setBusy(true); setErr(''); setNote('');
+    try {
+      const d = await sendJSON('/api/admin/ai/score', 'POST', { force });
+      setNote(d.scored ? `Оценено лидов: ${d.scored}. Скоры видны на вкладке «Заявки» (бейдж, разбор по 7 осям).` : (d.message || 'Все лиды уже оценены.'));
+    } catch (e) {
+      if (e.status === 401) return onAuthLost?.();
+      setErr(e.data?.error || 'Не удалось выполнить скоринг');
+    } finally { setBusy(false); }
+  };
+
   return (
     <div className="ai-wrap">
       <div className="ai-head">
         <div>
           <h2 className="ai-title">ИИ-аналитика клиентов</h2>
-          <p className="ai-sub">Оценка важности клиентов и ключевых проблем по заявкам. Результат кэшируется — повторный запуск не тратит запрос, пока заявки не изменились.</p>
+          <p className="ai-sub">Анализ — по активным заявкам (кроме «Обслужен» и «Отказ»): важность клиентов и ключевые проблемы воронки. Скоринг по 7 осям — по «Обслужен» с заполненным оценочным листом и по «Отказ» с указанной причиной. Результаты кэшируются.</p>
         </div>
         <div className="ai-actions">
-          <button className="adm-btn" onClick={() => run(false)} disabled={busy}>{busy ? 'Анализирую…' : (a ? 'Проверить' : 'Запустить анализ')}</button>
+          <button className="adm-btn" onClick={() => run(false)} disabled={busy}>{busy ? 'Работаю…' : (a ? 'Проверить' : 'Запустить анализ')}</button>
           <button className="adm-ghost" onClick={() => run(true)} disabled={busy} title="Игнорировать кэш">Обновить заново</button>
+          <button className="adm-ghost" onClick={() => score(false)} disabled={busy} title="Скоринг по 7 осям: «Обслужен» с оценочным листом и «Отказ» с причиной (новые/изменённые)">Скоринг лидов</button>
+          <button className="adm-ghost" onClick={() => score(true)} disabled={busy} title="Пересчитать скор всех подходящих лидов">Скоринг: все</button>
         </div>
       </div>
 

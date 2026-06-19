@@ -1,9 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getJSON, sendJSON } from '../api.js';
+import EvaluationModal from './EvaluationModal.jsx';
 
 const STATUS_LABELS = { new: 'Новый', in_progress: 'В процессе', on_hold: 'Отложен', served: 'Обслужен', rejected: 'Отказ' };
 const STATUS_ORDER = ['new', 'in_progress', 'on_hold', 'served', 'rejected'];
 const FILTERS = [['', 'Все'], ['new', 'Новые'], ['in_progress', 'В процессе'], ['on_hold', 'Отложены'], ['served', 'Обслужены'], ['rejected', 'Отказ']];
+
+// 7 осей AI-скоринга — для разворачиваемой разбивки под лидом
+const AXIS_ORDER = ['value_ltv', 'lead_quality', 'conversion_prob', 'satisfaction', 'repeat_potential', 'risk', 'urgency'];
+const AXIS_LABELS = {
+  value_ltv: ['Ценность / LTV', 'масштаб, бюджет, повтор'],
+  lead_quality: ['Качество заявки', 'конкретика, адекватность'],
+  conversion_prob: ['Вероятность конверсии', 'станет ли оплатой'],
+  satisfaction: ['Удовлетворённость', 'конфликт, правки, общение'],
+  repeat_potential: ['Повторное сотрудничество', 'приведёт ли ещё'],
+  risk: ['Риск / проблемность', 'анти-скоринг'],
+  urgency: ['Срочность', ''],
+};
+function scoreClass(s) { if (s == null) return 's-none'; if (s >= 70) return 's-hi'; if (s >= 40) return 's-mid'; return 's-lo'; }
 
 function fmtDate(iso) {
   try {
@@ -11,7 +25,7 @@ function fmtDate(iso) {
   } catch { return iso || ''; }
 }
 
-function Row({ row, onPatch, canEdit, highlight, onDelete }) {
+function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onAssign, showAssignee, expanded, onToggleScore, onOpenEval, colCount }) {
   const [comment, setComment] = useState(row.admin_comment || '');
   const [saved, setSaved] = useState(false);
 
@@ -23,69 +37,146 @@ function Row({ row, onPatch, canEdit, highlight, onDelete }) {
     setTimeout(() => setSaved(false), 1500);
   };
 
+  const axes = row.score_json && row.score_json.axes;
+
   return (
-    <tr id={`lead-${row.id}`} className={highlight ? 'lead-flash' : ''}>
-      <td data-label="Клиент">
-        <div className="who-name">{row.full_name}</div>
-        <div className="who-sub">{row.email || '—'}{row.phone ? ` · ${row.phone}` : ''}</div>
-      </td>
-      <td data-label="Вопрос">
-        <div>{row.subject || '—'}</div>
-        {row.message && <div className="who-sub">{row.message}</div>}
-      </td>
-      <td data-label="Статус">
-        <select
-          className={`status-select st-${row.status}`}
-          value={row.status}
-          disabled={!canEdit}
-          onChange={(e) => patch({ status: e.target.value })}
-        >
-          {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-        </select>
-      </td>
-      <td data-label="Оценка">
-        <div className="stars">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              className={`star ${n <= (row.rating || 0) ? 'on' : ''}`}
-              disabled={!canEdit}
-              onClick={() => patch({ rating: n === row.rating ? 0 : n })}
-              aria-label={`${n}`}
-            >★</button>
-          ))}
-        </div>
-      </td>
-      <td data-label="Комментарий">
-        <div className="comment-box">
-          <textarea className="adm-input" value={comment} readOnly={!canEdit} onChange={(e) => setComment(e.target.value)} />
-          {canEdit && (
-            <div className="save-row">
-              <button className="btn-sm" onClick={saveComment}>Сохранить</button>
-              <span className={`saved-tag ${saved ? 'show' : ''}`}>Сохранено ✓</span>
-            </div>
+    <>
+      <tr id={`lead-${row.id}`} className={highlight ? 'lead-flash' : ''}>
+        <td data-label="Клиент">
+          <div className="who-name">{row.full_name}</div>
+          <div className="who-sub">{row.email || '—'}{row.phone ? ` · ${row.phone}` : ''}</div>
+        </td>
+        <td data-label="Вопрос">
+          <div>{row.subject || '—'}</div>
+          {row.message && <div className="who-sub">{row.message}</div>}
+        </td>
+        <td data-label="Статус">
+          <select
+            className={`status-select st-${row.status}`}
+            value={row.status}
+            disabled={!canEdit}
+            onChange={(e) => patch({ status: e.target.value })}
+          >
+            {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+          </select>
+        </td>
+        <td data-label="Оценка">
+          <div className="stars">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                className={`star ${n <= (row.rating || 0) ? 'on' : ''}`}
+                disabled={!canEdit}
+                onClick={() => patch({ rating: n === row.rating ? 0 : n })}
+                aria-label={`${n}`}
+              >★</button>
+            ))}
+          </div>
+        </td>
+        <td data-label="Скор">
+          {row.score != null ? (
+            <button className={`score-badge ${scoreClass(row.score)}`} onClick={() => onToggleScore(row.id)} title="Разбор по 7 осям">{row.score}</button>
+          ) : (
+            <span className="score-badge s-none">—</span>
           )}
-        </div>
-      </td>
-      <td data-label="Дата" className="nowrap">
-        <div>{fmtDate(row.created_at)}</div>
-        {canEdit && <button className="lead-del" onClick={() => onDelete(row.id, row.full_name)}>Удалить</button>}
-      </td>
-    </tr>
+        </td>
+        <td data-label="Комментарий">
+          <div className="comment-box">
+            <textarea className="adm-input" value={comment} readOnly={!canEdit} onChange={(e) => setComment(e.target.value)} />
+            {canEdit && (
+              <div className="save-row">
+                <button className="btn-sm" onClick={saveComment}>Сохранить</button>
+                <span className={`saved-tag ${saved ? 'show' : ''}`}>Сохранено ✓</span>
+              </div>
+            )}
+          </div>
+        </td>
+        {showAssignee && (
+          <td data-label="Исполнитель">
+            {canAssign ? (
+              <select className="adm-input assignee-select" value={row.assignee_id || ''}
+                onChange={(e) => onAssign(row.id, e.target.value)}>
+                <option value="">— не назначен —</option>
+                {staff.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {(s.full_name || s.username)}{s.department ? ` · ${s.department}` : ''}{s.role === 'manager' ? ' (нач.)' : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="who-name">{row.assignee_name || row.assignee_username || '—'}</span>
+            )}
+          </td>
+        )}
+        <td data-label="Дата" className="nowrap">
+          <div>{fmtDate(row.created_at)}</div>
+          {canEdit && <button className={`eval-btn ${row.has_evaluation ? 'done' : ''}`} onClick={() => onOpenEval(row)}>{row.has_evaluation ? 'Лист ✓' : 'Оценочный лист'}</button>}
+          {canEdit && <button className="lead-del" onClick={() => onDelete(row.id, row.full_name)}>Удалить</button>}
+        </td>
+      </tr>
+      {expanded && axes && (
+        <tr className="score-detail">
+          <td colSpan={colCount}>
+            {AXIS_ORDER.map((k) => {
+              const a = axes[k] || { score: 0, reason: '' };
+              return (
+                <div key={k}>
+                  <div className="axis-row">
+                    <div className="axis-name">{AXIS_LABELS[k][0]}<small>{AXIS_LABELS[k][1]}</small></div>
+                    <div className={`axis-bar ${k === 'risk' ? 'risk' : ''}`}><span style={{ width: `${a.score}%` }} /></div>
+                    <div className="axis-val">{a.score}</div>
+                  </div>
+                  {a.reason && <div className="axis-reason">{a.reason}</div>}
+                </div>
+              );
+            })}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
-export default function Leads({ onAuthLost, canEdit = true, focusId = null }) {
+export default function Leads({ onAuthLost, canEdit = true, canAssign = false, isStaff = false, focusId = null }) {
   const [stats, setStats] = useState(null);
   const [rows, setRows] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [filter, setFilter] = useState('');
   const [q, setQ] = useState('');
   const [empty, setEmpty] = useState(false);
+  const [evalLead, setEvalLead] = useState(null);
+  const [expanded, setExpanded] = useState(() => new Set());
+  const [sortScore, setSortScore] = useState(false);
   const debRef = useRef(0);
+  const showAssignee = !isStaff;
+  const colCount = showAssignee ? 8 : 7;
+
+  const toggleScore = (id) => setExpanded((prev) => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+  const onSavedEval = (id) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, has_evaluation: true } : r)));
 
   const loadStats = useCallback(async () => {
     try { setStats(await getJSON('/api/stats')); } catch {}
   }, []);
+
+  // Список сотрудников для дропдауна назначения (только тем, кто может назначать)
+  useEffect(() => {
+    if (!canAssign) return;
+    let alive = true;
+    getJSON('/api/admin/staff').then((d) => { if (alive) setStaff(Array.isArray(d) ? d : []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [canAssign]);
+
+  const assign = async (id, assigneeId) => {
+    try {
+      const updated = await sendJSON(`/api/leads/${id}/assign`, 'PATCH',
+        { assignee_id: assigneeId === '' ? null : Number(assigneeId) });
+      setRows((rs) => rs.map((r) => (r.id === id ? updated : r)));
+    } catch (e) {
+      if (e.status === 401) onAuthLost?.();
+    }
+  };
 
   const loadLeads = useCallback(async (statusFilter, query) => {
     const params = new URLSearchParams();
@@ -155,6 +246,9 @@ export default function Leads({ onAuthLost, canEdit = true, focusId = null }) {
             <button key={f} className={f === filter ? 'active' : ''} onClick={() => setFilter(f)}>{label}</button>
           ))}
         </div>
+        <button className={`adm-ghost ${sortScore ? 'active' : ''}`} onClick={() => setSortScore((v) => !v)}>
+          {sortScore ? 'Сортировка: по скору ▼' : 'Сортировать по скору'}
+        </button>
         <button className="adm-ghost" onClick={() => { loadStats(); loadLeads(filter, q); }}>Обновить</button>
       </div>
 
@@ -162,15 +256,23 @@ export default function Leads({ onAuthLost, canEdit = true, focusId = null }) {
         <table className="adm-table">
           <thead>
             <tr>
-              <th>Клиент</th><th>Вопрос</th><th>Статус</th><th>Оценка</th><th>Комментарий</th><th className="nowrap">Дата</th>
+              <th>Клиент</th><th>Вопрос</th><th>Статус</th><th>Оценка</th><th>Скор</th><th>Комментарий</th>
+              {showAssignee && <th>Исполнитель</th>}
+              <th className="nowrap">Дата</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => <Row key={row.id} row={row} onPatch={patch} canEdit={canEdit} highlight={focusId === row.id} onDelete={del} />)}
+            {(sortScore ? [...rows].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)) : rows).map((row) => (
+              <Row key={row.id} row={row} onPatch={patch} canEdit={canEdit} highlight={focusId === row.id} onDelete={del}
+                canAssign={canAssign} staff={staff} onAssign={assign} showAssignee={showAssignee}
+                expanded={expanded.has(row.id)} onToggleScore={toggleScore} onOpenEval={setEvalLead} colCount={colCount} />
+            ))}
           </tbody>
         </table>
         {empty && <div className="adm-empty">Заявок пока нет.</div>}
       </div>
+
+      {evalLead && <EvaluationModal lead={evalLead} onClose={() => setEvalLead(null)} onSaved={onSavedEval} />}
     </>
   );
 }

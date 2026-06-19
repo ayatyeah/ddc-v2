@@ -7,9 +7,10 @@ import NewsManager from './NewsManager.jsx';
 import Analytics from './Analytics.jsx';
 import Users from './Users.jsx';
 import AiPanel from './AiPanel.jsx';
+import NotificationBell from './NotificationBell.jsx';
 import './admin.css';
 
-const ROLE_LABEL = { admin: 'Администратор', editor: 'Редактор', viewer: 'Просмотр' };
+const ROLE_LABEL = { admin: 'Администратор', manager: 'Начальник отдела', staff: 'Сотрудник', editor: 'Редактор', viewer: 'Просмотр' };
 const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', news: 'Новости', history: 'История', users: 'Пользователи' };
 
 function Ico({ name, size = 20 }) {
@@ -39,7 +40,7 @@ export default function Admin() {
   useEffect(() => {
     let alive = true;
     getJSON('/api/me')
-      .then((m) => { if (alive) { setMe({ username: m.username || '', role: m.role || 'viewer' }); setState('app'); } })
+      .then((m) => { if (alive) { const r = m.role || 'viewer'; setMe({ username: m.username || '', role: r, id: m.id ?? null }); if (r === 'staff') setTab('leads'); setState('app'); } })
       .catch(() => { if (alive) setState('login'); });
     return () => { alive = false; };
   }, []);
@@ -48,7 +49,9 @@ export default function Admin() {
     setBusy(true); setErr('');
     try {
       const d = await sendJSON('/api/login', 'POST', { username: login.trim(), password: pass });
-      setMe({ username: d.username || login.trim(), role: d.role || 'viewer' });
+      const r = d.role || 'viewer';
+      setMe({ username: d.username || login.trim(), role: r, id: d.id ?? null });
+      if (r === 'staff') setTab('leads');
       setState('app');
     } catch (e) {
       setErr(e.status === 401 ? 'Неверный логин или пароль' : 'Сервер недоступен');
@@ -94,16 +97,22 @@ export default function Admin() {
   }
 
   const role = me.role;
-  const canEdit = role === 'admin' || role === 'editor';
   const isAdmin = role === 'admin';
+  const isManager = role === 'manager';
+  const isStaff = role === 'staff';
+  const canAssign = isAdmin || isManager;                       // назначать исполнителя
+  const canEditLeads = isAdmin || isManager || isStaff || role === 'editor';
+  const canEditNews = isAdmin || role === 'editor';
+  const aiAccess = isAdmin || isManager;
+  const titleOf = (id) => (id === 'leads' && isStaff ? 'Мои задачи' : TITLES[id]);
 
   const items = [
-    { id: 'dashboard', show: true },
+    { id: 'dashboard', show: !isStaff },
     { id: 'leads', show: true },
-    { id: 'ai', show: canEdit },
-    { id: 'analytics', show: true },
-    { id: 'news', show: true },
-    { id: 'history', show: true },
+    { id: 'ai', show: aiAccess },
+    { id: 'analytics', show: !isStaff },
+    { id: 'news', show: isAdmin || role === 'editor' || role === 'viewer' },
+    { id: 'history', show: !isStaff },
     { id: 'users', show: isAdmin },
   ].filter((x) => x.show);
 
@@ -113,8 +122,8 @@ export default function Admin() {
         <div className="rail-brand"><img src="/ddc.png" alt="DDC" /></div>
         <nav className="rail-nav">
           {items.map((it) => (
-            <button key={it.id} className={`rail-btn ${tab === it.id ? 'active' : ''}`} onClick={() => setTab(it.id)} title={TITLES[it.id]}>
-              <Ico name={it.id} /><span>{TITLES[it.id]}</span>
+            <button key={it.id} className={`rail-btn ${tab === it.id ? 'active' : ''}`} onClick={() => setTab(it.id)} title={titleOf(it.id)}>
+              <Ico name={it.id} /><span>{titleOf(it.id)}</span>
             </button>
           ))}
         </nav>
@@ -130,16 +139,17 @@ export default function Admin() {
 
       <div className="adm-body">
         <header className="adm-bar">
-          <h1 className="adm-bar-title">{TITLES[tab]}</h1>
+          <h1 className="adm-bar-title">{titleOf(tab)}</h1>
           <span className="sp" />
+          <NotificationBell onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />
           {me.username && <span className="who">{me.username} <span className={`us-role r-${role}`}>{ROLE_LABEL[role]}</span></span>}
         </header>
         <main className="adm-main">
-          {tab === 'dashboard' && <Dashboard onAuthLost={() => setState('login')} onGoTab={setTab} />}
-          {tab === 'leads' && <Leads onAuthLost={() => setState('login')} canEdit={canEdit} focusId={focusLead} />}
-          {tab === 'ai' && canEdit && <AiPanel onAuthLost={() => setState('login')} onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />}
-          {tab === 'analytics' && <Analytics onAuthLost={() => setState('login')} />}
-          {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEdit} />}
+          {tab === 'dashboard' && !isStaff && <Dashboard onAuthLost={() => setState('login')} onGoTab={setTab} />}
+          {tab === 'leads' && <Leads onAuthLost={() => setState('login')} canEdit={canEditLeads} canAssign={canAssign} isStaff={isStaff} focusId={focusLead} />}
+          {tab === 'ai' && aiAccess && <AiPanel onAuthLost={() => setState('login')} onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />}
+          {tab === 'analytics' && !isStaff && <Analytics onAuthLost={() => setState('login')} />}
+          {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEditNews} />}
           {tab === 'history' && <History onAuthLost={() => setState('login')} />}
           {tab === 'users' && isAdmin && <Users onAuthLost={() => setState('login')} me={me} />}
         </main>
