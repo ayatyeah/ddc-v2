@@ -243,23 +243,26 @@ button { font-family: inherit; cursor: pointer; }
 
 /* Стеклянный островок со всеми элементами навигации — у правого края */
 .nav-island {
-  display: flex; align-items: center; gap: 6px; padding: 6px;
+  display: flex; align-items: center; gap: 8px; padding: 7px;
   background: var(--nav-glass); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
   border: 1px solid var(--line); border-radius: 980px; box-shadow: var(--shadow-card);
 }
 .nav-links { display: flex; gap: 2px; }
 .nav-links a {
-  font-size: 14px; color: var(--ink-soft); padding: 8px 14px; border-radius: 980px;
+  font-size: 15px; color: var(--ink-soft); padding: 9px 16px; border-radius: 980px;
   transition: color 0.2s, background 0.2s;
 }
 .nav-links a:hover { color: var(--ink); background: var(--card-glass); }
 .nav-links a.active { color: var(--ink); background: var(--card-glass); }
-.lang { display: flex; border-radius: 980px; overflow: hidden; }
-.lang button { background: transparent; border: none; color: var(--ink-faint); font-size: 12px; font-weight: 600; padding: 8px 11px; border-radius: 980px; }
+/* Группа языков: каждая кнопка — отдельная пилюля (без overflow:hidden, чтобы активную
+   не срезало с краю), с небольшим зазором — выглядит как аккуратный сегментный переключатель. */
+.lang { display: flex; gap: 3px; }
+.lang button { background: transparent; border: none; color: var(--ink-faint); font-size: 13px; font-weight: 600; padding: 9px 13px; border-radius: 980px; cursor: pointer; transition: background 0.2s, color 0.2s; }
+.lang button:hover { color: var(--ink); }
 .lang button.active { background: var(--blue); color: #fff; }
 [data-theme='dark'] .lang button.active { color: #04122e; }
 .icon-btn {
-  width: 38px; height: 38px; border-radius: 50%; border: none; background: transparent; color: var(--ink);
+  width: 42px; height: 42px; border-radius: 50%; border: none; background: transparent; color: var(--ink);
   display: grid; place-items: center; transition: background 0.2s;
 }
 .icon-btn:hover { background: var(--card-glass); }
@@ -819,8 +822,8 @@ html, body { overflow-x: hidden; }
 
   /* Острову-меню даём отступ от краёв */
   .nav .wrap { padding-right: 14px; }
-  .nav-island { gap: 4px; padding: 5px; }
-  .lang button { padding: 8px 9px; }
+  .nav-island { gap: 6px; padding: 6px; }
+  .lang button { padding: 9px 11px; font-size: 13px; }
 
   /* Тач-таргеты карточек-кнопок ленты */
   .af-card { padding: 16px; }
