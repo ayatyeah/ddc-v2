@@ -4,9 +4,13 @@ import { navigate } from './router.js';
 export default function Brand() {
   return (
     <div className="brandlock" onClick={() => navigate('/')} role="link" tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && navigate('/')} aria-label="DDC — на главную">
+      onKeyDown={(e) => e.key === 'Enter' && navigate('/')} aria-label="Digital Development Center — на главную">
       <img className="bl-logo" src="/logo_ddc.svg" alt="" />
-      <div className="bl-word">DDC</div>
+      <div className="bl-word">
+        <span>Digital</span>
+        <span>Development</span>
+        <span>Center</span>
+      </div>
     </div>
   );
 }

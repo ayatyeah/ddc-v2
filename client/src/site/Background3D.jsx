@@ -12,6 +12,7 @@ export default function Background3D({ onReady }) {
     const scene = initScene(sceneRef.current);
     const inst = {
       setTarget(p) { scene.setTarget(p); },
+      setYaw(y) { scene.setYaw?.(y); },
       setPage() { scene.setPage?.(); },
       dispose() { scene.dispose(); },
     };

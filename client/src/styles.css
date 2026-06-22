@@ -266,26 +266,39 @@ button { font-family: inherit; cursor: pointer; }
 .nav-burger { display: none; }
 
 @media (max-width: 860px) {
-  .nav-links { display: none; }
-  .nav-links.open {
-    display: flex; flex-direction: column; position: absolute; top: 88px; right: 14px; min-width: 210px;
-    background: var(--nav-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    padding: 10px; border: 1px solid var(--line); border-radius: 20px; gap: 2px; box-shadow: var(--shadow-pop);
+  .nav-burger { display: grid; position: relative; z-index: 130; }  /* поверх панели — заодно служит кнопкой закрытия */
+  /* Меню выезжает с ПРАВОЙ стороны почти во весь экран */
+  .nav-links {
+    display: flex; flex-direction: column; gap: 6px;
+    position: fixed; top: 0; right: 0; z-index: 120;
+    width: min(86vw, 460px); height: 100vh; height: 100dvh;
+    padding: 92px 22px calc(28px + env(safe-area-inset-bottom));
+    background: var(--nav-glass); backdrop-filter: saturate(180%) blur(22px); -webkit-backdrop-filter: saturate(180%) blur(22px);
+    border-left: 1px solid var(--line); box-shadow: -22px 0 60px rgba(0, 0, 0, 0.28);
+    transform: translateX(105%); pointer-events: none;
+    transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .nav-burger { display: grid; }
+  .nav-links.open { transform: translateX(0); pointer-events: auto; }
+  .nav-links a { font-size: 18px; padding: 14px 18px; border-radius: 14px; }
 }
 
-/* ── Интро-локап (логотип + DDC) ─────────────────────────────────────────────── */
+/* ── Интро-локап: крупный логотип + надпись Digital / Development / Center рядом ── */
 .brandlock {
   position: fixed; top: 0; left: 44px; z-index: 110;
-  height: 88px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
-  gap: 1px; cursor: pointer; text-align: left;
+  height: 88px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
+  gap: 12px; cursor: pointer; text-align: left;
 }
-.brandlock .bl-logo { width: 28px; height: 28px; object-fit: contain; }
+.brandlock .bl-logo { width: 52px; height: 52px; object-fit: contain; flex: none; }
 .brandlock .bl-word {
-  font-family: var(--display); font-weight: 500; font-size: 18px; line-height: 1; letter-spacing: 0.08em; color: var(--ink);
+  display: flex; flex-direction: column; justify-content: center;
+  font-family: var(--display); font-weight: 600; font-size: 15px; line-height: 1.12;
+  letter-spacing: 0.04em; color: var(--ink);
 }
-@media (max-width: 760px) { .brandlock { left: 22px; } }
+@media (max-width: 760px) {
+  .brandlock { left: 22px; gap: 9px; }
+  .brandlock .bl-logo { width: 42px; height: 42px; }
+  .brandlock .bl-word { font-size: 13px; }
+}
 
 /* ── Hero ────────────────────────────────────────────────────────────────────── */
 .hero {
@@ -624,16 +637,15 @@ textarea.inp { resize: vertical; min-height: 110px; }
 
 /* ── Многостраничность ─────────────────────────────────────────────────────── */
 .page-top { padding-top: clamp(84px, 11vh, 128px); }
-.page-enter { animation: pageIn 0.62s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.page-enter { animation: pageIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes pageIn {
-  0%   { opacity: 0; transform: translateY(22px) scale(0.985); filter: blur(6px); }
-  60%  { filter: blur(0); }
-  100% { opacity: 1; transform: none; filter: blur(0); }
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: none; }
 }
 /* Лёгкая «волна» появления вложенных секций */
-.page-enter > * { animation: sectionIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: 0.06s; }
-.page-enter > *:nth-child(2) { animation-delay: 0.14s; }
-.page-enter > *:nth-child(3) { animation-delay: 0.22s; }
+.page-enter > * { animation: sectionIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: 0.04s; }
+.page-enter > *:nth-child(2) { animation-delay: 0.09s; }
+.page-enter > *:nth-child(3) { animation-delay: 0.14s; }
 @keyframes sectionIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .page-enter, .page-enter > * { animation: none; }

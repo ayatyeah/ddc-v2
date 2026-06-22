@@ -20,7 +20,7 @@ export default function Site() {
   const Page = route.Comp;
 
   const sceneRef = useRef(null);
-  const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); }, []); // eslint-disable-line
+  const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
 
   // SEO: обновляем заголовок и meta-описание при смене страницы (SPA-навигация)
   useEffect(() => {
@@ -44,6 +44,7 @@ export default function Site() {
     const root = document.documentElement;
     const fogEl = document.getElementById('fog');
     sceneRef.current?.setPage?.();          // при смене страницы узор планеты (DDC) слегка меняется
+    sceneRef.current?.setYaw?.(route.yaw ?? 0);   // у каждой страницы свой угол доворота карты
     if (path === '/') {
       let raf = 0;
       const apply = () => {

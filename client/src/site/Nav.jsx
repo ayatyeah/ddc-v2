@@ -41,9 +41,9 @@ export default function Nav() {
             ))}
           </div>
           <button className="icon-btn nav-burger" onClick={() => setOpen((o) => !o)}
-            aria-label="Меню" aria-expanded={open} aria-controls="nav-menu">
+            aria-label={open ? 'Закрыть меню' : 'Меню'} aria-expanded={open} aria-controls="nav-menu">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-              <path d="M3 6h18M3 12h18M3 18h18" />
+              <path d={open ? 'M6 6l12 12M18 6l-12 12' : 'M3 6h18M3 12h18M3 18h18'} />
             </svg>
           </button>
         </div>
