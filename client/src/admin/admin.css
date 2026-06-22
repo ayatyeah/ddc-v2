@@ -237,6 +237,8 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .eval-modal { width: min(560px, 100%); max-height: 88vh; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: 0 24px 70px rgba(0,0,0,0.3); }
 .eval-modal h3 { margin: 0 0 4px; }
 .eval-modal .sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 16px; }
+.eval-sec { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); margin: 18px 0 10px; }
+.eval-sec small { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .eval-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .eval-field { display: flex; flex-direction: column; gap: 5px; }
 .eval-field.full { grid-column: 1 / -1; }

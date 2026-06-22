@@ -225,11 +225,15 @@ CREATE TABLE IF NOT EXISTS evaluations (
   q_clarity       TEXT        NOT NULL DEFAULT '',   -- чёткость запроса
   q_extra         TEXT        NOT NULL DEFAULT '',   -- свободный вопрос
   notes           TEXT        NOT NULL DEFAULT '',
+  -- факты по сделке (новый формат): скорость ответа, правки, оплата, конфликт, чёткость ТЗ,
+  -- вероятность повтора (0-10), комментарий + ручные «авто»-метрики (стоимость, срок, сообщения…)
+  facts           JSONB       NOT NULL DEFAULT '{}'::jsonb,
   created_by      TEXT        NOT NULL DEFAULT '',
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_eval_lead ON evaluations (lead_id);
+ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS facts JSONB NOT NULL DEFAULT '{}'::jsonb;
 DROP TRIGGER IF EXISTS trg_eval_updated_at ON evaluations;
 CREATE TRIGGER trg_eval_updated_at
   BEFORE UPDATE ON evaluations

@@ -515,13 +515,47 @@ async function leadOwnedOrManager(req, id) {
   return r.rows.length > 0 && r.rows[0].assignee_id === req.admin.id;
 }
 
+// Сколько раз этот клиент уже обращался (по email/телефону), не считая текущую заявку.
+async function priorOrdersCount(id) {
+  try {
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS n
+         FROM leads l2 JOIN leads l1 ON l1.id = $1
+        WHERE l2.id <> l1.id
+          AND ( (btrim(coalesce(l1.email,'')) <> '' AND l2.email = l1.email)
+             OR (btrim(coalesce(l1.phone,'')) <> '' AND l2.phone = l1.phone) )`, [id]);
+    return rows[0]?.n || 0;
+  } catch { return 0; }
+}
+
+// Факты по сделке: нормализуем входной объект к безопасному виду.
+function sanitizeFacts(f = {}) {
+  const num = (v, max) => Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
+  const oneOf = (v, arr) => (arr.includes(v) ? v : '');
+  return {
+    response_speed: oneOf(f.response_speed, ['fast', 'medium', 'slow']),
+    revisions: num(f.revisions, 999),
+    paid_on_time: oneOf(f.paid_on_time, ['yes', 'partial', 'no']),
+    conflict: !!f.conflict,
+    ts_clarity: oneOf(f.ts_clarity, ['low', 'medium', 'high']),
+    repeat_prob: num(f.repeat_prob, 10),
+    comment: String(f.comment ?? '').slice(0, 2000),
+    cost: num(f.cost, 1e12),
+    duration_days: num(f.duration_days, 100000),
+    messages: num(f.messages, 1e6),
+    calls: num(f.calls, 1e6),
+    avg_response: String(f.avg_response ?? '').slice(0, 60),
+  };
+}
+
 app.get('/api/leads/:id/evaluation', auth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
   try {
     if (!(await leadOwnedOrManager(req, id))) return res.status(403).json({ error: 'Это не ваш лид' });
     const { rows } = await db.query(`SELECT * FROM evaluations WHERE lead_id = $1`, [id]);
-    res.json(rows[0] || null);
+    const prior_orders = await priorOrdersCount(id);
+    res.json({ ...(rows[0] || {}), prior_orders });   // всегда отдаём prior_orders (даже без листа)
   } catch (e) { console.error('GET evaluation:', e.message); res.status(500).json({ error: 'Ошибка чтения' }); }
 });
 
@@ -531,21 +565,18 @@ app.post('/api/leads/:id/evaluation', auth, requireRole('admin', 'manager', 'sta
   try {
     if (!(await leadOwnedOrManager(req, id))) return res.status(403).json({ error: 'Это не ваш лид' });
     const b = req.body || {};
-    const s = (v, n) => String(v ?? '').slice(0, n);
-    const willReturn = ['yes', 'maybe', 'no', ''].includes(b.will_return) ? b.will_return : '';
-    const rev = Math.max(0, Math.min(999, Number(b.revisions_count) || 0));
-    const comm = Math.max(0, Math.min(5, Number(b.comm_quality) || 0));
+    const facts = sanitizeFacts(b.facts || b);
+    // revisions_count/had_conflict/notes дублируем в отдельные колонки (для совместимости и скоринга),
+    // полный набор фактов — в facts (JSONB).
     const { rows } = await db.query(
       `INSERT INTO evaluations
-         (lead_id, accepted_by, performed_by, will_return, revisions_count, had_conflict, comm_quality, q_budget, q_clarity, q_extra, notes, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         (lead_id, revisions_count, had_conflict, notes, facts, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT (lead_id) DO UPDATE SET
-         accepted_by=EXCLUDED.accepted_by, performed_by=EXCLUDED.performed_by, will_return=EXCLUDED.will_return,
-         revisions_count=EXCLUDED.revisions_count, had_conflict=EXCLUDED.had_conflict, comm_quality=EXCLUDED.comm_quality,
-         q_budget=EXCLUDED.q_budget, q_clarity=EXCLUDED.q_clarity, q_extra=EXCLUDED.q_extra, notes=EXCLUDED.notes
+         revisions_count=EXCLUDED.revisions_count, had_conflict=EXCLUDED.had_conflict,
+         notes=EXCLUDED.notes, facts=EXCLUDED.facts
        RETURNING *`,
-      [id, s(b.accepted_by, 120), s(b.performed_by, 120), willReturn, rev, !!b.had_conflict, comm,
-       s(b.q_budget, 500), s(b.q_clarity, 500), s(b.q_extra, 500), s(b.notes, 2000), req.admin.u]
+      [id, facts.revisions, facts.conflict, facts.comment, JSON.stringify(facts), req.admin.u]
     );
     logAudit(req, 'lead', id, 'evaluation', `Оценочный лист по лиду #${id} сохранён`);
     res.json(rows[0]);
@@ -909,7 +940,10 @@ app.post('/api/admin/ai/score', auth, requireRole('admin', 'manager'), async (re
     //  • status='rejected' и указана причина (admin_comment не пуст).
     const { rows: leads } = await db.query(
       `SELECT l.id, l.full_name, l.subject, l.message, l.status, l.rating, l.admin_comment, l.updated_at, l.score, l.score_at,
-              e.will_return, e.revisions_count, e.had_conflict, e.comm_quality, e.q_budget, e.q_clarity, e.q_extra, e.notes AS eval_notes
+              e.facts,
+              (SELECT COUNT(*) FROM leads l2 WHERE l2.id <> l.id
+                 AND ((btrim(coalesce(l.email,'')) <> '' AND l2.email = l.email)
+                   OR (btrim(coalesce(l.phone,'')) <> '' AND l2.phone = l.phone))) AS prior_orders
        FROM leads l LEFT JOIN evaluations e ON e.lead_id = l.id
        WHERE (l.status = 'served'   AND e.lead_id IS NOT NULL)
           OR (l.status = 'rejected' AND btrim(coalesce(l.admin_comment, '')) <> '')
@@ -919,16 +953,32 @@ app.post('/api/admin/ai/score', auth, requireRole('admin', 'manager'), async (re
     const need = force ? leads : leads.filter((l) => l.score == null || !l.score_at || new Date(l.updated_at) > new Date(l.score_at));
     if (!need.length) return res.json({ scored: 0, total: leads.length, message: 'Все лиды уже оценены' });
     const batch = need.slice(0, 40);
-    const compact = batch.map((l) => ({
-      id: l.id, name: l.full_name, subject: l.subject, message: (l.message || '').slice(0, 140), status: l.status, internal_rating: l.rating,
-      reason_or_note: (l.admin_comment || '').slice(0, 150) || null,   // для отказанных — причина отказа
-      evaluation: (l.will_return || l.comm_quality || l.revisions_count || l.q_budget) ? {
-        will_return: l.will_return, revisions: l.revisions_count, conflict: l.had_conflict, comm_quality: l.comm_quality,
-        budget: l.q_budget, clarity: l.q_clarity, extra: l.q_extra, notes: l.eval_notes,
-      } : null,
-    }));
+    const compact = batch.map((l) => {
+      const f = l.facts && typeof l.facts === 'object' ? l.facts : null;
+      const hasFacts = f && Object.keys(f).length > 0;
+      return {
+        id: l.id, name: l.full_name, subject: l.subject, message: (l.message || '').slice(0, 140), status: l.status,
+        reason_or_note: (l.admin_comment || '').slice(0, 150) || null,   // для отказанных — причина отказа
+        prior_orders: Number(l.prior_orders) || 0,                       // сколько раз клиент уже обращался
+        facts: hasFacts ? {
+          response_speed: f.response_speed || null, revisions: f.revisions, paid_on_time: f.paid_on_time || null,
+          conflict: !!f.conflict, ts_clarity: f.ts_clarity || null, repeat_prob_0_10: f.repeat_prob,
+          cost: f.cost || null, duration_days: f.duration_days || null, messages: f.messages || null,
+          calls: f.calls || null, avg_client_response: f.avg_response || null, comment: f.comment || null,
+        } : null,
+      };
+    });
     const prompt =
-`Ты — аналитик по клиентам IT-компании DDC. Оцени КАЖДЫЙ лид по 7 осям (0-100). Где данных нет — ставь умеренные 50 и отметь это в reason. Если у лида есть evaluation (оценочный лист сотрудника) — используй его для осей satisfaction/repeat_potential/risk. Если status='rejected' — в reason_or_note причина отказа: учитывай её (это повышает risk и снижает conversion_prob/repeat_potential).
+`Ты — аналитик по клиентам IT-компании DDC. Оцени КАЖДЫЙ лид по 7 осям (0-100). Где данных нет — ставь умеренные 50 и отметь это в reason.
+Главный источник правды — поле facts (факты по сделке от сотрудника + метрики проекта) и prior_orders (сколько раз клиент уже заказывал). Используй их:
+- response_speed (fast/medium/slow), avg_client_response — скорость ответа клиента → lead_quality, satisfaction
+- revisions (кол-во правок), ts_clarity (low/medium/high — чёткость ТЗ) → satisfaction, risk (много правок/низкая чёткость = выше risk)
+- paid_on_time (yes/partial/no) → risk (no = высокий risk), conversion_prob
+- conflict (был конфликт) → выше risk, ниже satisfaction/repeat_potential
+- repeat_prob_0_10 (мнение сотрудника о повторе) и prior_orders → repeat_potential
+- cost (стоимость), duration_days (срок) → value_ltv
+- messages, calls — интенсивность общения (контекст)
+Если status='rejected' — в reason_or_note причина отказа: учитывай её (повышает risk, снижает conversion_prob/repeat_potential).
 Оси:
 - value_ltv: потенциальная ценность/LTV (масштаб проекта, бюджет, повторный доход)
 - lead_quality: качество заявки (конкретика, адекватность; спам→низко)
@@ -1224,9 +1274,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   // Лёгкая идемпотентная авто-миграция — чтобы деплой не требовал ручного `npm run init-db`.
   db.query(
     `ALTER TABLE news ADD COLUMN IF NOT EXISTS image_fit TEXT NOT NULL DEFAULT 'cover';
-     ALTER TABLE news ADD COLUMN IF NOT EXISTS image_pos TEXT NOT NULL DEFAULT '50% 50%';`
-  ).then(() => console.log('✓ Колонки новостей image_fit/image_pos на месте'))
-   .catch((e) => console.error('Авто-миграция новостей:', e.message));
+     ALTER TABLE news ADD COLUMN IF NOT EXISTS image_pos TEXT NOT NULL DEFAULT '50% 50%';
+     ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS facts JSONB NOT NULL DEFAULT '{}'::jsonb;`
+  ).then(() => console.log('✓ Колонки image_fit/image_pos/facts на месте'))
+   .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);
 });

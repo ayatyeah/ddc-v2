@@ -1,24 +1,32 @@
 import { useEffect, useState } from 'react';
 import { getJSON, sendJSON } from '../api.js';
 
+const SPEED = [['', '—'], ['fast', 'Быстро'], ['medium', 'Средне'], ['slow', 'Долго']];
+const PAID = [['', '—'], ['yes', 'Вовремя'], ['partial', 'С задержкой'], ['no', 'Не оплатил']];
+const CLARITY = [['', '—'], ['low', 'Низкая'], ['medium', 'Средняя'], ['high', 'Высокая']];
+
 const EMPTY = {
-  accepted_by: '', performed_by: '', will_return: '', revisions_count: 0,
-  had_conflict: false, comm_quality: 0, q_budget: '', q_clarity: '', q_extra: '', notes: '',
+  response_speed: '', revisions: 0, paid_on_time: '', conflict: false, ts_clarity: '',
+  repeat_prob: 5, comment: '',
+  cost: 0, duration_days: 0, messages: 0, calls: 0, avg_response: '',
 };
 
-const RETURN_OPTS = [['', '—'], ['yes', 'Да'], ['maybe', 'Возможно'], ['no', 'Нет']];
-
-/* Оценочный лист по лиду (Фаза 3). Заполняет сотрудник после обслуживания.
-   Опросник «для клиента» вносит сам сотрудник (по решению заказчика). */
+/* Оценочный лист = ФАКТЫ по сделке (заполняет сотрудник) + метрики проекта (пока вручную)
+   + авто «сколько раз клиент уже обращался». На основе этих данных ИИ выставляет скоринг. */
 export default function EvaluationModal({ lead, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY);
+  const [prior, setPrior] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
   useEffect(() => {
     let alive = true;
     getJSON(`/api/leads/${lead.id}/evaluation`)
-      .then((d) => { if (alive && d) setForm({ ...EMPTY, ...d, had_conflict: !!d.had_conflict }); })
+      .then((d) => {
+        if (!alive || !d) return;
+        setPrior(d.prior_orders || 0);
+        if (d.facts && typeof d.facts === 'object') setForm({ ...EMPTY, ...d.facts });
+      })
       .catch(() => {});
     return () => { alive = false; };
   }, [lead.id]);
@@ -31,11 +39,16 @@ export default function EvaluationModal({ lead, onClose, onSaved }) {
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      await sendJSON(`/api/leads/${lead.id}/evaluation`, 'POST', {
+      const facts = {
         ...form,
-        revisions_count: Number(form.revisions_count) || 0,
-        comm_quality: Number(form.comm_quality) || 0,
-      });
+        revisions: Number(form.revisions) || 0,
+        repeat_prob: Number(form.repeat_prob) || 0,
+        cost: Number(form.cost) || 0,
+        duration_days: Number(form.duration_days) || 0,
+        messages: Number(form.messages) || 0,
+        calls: Number(form.calls) || 0,
+      };
+      await sendJSON(`/api/leads/${lead.id}/evaluation`, 'POST', { facts });
       onSaved?.(lead.id);
       onClose?.();
     } catch (e) {
@@ -49,53 +62,56 @@ export default function EvaluationModal({ lead, onClose, onSaved }) {
         <h3>Оценочный лист</h3>
         <p className="sub">{lead.full_name}{lead.subject ? ` · ${lead.subject}` : ''}</p>
 
+        <div className="eval-sec">Факты по работе с клиентом</div>
         <div className="eval-grid">
           <div className="eval-field">
-            <label>Кто принял заказ</label>
-            <input className="adm-input" value={form.accepted_by} onChange={set('accepted_by')} />
+            <label>Скорость ответа клиента</label>
+            <select className="adm-input" value={form.response_speed} onChange={set('response_speed')}>
+              {SPEED.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
           </div>
           <div className="eval-field">
-            <label>Кто выполнял</label>
-            <input className="adm-input" value={form.performed_by} onChange={set('performed_by')} />
+            <label>Оплата</label>
+            <select className="adm-input" value={form.paid_on_time} onChange={set('paid_on_time')}>
+              {PAID.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
           </div>
           <div className="eval-field">
-            <label>Будет работать с нами ещё?</label>
-            <select className="adm-input" value={form.will_return} onChange={set('will_return')}>
-              {RETURN_OPTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            <label>Чёткость ТЗ</label>
+            <select className="adm-input" value={form.ts_clarity} onChange={set('ts_clarity')}>
+              {CLARITY.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
           </div>
           <div className="eval-field">
             <label>Кол-во правок</label>
-            <input className="adm-input" type="number" min="0" value={form.revisions_count} onChange={set('revisions_count')} />
+            <input className="adm-input" type="number" min="0" value={form.revisions} onChange={set('revisions')} />
           </div>
-          <div className="eval-field">
-            <label>Качество коммуникации (0–5)</label>
-            <select className="adm-input" value={form.comm_quality} onChange={set('comm_quality')}>
-              {[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
+          <div className="eval-field full">
+            <label>Вероятность повторного заказа (мнение сотрудника): <b>{form.repeat_prob} / 10</b></label>
+            <input type="range" min="0" max="10" step="1" value={form.repeat_prob} onChange={set('repeat_prob')}
+              style={{ width: '100%', accentColor: 'var(--blue)' }} />
           </div>
-          <div className="eval-field" style={{ justifyContent: 'flex-end' }}>
+          <div className="eval-field full">
             <label className="eval-check">
-              <input type="checkbox" checked={form.had_conflict} onChange={set('had_conflict')} />
-              Был конфликт / напряжение
+              <input type="checkbox" checked={form.conflict} onChange={set('conflict')} /> Был конфликт / напряжение
             </label>
           </div>
+        </div>
 
+        <div className="eval-sec">Данные по проекту <small>(пока вносятся вручную)</small></div>
+        <div className="eval-grid">
+          <div className="eval-field"><label>Стоимость проекта, ₸</label><input className="adm-input" type="number" min="0" value={form.cost} onChange={set('cost')} /></div>
+          <div className="eval-field"><label>Время выполнения, дней</label><input className="adm-input" type="number" min="0" value={form.duration_days} onChange={set('duration_days')} /></div>
+          <div className="eval-field"><label>Кол-во сообщений</label><input className="adm-input" type="number" min="0" value={form.messages} onChange={set('messages')} /></div>
+          <div className="eval-field"><label>Кол-во созвонов</label><input className="adm-input" type="number" min="0" value={form.calls} onChange={set('calls')} /></div>
+          <div className="eval-field"><label>Средний ответ клиента</label><input className="adm-input" placeholder="напр. 2 часа" value={form.avg_response} onChange={set('avg_response')} /></div>
+          <div className="eval-field"><label>Прошлых обращений <small>(авто)</small></label><input className="adm-input" value={String(prior)} readOnly disabled /></div>
+        </div>
+
+        <div className="eval-grid">
           <div className="eval-field full">
-            <label>Опрос клиента · Бюджет / масштаб проекта</label>
-            <textarea className="adm-input" value={form.q_budget} onChange={set('q_budget')} />
-          </div>
-          <div className="eval-field full">
-            <label>Опрос клиента · Насколько чёткий запрос</label>
-            <textarea className="adm-input" value={form.q_clarity} onChange={set('q_clarity')} />
-          </div>
-          <div className="eval-field full">
-            <label>Опрос клиента · Дополнительно</label>
-            <textarea className="adm-input" value={form.q_extra} onChange={set('q_extra')} />
-          </div>
-          <div className="eval-field full">
-            <label>Заметки сотрудника</label>
-            <textarea className="adm-input" value={form.notes} onChange={set('notes')} />
+            <label>Комментарий</label>
+            <textarea className="adm-input" value={form.comment} onChange={set('comment')} />
           </div>
         </div>
 
