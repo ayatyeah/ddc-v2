@@ -12,10 +12,10 @@ export function HomePage() {
   return (<><Hero /><Stats /><div className="page-soft"><News /></div></>);
 }
 export function ServicesPage() {
-  return (<div className="page-top"><Services /><Showcase /></div>);
+  return (<div className="page-top"><Showcase /><Services /></div>);
 }
 export function AboutPage() {
-  return (<div className="page-top"><About /><BuildingShot /><Workstation /></div>);
+  return (<div className="page-top"><About /><Workstation /><BuildingShot /></div>);
 }
 export function ContactPage() {
   return (<div className="page-top"><Contact /></div>);

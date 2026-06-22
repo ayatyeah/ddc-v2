@@ -153,8 +153,13 @@ export function initComputer(canvas, opts = {}) {
       const fade = Math.min(1, since / 0.4) * Math.min(1, (HOLD - since) / 0.4 + 1);
       const f = facts[idx];
       g.globalAlpha = Math.max(0, Math.min(1, fade));
-      g.fillStyle = '#ffd98a'; g.font = '700 96px Inter, sans-serif';
-      g.fillText(f.value, 56, 210);
+      // Значение авто-подгоняется по ширине экрана: длинные строки (напр. zakup.nationalbank.kz)
+      // больше не вылезают за край — шрифт уменьшается, пока не влезет в поля.
+      const maxW = SW - 56 * 2;
+      let vSize = 96; g.font = `700 ${vSize}px Inter, sans-serif`;
+      while (vSize > 34 && g.measureText(f.value).width > maxW) { vSize -= 4; g.font = `700 ${vSize}px Inter, sans-serif`; }
+      g.fillStyle = '#ffd98a';
+      g.fillText(f.value, 56, 210 + (96 - vSize) * 0.55);   // вертикальная позиция компенсирует меньший кегль
       g.fillStyle = '#dce8ff'; g.font = '400 38px Inter, sans-serif';
       g.fillText(f.label, 58, 340);
       g.globalAlpha = 1;
