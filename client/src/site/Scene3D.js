@@ -353,6 +353,25 @@ export function initScene(canvas) {
   const stars = new THREE.Points(starGeo, starMat); stars.frustumCulled = false; scene.add(stars);
   if (mobile) stars.visible = false;   // тяжёлый эффект — на мобиле выключен
 
+  // ── Спутники-огоньки: несколько светящихся точек на орбитах над страной — добавляют
+  //    «жизни» и наполняют фон (десктоп). Дёшево: спрайты с одной glow-текстурой. ──
+  const satCv = document.createElement('canvas'); satCv.width = satCv.height = 64;
+  const satC = satCv.getContext('2d');
+  const satG = satC.createRadialGradient(32, 32, 0, 32, 32, 32);
+  satG.addColorStop(0, 'rgba(224,242,255,1)'); satG.addColorStop(0.3, 'rgba(120,200,255,0.7)'); satG.addColorStop(1, 'rgba(120,200,255,0)');
+  satC.fillStyle = satG; satC.fillRect(0, 0, 64, 64);
+  const satTex = new THREE.CanvasTexture(satCv);
+  const sats = [];
+  const satDefs = [
+    { r: 72, y: 42, sp: 0.16, ph: 0.0, s: 2.6 }, { r: 98, y: 58, sp: -0.11, ph: 2.1, s: 2.2 },
+    { r: 54, y: 30, sp: 0.22, ph: 4.0, s: 3.0 }, { r: 122, y: 70, sp: 0.08, ph: 1.0, s: 2.0 },
+  ];
+  for (const d of satDefs) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: satTex, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.9 }));
+    sp.scale.set(d.s, d.s, 1); sp.userData = d; sats.push(sp); scene.add(sp);
+    if (mobile) sp.visible = false;
+  }
+
   // ── Облака: смягчают исчезновение зданий (здания «растворяются» в них) ───────
   const cloudCv = document.createElement('canvas'); cloudCv.width = cloudCv.height = 128;
   const cctx = cloudCv.getContext('2d');
@@ -475,8 +494,12 @@ export function initScene(canvas) {
     const camZ = L.camZ + lift * (6 - L.camZ);   // 112 → ~6 (почти прямо над хабом z≈-9)
     const lookY = L.lookY * (1 - lift);          // 5 → 0 (взгляд вертикально вниз)
     const lookZ = lift * -9;                     // 0 → -9 (центр кадра — хаб)
+    // На узких/портретных экранах (мобила) отъезжаем дальше и выше, СОХРАНЯЯ угол наклона,
+    // чтобы тот же 3/4-вид на всю страну с башнями влезал в кадр, как на десктопе.
+    const asp = camera.aspect || 1;
+    const fit = asp < 1.2 ? 1 + (1.2 - asp) * 0.8 : 1;
     const par = 1 - lift;                        // параллакс гаснет в виде сверху
-    camera.position.set(px * 2.0 * par, eyeY - py * 1.2 * par + Math.sin(t * 0.3) * 0.08, camZ);
+    camera.position.set(px * 2.0 * par, eyeY * fit - py * 1.2 * par + Math.sin(t * 0.3) * 0.08, camZ * fit);
     camera.lookAt(px * 0.4 * par, lookY, lookZ);
 
     // Здания стоят в полный рост, пока камера поднимается; затем ПРОПАДАЮТ, освобождая
@@ -520,6 +543,13 @@ export function initScene(canvas) {
       // звёзды/поле остаются всегда — наполняют фон и при виде сверху (раньше гасли)
       starMat.uniforms.uTime.value = t;
       starMat.uniforms.uOpacity.value = 1;
+
+      // спутники-огоньки тихо вращаются на орбитах над страной
+      for (const sp of sats) {
+        const d = sp.userData, a = t * d.sp + d.ph;
+        sp.position.set(Math.cos(a) * d.r, d.y + Math.sin(a * 1.3) * 3, -9 + Math.sin(a) * d.r);
+        sp.material.opacity = 0.5 + 0.4 * (0.5 + 0.5 * Math.sin(t * 1.8 + d.ph));
+      }
 
       // облака появляются, пока башни тают, и расходятся после — мягкое исчезновение
       const cloudOp = smooth(p, 0.06, 0.16) * (1 - smooth(p, 0.26, 0.34));
@@ -582,7 +612,7 @@ export function initScene(canvas) {
       window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
       window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);
       window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
-      pMat.dispose(); pGeo.dispose(); planetTex.dispose(); cloudTex.dispose(); [facadeA, facadeB].forEach((x) => x.dispose());
+      pMat.dispose(); pGeo.dispose(); planetTex.dispose(); cloudTex.dispose(); satTex.dispose(); [facadeA, facadeB].forEach((x) => x.dispose());
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const mm = o.material; (Array.isArray(mm) ? mm : [mm]).forEach((x) => x.dispose()); } });
       pmrem.dispose(); renderer.dispose();
     },
