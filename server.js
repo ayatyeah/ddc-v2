@@ -1075,11 +1075,11 @@ async function buildFeed() {
     const input = all.slice(0, 24).map((x) => ({ title: x.title, source: x.source, url: x.url, date: x.date, desc: (x.desc || '').slice(0, 140) }));
     const prompt =
 `Ты — редактор новостей о цифровом Казахстане. Из списка ниже (новости с нескольких источников) отбери до 6 самых релевантных новостей про цифровую жизнь Казахстана, новые технологии, ИТ, финтех и цифровизацию госуслуг. По возможности бери новости из разных источников для разнообразия.
-Сделай так, чтобы их можно было прочитать прямо у нас на сайте, не переходя на источник.
+Для КАЖДОЙ новости дай заголовок и краткий пересказ (2-3 предложения, своими словами, не копируя дословно) на ТРЁХ языках: русском (ru), казахском (kk), английском (en). Также дай общий дайджест дня (2-3 предложения) на трёх языках.
 Верни ТОЛЬКО JSON-объект вида:
-{"digest":"2-3 предложения — общий обзор главного за день по-русски","items":[{"title":"заголовок на русском","summary":"краткий пересказ новости в 2-3 предложениях по-русски, своими словами","url":"ссылка из данных","source":"источник из данных","date":"дата как есть"}]}
-Не копируй текст дословно — пиши пересказ своими словами. Новости: ${JSON.stringify(input)}`;
-    const parsed = parseJsonLoose(await callGemini(prompt, 1600));
+{"digest":{"ru":"…","kk":"…","en":"…"},"items":[{"title":{"ru":"…","kk":"…","en":"…"},"summary":{"ru":"…","kk":"…","en":"…"},"url":"ссылка из данных","source":"источник из данных","date":"дата как есть"}]}
+Новости: ${JSON.stringify(input)}`;
+    const parsed = parseJsonLoose(await callGemini(prompt, 3500));
     if (parsed && Array.isArray(parsed.items)) result = { digest: String(parsed.digest || ''), items: parsed.items };
     else if (Array.isArray(parsed)) result = { digest: '', items: parsed };
   } catch (e) { console.error('feed Gemini:', e.message); }

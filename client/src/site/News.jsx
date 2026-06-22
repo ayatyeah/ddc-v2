@@ -8,6 +8,12 @@ import { IcoArrow } from './icons.jsx';
 
 function pick(row, base, lang) { return row[`${base}_${lang}`] || row[`${base}_ru`] || ''; }
 
+// AI-лента: поле может быть строкой (старый кэш) или объектом {ru,kk,en} (мультиязычно).
+function pickT(v, lang) {
+  if (v && typeof v === 'object') return v[lang] || v.ru || v.en || v.kk || '';
+  return v || '';
+}
+
 function fmtDate(value, lang) {
   if (!value) return '';
   const d = new Date(value);
@@ -136,7 +142,7 @@ export default function News() {
         <div className="news-ai-note">
           {t(lang, 'news.aiNote')}{feedAt ? ` · ${t(lang, 'news.updated')} ${fmtDate(feedAt, lang)}` : ''}
         </div>
-        {feedDigest && <div className="ai-digest"><span className="ai-digest-lbl">{t(lang, 'news.digest')}</span>{feedDigest}</div>}
+        {pickT(feedDigest, lang) && <div className="ai-digest"><span className="ai-digest-lbl">{t(lang, 'news.digest')}</span>{pickT(feedDigest, lang)}</div>}
         <div className="ai-feed">
           {feed.length === 0 ? (
             <div className="news-empty">{t(lang, 'news.aiEmpty')}</div>
@@ -144,8 +150,8 @@ export default function News() {
             <button className="af-card" key={i} onClick={() => setAiActive(it)}>
               {it.image && <div className="af-ph"><img src={it.image} alt="" loading="lazy" /></div>}
               <div className="af-src">{it.source}{it.date ? ` · ${it.date}` : ''}</div>
-              <h4>{it.title}</h4>
-              {it.summary && <p>{it.summary}</p>}
+              <h4>{pickT(it.title, lang)}</h4>
+              {pickT(it.summary, lang) && <p>{pickT(it.summary, lang)}</p>}
               <span className="more">{t(lang, 'news.read')} →</span>
             </button>
           ))}
@@ -164,8 +170,8 @@ export default function News() {
             <div className="inner">
               <button className="x" onClick={() => setAiActive(null)} aria-label={t(lang, 'news.close')}>×</button>
               <time>{aiActive.source}{aiActive.date ? ` · ${aiActive.date}` : ''}</time>
-              <h2>{aiActive.title}</h2>
-              <p>{aiActive.summary}</p>
+              <h2>{pickT(aiActive.title, lang)}</h2>
+              <p>{pickT(aiActive.summary, lang)}</p>
               {aiActive.url && <a className="btn btn-ghost" href={aiActive.url} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: 'inline-flex' }}>{t(lang, 'news.source')} ↗</a>}
             </div>
           </div>
