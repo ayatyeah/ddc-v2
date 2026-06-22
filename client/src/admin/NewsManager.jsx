@@ -1,14 +1,75 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
 
 const LANGS = [['ru', 'RU'], ['kk', 'KZ'], ['en', 'EN']];
+const CROP_ASPECT = 16 / 9;   // соотношение кадра новости
 
-// 9 точек кадрирования (object-position) для режима «Заполнить»
-const POSES = [
-  ['0% 0%', '↖'], ['50% 0%', '↑'], ['100% 0%', '↗'],
-  ['0% 50%', '←'], ['50% 50%', '•'], ['100% 50%', '→'],
-  ['0% 100%', '↙'], ['50% 100%', '↓'], ['100% 100%', '↘'],
-];
+/* Кадрирование: двигаем/масштабируем фото в рамке нужного соотношения, оставляя видимой
+   нужную часть. Результат «запекается» в изображение фиксированного размера (1280×720),
+   что заодно держит вес небольшим (нет ошибки «request entity too large»). */
+function ImageCropper({ src, onApply, onCancel }) {
+  const VIEW_W = 360, VIEW_H = Math.round(VIEW_W / CROP_ASPECT);
+  const [nat, setNat] = useState(null);
+  const [scale, setScale] = useState(1);
+  const [minScale, setMinScale] = useState(1);
+  const [off, setOff] = useState({ x: 0, y: 0 });
+  const drag = useRef(null);
+
+  const clampOff = (o, s, n) => {
+    if (!n) return o;
+    const w = n.w * s, h = n.h * s;
+    return { x: Math.min(0, Math.max(VIEW_W - w, o.x)), y: Math.min(0, Math.max(VIEW_H - h, o.y)) };
+  };
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      const cover = Math.max(VIEW_W / img.width, VIEW_H / img.height);
+      const n = { w: img.width, h: img.height };
+      setNat(n); setMinScale(cover); setScale(cover);
+      setOff({ x: (VIEW_W - img.width * cover) / 2, y: (VIEW_H - img.height * cover) / 2 });
+    };
+    img.src = src;
+  }, [src]);
+
+  const onDown = (e) => { drag.current = { x: e.clientX, y: e.clientY, ox: off.x, oy: off.y }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} };
+  const onMove = (e) => { if (!drag.current) return; setOff(clampOff({ x: drag.current.ox + (e.clientX - drag.current.x), y: drag.current.oy + (e.clientY - drag.current.y) }, scale, nat)); };
+  const onUp = () => { drag.current = null; };
+  const onZoom = (e) => {
+    const s = Number(e.target.value), cx = VIEW_W / 2, cy = VIEW_H / 2, k = s / scale;
+    setScale(s); setOff(clampOff({ x: cx - (cx - off.x) * k, y: cy - (cy - off.y) * k }, s, nat));
+  };
+  const apply = () => {
+    if (!nat) return;
+    const OUT_W = 1280, OUT_H = Math.round(OUT_W / CROP_ASPECT);
+    const cv = document.createElement('canvas'); cv.width = OUT_W; cv.height = OUT_H;
+    const sx = -off.x / scale, sy = -off.y / scale, sw = VIEW_W / scale, sh = VIEW_H / scale;
+    const img = new Image();
+    img.onload = () => { cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, OUT_W, OUT_H); onApply(cv.toDataURL('image/jpeg', 0.82)); };
+    img.src = src;
+  };
+
+  return (
+    <div className="nm-crop-ov" onClick={onCancel}>
+      <div className="nm-crop" onClick={(e) => e.stopPropagation()}>
+        <div className="nm-crop-h">Кадрирование — двигайте фото и меняйте масштаб</div>
+        <div className="nm-crop-view" style={{ width: VIEW_W, height: VIEW_H }}
+          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+          {nat && <img src={src} draggable={false} alt="" style={{ position: 'absolute', left: off.x, top: off.y, width: nat.w * scale, height: nat.h * scale }} />}
+          <div className="nm-crop-grid" />
+        </div>
+        <div className="nm-crop-zoom">
+          <span className="nm-fit-lab">Масштаб</span>
+          <input type="range" min={minScale} max={minScale * 4} step="0.0001" value={scale} onChange={onZoom} />
+        </div>
+        <div className="nm-crop-actions">
+          <button className="adm-ghost" onClick={onCancel}>Отмена</button>
+          <button className="adm-btn" onClick={apply}>Применить кадр</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function blank() {
   return {
@@ -54,6 +115,7 @@ function Editor({ initial, onClose, onSaved, onAuthLost }) {
   const [lang, setLang] = useState('ru');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [cropSrc, setCropSrc] = useState('');
   const isEdit = Boolean(initial?.id);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -64,9 +126,8 @@ function Editor({ initial, onClose, onSaved, onAuthLost }) {
     if (!file) return;
     if (!/^image\//.test(file.type)) { setErr('Файл должен быть изображением'); return; }
     try {
-      const url = await fileToDataURL(file);
-      setForm((f) => ({ ...f, image: url }));
-      setErr('');
+      const url = await fileToDataURL(file, 1600, 0.9);   // источник для кадрирования
+      setCropSrc(url); setErr('');
     } catch (e2) { setErr(e2.message); }
   };
 
@@ -124,32 +185,18 @@ function Editor({ initial, onClose, onSaved, onAuthLost }) {
                   {form.image ? 'Заменить фото' : 'Загрузить фото'}
                   <input type="file" accept="image/*" hidden onChange={onPickImage} />
                 </label>
+                {form.image && <button className="nm-mini" onClick={() => setCropSrc(form.image)}>Кадрировать</button>}
                 {form.image && <button className="nm-mini del" onClick={() => setForm((f) => ({ ...f, image: '' }))}>Убрать фото</button>}
-                <div className="nm-hint">JPG/PNG. Покажется вместо цветной заглушки на карточке и в окне новости.</div>
+                <div className="nm-hint">JPG/PNG. При загрузке откроется кадрирование — двигайте и масштабируйте фото, оставив нужную часть.</div>
               </div>
             </div>
 
-            {form.image && (
-              <div className="nm-fit">
-                <div className="nm-fit-row">
-                  <span className="nm-fit-lab">Как вписать</span>
-                  <div className="nm-langtabs">
-                    <button className={form.image_fit === 'cover' ? 'active' : ''} onClick={() => setForm((f) => ({ ...f, image_fit: 'cover' }))}>Заполнить</button>
-                    <button className={form.image_fit === 'contain' ? 'active' : ''} onClick={() => setForm((f) => ({ ...f, image_fit: 'contain' }))}>Вписать целиком</button>
-                  </div>
-                </div>
-                {form.image_fit === 'cover' && (
-                  <div className="nm-fit-row">
-                    <span className="nm-fit-lab">Фокус кадра</span>
-                    <div className="nm-focus">
-                      {POSES.map(([p, ic]) => (
-                        <button key={p} type="button" className={form.image_pos === p ? 'on' : ''} title={p}
-                          onClick={() => setForm((f) => ({ ...f, image_pos: p }))}>{ic}</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+            {cropSrc && (
+              <ImageCropper
+                src={cropSrc}
+                onApply={(url) => { setForm((f) => ({ ...f, image: url, image_fit: 'cover', image_pos: '50% 50%' })); setCropSrc(''); }}
+                onCancel={() => setCropSrc('')}
+              />
             )}
           </div>
 

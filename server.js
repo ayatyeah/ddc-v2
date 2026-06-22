@@ -110,7 +110,7 @@ app.use(cors({
   origin: origins.length ? origins : true,   // в dev можно true; на проде укажи домены
   credentials: true,
 }));
-app.use(express.json({ limit: '1mb' }));   // 8mb был избыточен и расширял поверхность DoS
+app.use(express.json({ limit: '3mb' }));   // под фото новостей (base64); 8mb был избыточен для DoS
 app.use(cookieParser());
 
 // Раздаём собранный фронт как статику (с кешем для иммутабельных ассетов)
@@ -974,10 +974,15 @@ reason — очень кратко по-русски. Лиды: ${JSON.stringify
 // ── AI-агрегатор новостей: цифровая жизнь и технологии Казахстана ─────────────
 // Несколько источников грузятся параллельно; дубли по URL/заголовку отсеиваются,
 // затем Gemini отбирает самое релевантное. Поддерживаются RSS (<item>) и Atom (<entry>).
+// kzOnly — глобальные источники (TechCrunch/The Verge): берём только материалы про Казахстан.
+const KZ_RE = /kazakh|казах|astana|астан|almaty|алмат|nur-?sultan|нур-?султан|kaspi|halyk|kazakhstan/i;
 const FEED_SOURCES = [
   { name: 'Profit.kz', url: 'https://profit.kz/rss/' },
   { name: 'Digital Business', url: 'https://digitalbusiness.kz/feed/' },
   { name: 'Bluescreen.kz', url: 'https://bluescreen.kz/feed/' },
+  { name: 'Forbes.kz', url: 'https://forbes.kz/rss/' },
+  { name: 'TechCrunch', url: 'https://techcrunch.com/feed/', kzOnly: true },
+  { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml', kzOnly: true },
 ];
 const FEED_TTL_MS = 24 * 60 * 60 * 1000;
 const FEED_TIMEOUT_MS = 8000;            // не ждём зависший источник дольше 8 с
@@ -1010,9 +1015,30 @@ function parseRss(xml, source) {
     }
     const date = get('pubDate') || get('published') || get('updated');
     const desc = (get('description') || get('summary') || get('content')).slice(0, 240);
-    if (title) items.push({ title, url: link, date, desc, source });
+    // обложка из RSS: enclosure / media:content / media:thumbnail / первый <img> в описании
+    let image = '';
+    const mMedia = b.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*type=["']image/i)
+      || b.match(/<media:(?:content|thumbnail)[^>]+url=["']([^"']+)["']/i);
+    if (mMedia) image = mMedia[1];
+    if (!image) { const mImg = b.match(/<img[^>]+src=["']([^"']+)["']/i); if (mImg) image = mImg[1]; }
+    if (title) items.push({ title, url: link, date, desc, source, image });
   }
   return items;
+}
+// Достаём og:image со страницы статьи (запасной вариант, если в RSS обложки нет)
+async function fetchOgImage(url) {
+  try {
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 6000);
+    const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 DDC-NewsBot' }, signal: ctrl.signal });
+    clearTimeout(tm);
+    if (!r.ok) return '';
+    const html = (await r.text()).slice(0, 200000);
+    const m = html.match(/<meta[^>]+(?:property|name)=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:image["']/i)
+      || html.match(/<meta[^>]+(?:property|name)=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+    return m ? m[1] : '';
+  } catch { return ''; }
 }
 async function fetchRss(src) {
   try {
@@ -1021,8 +1047,10 @@ async function fetchRss(src) {
     const r = await fetch(src.url, { headers: { 'User-Agent': 'Mozilla/5.0 DDC-NewsBot' }, signal: ctrl.signal });
     clearTimeout(timer);
     if (!r.ok) { console.error('RSS', src.name, 'HTTP', r.status, src.url); return []; }
-    const items = parseRss(await r.text(), src.name);
-    if (!items.length) console.warn('RSS', src.name, '— 0 новостей (проверьте формат/URL):', src.url);
+    let items = parseRss(await r.text(), src.name);
+    // Глобальные источники — только материалы про Казахстан
+    if (src.kzOnly) items = items.filter((it) => KZ_RE.test(`${it.title} ${it.desc || ''}`));
+    if (!items.length && !src.kzOnly) console.warn('RSS', src.name, '— 0 новостей (проверьте формат/URL):', src.url);
     return items;
   } catch (e) { console.error('RSS', src.name, e.message, src.url); return []; }
 }
@@ -1056,8 +1084,16 @@ async function buildFeed() {
     else if (Array.isArray(parsed)) result = { digest: '', items: parsed };
   } catch (e) { console.error('feed Gemini:', e.message); }
   if (!result) {
-    result = { digest: '', items: all.slice(0, 6).map((x) => ({ title: x.title, summary: x.desc || '', url: x.url, source: x.source, date: x.date })) };
+    result = { digest: '', items: all.slice(0, 6).map((x) => ({ title: x.title, summary: x.desc || '', url: x.url, source: x.source, date: x.date, image: x.image || '' })) };
   }
+  // Обложки новостей: сначала из RSS (по URL), затем og:image со страницы для оставшихся.
+  const imgByUrl = new Map();
+  for (const x of all) { const k = (x.url || '').split('?')[0]; if (k && x.image) imgByUrl.set(k, x.image); }
+  for (const it of (result.items || [])) {
+    if (!it.image) it.image = imgByUrl.get((it.url || '').split('?')[0]) || '';
+  }
+  const need = (result.items || []).filter((it) => !it.image && it.url).slice(0, 6);
+  await Promise.all(need.map(async (it) => { it.image = await fetchOgImage(it.url); }));
   await db.query(`INSERT INTO feed_cache (content) VALUES ($1)`, [JSON.stringify(result)]);
   return result;
 }

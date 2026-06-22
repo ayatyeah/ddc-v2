@@ -142,6 +142,7 @@ export default function News() {
             <div className="news-empty">{t(lang, 'news.aiEmpty')}</div>
           ) : feed.map((it, i) => (
             <button className="af-card" key={i} onClick={() => setAiActive(it)}>
+              {it.image && <div className="af-ph"><img src={it.image} alt="" loading="lazy" /></div>}
               <div className="af-src">{it.source}{it.date ? ` · ${it.date}` : ''}</div>
               <h4>{it.title}</h4>
               {it.summary && <p>{it.summary}</p>}
@@ -154,7 +155,10 @@ export default function News() {
       {aiActive && createPortal(
         <div className="modal-ov" onClick={() => setAiActive(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="bar" style={{ background: 'linear-gradient(120deg,#13245a,#0a1a3e)' }}>
+            <div className="bar" style={aiActive.image
+              ? { height: 200, padding: 0, background: '#0a1a3e' }
+              : { background: 'linear-gradient(120deg,#13245a,#0a1a3e)' }}>
+              {aiActive.image && <img src={aiActive.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
               <span className="ai-tag" style={{ position: 'absolute', left: 20, bottom: 16 }}>AI</span>
             </div>
             <div className="inner">

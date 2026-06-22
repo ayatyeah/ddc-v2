@@ -628,3 +628,18 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
 [data-theme='dark'] .nm-focus button.on { color: #04122e; }
 
 @media (prefers-reduced-motion: reduce) { .nm-ov, .eval-ov, .nm-modal, .eval-modal { animation: none; } }
+
+/* Кадрирование фото новости (двигаем/масштабируем в рамке нужного соотношения) */
+.nm-crop-ov { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.6); display: grid; place-items: center; padding: 20px; animation: nmFade 0.18s ease; }
+.nm-crop { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow-pop); display: flex; flex-direction: column; gap: 12px; max-width: calc(100vw - 32px); animation: nmPop 0.28s cubic-bezier(0.22,1,0.36,1) both; }
+.nm-crop-h { font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+.nm-crop-view { position: relative; overflow: hidden; border-radius: 10px; background: #0e1116; cursor: grab; touch-action: none; user-select: none; max-width: 100%; }
+.nm-crop-view:active { cursor: grabbing; }
+.nm-crop-view img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
+.nm-crop-grid { position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.35) 1px, transparent 1px);
+  background-size: 33.33% 33.33%; opacity: 0.55; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45); }
+.nm-crop-zoom { display: flex; align-items: center; gap: 10px; }
+.nm-crop-zoom input[type=range] { flex: 1; accent-color: var(--blue); }
+.nm-crop-actions { display: flex; gap: 10px; justify-content: flex-end; }
+@media (prefers-reduced-motion: reduce) { .nm-crop-ov, .nm-crop { animation: none; } }
