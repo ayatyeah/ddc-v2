@@ -213,7 +213,7 @@ export function initScene(canvas) {
   // Частицы в ЛОКАЛЬНЫХ координатах gMap (надпись жёстко привязана к карте). TEXT_Y/TEXT_S
   // и рамка AX×AZ заданы выше (рядом с картой), чтобы линии стартовали с краёв надписи.
   const CZ = -26;
-  const N = PARTICLE_N;   // полная плотность частиц везде (как десктоп)
+  const N = mobile ? Math.round(PARTICLE_N * 0.6) : PARTICLE_N;   // на мобиле меньше частиц (облегчённая сцена)
   const kz = new Float32Array(N * 3), ddc = new Float32Array(N * 3);
   const zoff = new Float32Array(N);
   for (let i = 0; i < N; i++) zoff[i] = (Math.random() - 0.5) * 4;
@@ -306,6 +306,7 @@ export function initScene(canvas) {
   );
   planet.rotation.z = 0.34;                       // наклон оси — объёмнее смотрится
   scene.add(planet);
+  if (mobile) planet.visible = false;             // тяжёлый эффект — на мобиле выключен
 
   const PLANET_K = 0.98;             // планета — сдержанный фон, а не во весь экран
   function placePlanet() {
@@ -341,6 +342,7 @@ export function initScene(canvas) {
         gl_FragColor = vec4(uColor, a); }`,
   });
   const stars = new THREE.Points(starGeo, starMat); stars.frustumCulled = false; scene.add(stars);
+  if (mobile) stars.visible = false;   // тяжёлый эффект — на мобиле выключен
 
   // ── Облака: смягчают исчезновение зданий (здания «растворяются» в них) ───────
   const cloudCv = document.createElement('canvas'); cloudCv.width = cloudCv.height = 128;
@@ -354,6 +356,7 @@ export function initScene(canvas) {
   for (const [cx, cyy, cz, cs] of cloudDefs) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
     sp.position.set(cx, cyy, cz); sp.scale.set(cs, cs * 0.6, 1); sp.userData.bx = cx;
+    if (mobile) sp.visible = false;     // тяжёлый эффект — на мобиле выключен
     clouds.push(sp); scene.add(sp);
   }
 
@@ -501,33 +504,37 @@ export function initScene(canvas) {
       pkt.material.opacity = Math.min(1, (0.5 + 0.5 * Math.sin(t * 4 + u.t * 6)) * boost);
     }
 
-    // звёзды мерцают и уходят, когда камера встаёт строго над картой (небо покидает кадр)
-    starMat.uniforms.uTime.value = t;
-    starMat.uniforms.uOpacity.value = 1 - smooth(p, 0.32, 0.50);
+    // Тяжёлые fullscreen-эффекты (звёзды, облака, планета) — ТОЛЬКО на десктопе.
+    // На мобиле они отключены (выставлены invisible при создании) ради плавности —
+    // остаётся «облегчённая» 3D-сцена: башни, карта, надпись DDC, неон, движение камеры.
+    if (!mobile) {
+      // звёзды мерцают и уходят, когда камера встаёт строго над картой (небо покидает кадр)
+      starMat.uniforms.uTime.value = t;
+      starMat.uniforms.uOpacity.value = 1 - smooth(p, 0.32, 0.50);
 
-    // облака появляются, пока башни тают, и расходятся после — мягкое исчезновение
-    const cloudOp = smooth(p, 0.06, 0.16) * (1 - smooth(p, 0.26, 0.34));
-    for (const sp of clouds) {
-      sp.visible = cloudOp > 0.01;
-      sp.material.opacity = cloudOp * 0.92;
-      sp.position.x = sp.userData.bx + Math.sin(t * 0.14 + sp.userData.bx) * 1.4;
-    }
+      // облака появляются, пока башни тают, и расходятся после — мягкое исчезновение
+      const cloudOp = smooth(p, 0.06, 0.16) * (1 - smooth(p, 0.26, 0.34));
+      for (const sp of clouds) {
+        sp.visible = cloudOp > 0.01;
+        sp.material.opacity = cloudOp * 0.92;
+        sp.position.x = sp.userData.bx + Math.sin(t * 0.14 + sp.userData.bx) * 1.4;
+      }
 
-    // планета: тихий ДАЛЬНИЙ ФОН — медленно вращается и «дышит», не исчезает.
-    // Уходит ниже и назад, читаясь как горизонт/атмосфера за страной.
-    const spin = reduce ? 0 : t * 0.12;             // постоянное автовращение глобуса
-    planet.rotation.y = spin + t * 0.3 + p * 1.2;
-    if (!reduce) {
-      planet.rotation.z = 0.34 + Math.sin(t * 0.18) * 0.05;   // лёгкое покачивание оси наклона
-      planet.rotation.x = Math.sin(t * 0.13) * 0.03;
+      // планета: тихий ДАЛЬНИЙ ФОН — медленно вращается и «дышит».
+      const spin = reduce ? 0 : t * 0.12;             // постоянное автовращение глобуса
+      planet.rotation.y = spin + t * 0.3 + p * 1.2;
+      if (!reduce) {
+        planet.rotation.z = 0.34 + Math.sin(t * 0.18) * 0.05;   // лёгкое покачивание оси наклона
+        planet.rotation.x = Math.sin(t * 0.13) * 0.03;
+      }
+      const breathe = reduce ? 1 : 1 + Math.sin(t * 0.5) * 0.012; // мягкое «дыхание» размера
+      planet.scale.setScalar(L.kzS * PLANET_K * breathe);
+      planet.position.set(0, L.planetY - 6, CZ - 22 + (reduce ? 0 : Math.sin(t * 0.4) * 0.18));
+      // планета уходит, когда камера встаёт строго над картой (иначе «висела» бы в кадре).
+      const planetOp = 0.85 * (1 - smooth(p, 0.30, 0.48));
+      planet.material.opacity = planetOp;
+      planet.visible = planetOp > 0.02;
     }
-    const breathe = reduce ? 1 : 1 + Math.sin(t * 0.5) * 0.012; // мягкое «дыхание» размера
-    planet.scale.setScalar(L.kzS * PLANET_K * breathe);
-    planet.position.set(0, L.planetY - 6, CZ - 22 + (reduce ? 0 : Math.sin(t * 0.4) * 0.18));
-    // планета уходит, когда камера встаёт строго над картой (иначе «висела» бы в кадре).
-    const planetOp = 0.85 * (1 - smooth(p, 0.30, 0.48));
-    planet.material.opacity = planetOp;
-    planet.visible = planetOp > 0.02;
 
     // Надпись «DDC» из частиц проявляется над хабом к середине скролла, с лёгким
     // «живым» мерцанием/дрожанием частиц (центральный логотип цифровой экосистемы).

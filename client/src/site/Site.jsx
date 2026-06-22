@@ -7,7 +7,6 @@ import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Background3D from './Background3D.jsx';
-import MobileBackground from './MobileBackground.jsx';
 import Fog from './Fog.jsx';
 import Particles from './Particles.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
@@ -117,7 +116,7 @@ export default function Site() {
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
       <ErrorBoundary fallback={null}>
-        {isMobile ? <MobileBackground /> : <Background3D onReady={onReady} />}
+        <Background3D onReady={onReady} />
       </ErrorBoundary>
       {!isMobile && <Particles />}
       <Fog />
