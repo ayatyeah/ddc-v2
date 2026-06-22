@@ -433,6 +433,9 @@ button { font-family: inherit; cursor: pointer; }
 /* На узких экранах места по бокам нет — показываем панель снизу по центру */
 @media (max-width: 860px) {
   .chip-info { left: 10px !important; right: 10px !important; top: auto !important; bottom: 12px !important; width: auto !important; }
+  /* Панель снизу перекрывалась бы активным чипом (он остаётся видимым) — на мобиле
+     при открытой панели прячем ВСЕ чипы (заголовок дублируется в самой панели). */
+  .stage.panel-open .chip { opacity: 0; pointer-events: none; transition: opacity 0.3s var(--ease); }
 }
 
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
