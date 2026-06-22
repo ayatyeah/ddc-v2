@@ -17,13 +17,16 @@ import { KZ_OUTLINE, KZ_NODES, KZ_HUB } from './kzGeo.js';
 export function initScene(canvas) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const mobile = window.matchMedia('(max-width: 760px)').matches;
-  const DPR_CAP = mobile ? 1.5 : 2;   // на телефоне ниже плотность пикселей -> та же картинка, но без лагов
+  const DPR_CAP = 2;                   // потолок качества (как десктоп) — и на телефоне тоже
+  // Адаптивное разрешение рендера: стартуем с максимума, а в кадре сами держим плавность —
+  // на слабом телефоне тихо снижаем (для размытого фона незаметно), на сильном — десктопное.
+  let curDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
   const FRAME_MS = 0;         // без ограничения кадров — 60fps везде
   const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
   const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, DPR_CAP));
+  renderer.setPixelRatio(curDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.13;        // чуть больше свечения/«воздуха» в кадре
@@ -210,7 +213,7 @@ export function initScene(canvas) {
   // Частицы в ЛОКАЛЬНЫХ координатах gMap (надпись жёстко привязана к карте). TEXT_Y/TEXT_S
   // и рамка AX×AZ заданы выше (рядом с картой), чтобы линии стартовали с краёв надписи.
   const CZ = -26;
-  const N = mobile ? Math.round(PARTICLE_N * 0.55) : PARTICLE_N;   // меньше частиц на телефоне
+  const N = PARTICLE_N;   // полная плотность частиц везде (как десктоп)
   const kz = new Float32Array(N * 3), ddc = new Float32Array(N * 3);
   const zoff = new Float32Array(N);
   for (let i = 0; i < N; i++) zoff[i] = (Math.random() - 0.5) * 4;
@@ -313,7 +316,7 @@ export function initScene(canvas) {
   // ── Звёздное поле далеко позади: заполняет «пустое» небо за картой/зданиями ───
   // Один Points + лёгкий шейдер мерцания; позиции статичны (в кадре меняется только
   // время/прозрачность) — дёшево и не грузит мобильные. Уходит при выходе в вид сверху.
-  const STAR_N = mobile ? 320 : 760;
+  const STAR_N = 760;   // полное звёздное поле везде (как десктоп)
   const sPos = new Float32Array(STAR_N * 3), sRnd = new Float32Array(STAR_N);
   for (let i = 0; i < STAR_N; i++) {
     sPos[i * 3]     = (Math.random() - 0.5) * 460;
@@ -383,7 +386,7 @@ export function initScene(canvas) {
   function doResize() {
     const w = window.innerWidth, h = window.innerHeight;
     L = layout();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, DPR_CAP));
+    renderer.setPixelRatio(curDpr);   // уважаем текущее адаптивное качество (не сбрасываем на ресайзе)
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
     if (edgeGlowMat) edgeGlowMat.resolution.set(w, h);   // px-толщина неон-границы зависит от размера канваса
     if (edgeCoreMat) edgeCoreMat.resolution.set(w, h);
@@ -410,6 +413,7 @@ export function initScene(canvas) {
   scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
 
   const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, lastFrame = -1e9, prevT = 0;
+  let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps для адаптивного DPR
   function loop() {
     raf = 0;
     if (running) raf = requestAnimationFrame(loop);
@@ -424,8 +428,22 @@ export function initScene(canvas) {
     // Сглаживание по реальному времени кадра (а не фикс-шаг): переходы одинаково
     // плавные на 60/90/120 Гц и не «дёргаются» при просадках fps. dt ограничен,
     // чтобы после возврата из фоновой вкладки не было рывка.
-    const dt = Math.min(0.05, Math.max(0.001, t - prevT)); prevT = t;
+    const rawDt = t - prevT;                    // реальная длительность кадра (для оценки производительности)
+    const dt = Math.min(0.05, Math.max(0.001, rawDt)); prevT = t;
     const kSmooth = 1 - Math.exp(-dt * 6.0);    // быстрее переход между страницами (≈вдвое), кадронезависимо
+
+    // Адаптивное качество: держим плавность. Тяжёлые кадры -> ниже разрешение рендера
+    // (для размытого фона незаметно); лёгкие -> поднимаем к максимуму (десктопное качество).
+    perfAcc += rawDt; perfN++;
+    if (t - perfT > 0.7 && perfN > 8) {
+      const avg = perfAcc / perfN;                                   // средняя длительность кадра, сек
+      const maxDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+      let nd = curDpr;
+      if (avg > 0.025 && curDpr > 1.0) nd = Math.max(1.0, curDpr - 0.25);              // <~40fps -> снижаем
+      else if (avg < 0.0166 && curDpr < maxDpr) nd = Math.min(maxDpr, curDpr + 0.15);  // >~60fps -> повышаем
+      if (Math.abs(nd - curDpr) > 0.02) { curDpr = nd; renderer.setPixelRatio(curDpr); renderer.setSize(window.innerWidth, window.innerHeight, false); }
+      perfAcc = 0; perfN = 0; perfT = t;
+    }
     disp += (progress - disp) * kSmooth;        // плавный бесшовный переход между страницами/скроллом
     dispYaw += (viewYaw - dispYaw) * kSmooth;    // плавный доворот карты к углу текущей страницы
     const p = disp;
