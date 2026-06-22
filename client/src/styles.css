@@ -333,6 +333,12 @@ button { font-family: inherit; cursor: pointer; }
 }
 .hero-sub { margin: 24px auto 0; max-width: 48ch; font-size: clamp(1.02rem, 1.4vw, 1.22rem); color: var(--ink-soft); line-height: 1.5; }
 .hero-cta { margin-top: 36px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+/* На телефоне делаем призыв к действию явным: кнопки в столбик во всю ширину,
+   крупный тап-таргет — первый заход сразу понимает, куда идти («Наши услуги»). */
+@media (max-width: 600px) {
+  .hero-cta { flex-direction: column; align-items: stretch; gap: 10px; width: 100%; max-width: 340px; margin-left: auto; margin-right: auto; }
+  .hero-cta .btn { width: 100%; justify-content: center; padding: 15px 22px; font-size: 16px; }
+}
 .scroll-cue {
   position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 1;
   width: 24px; height: 38px; border: 2px solid var(--ink-faint); border-radius: 14px; opacity: 0.6;
