@@ -72,7 +72,7 @@ export default function Admin() {
       <div className="adm">
         <div className="adm-login">
           <div className="adm-login-card">
-            <div className="adm-login-logo"><img src="/ddc.png" alt="" className="adm-logo-img" /> DDC · Админ</div>
+            <div className="adm-login-logo"><img src="/logo_ddc.svg?v=2" alt="" className="adm-logo-img" /> DDC · Админ</div>
             <h1>Вход в панель</h1>
             <p className="sub">Центр цифрового развития</p>
             <div className="adm-field">
@@ -119,7 +119,7 @@ export default function Admin() {
   return (
     <div className="adm adm-shell">
       <aside className="adm-rail">
-        <div className="rail-brand"><img src="/ddc.png" alt="DDC" /></div>
+        <div className="rail-brand"><img src="/logo_ddc.svg?v=2" alt="DDC" /></div>
         <nav className="rail-nav">
           {items.map((it) => (
             <button key={it.id} className={`rail-btn ${tab === it.id ? 'active' : ''}`} onClick={() => setTab(it.id)} title={titleOf(it.id)}>
@@ -144,7 +144,7 @@ export default function Admin() {
           <NotificationBell onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />
           {me.username && <span className="who">{me.username} <span className={`us-role r-${role}`}>{ROLE_LABEL[role]}</span></span>}
         </header>
-        <main className="adm-main">
+        <main className="adm-main" key={tab}>
           {tab === 'dashboard' && !isStaff && <Dashboard onAuthLost={() => setState('login')} onGoTab={setTab} />}
           {tab === 'leads' && <Leads onAuthLost={() => setState('login')} canEdit={canEditLeads} canAssign={canAssign} isStaff={isStaff} focusId={focusLead} />}
           {tab === 'ai' && aiAccess && <AiPanel onAuthLost={() => setState('login')} onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />}
