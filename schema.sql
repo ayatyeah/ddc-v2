@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS news (
   color        TEXT        NOT NULL DEFAULT '#1a4aaa',
   -- изображение новости: data-URL (base64) или http(s)-ссылка; пусто → цветная заглушка
   image        TEXT        NOT NULL DEFAULT '',
+  -- подгонка фото: cover (заполнить) | contain (вписать целиком)
+  image_fit    TEXT        NOT NULL DEFAULT 'cover',
+  -- фокус кадрирования (object-position), напр. '50% 50%'
+  image_pos    TEXT        NOT NULL DEFAULT '50% 50%',
   -- дата публикации, которую показываем на карточке
   news_date    DATE        NOT NULL DEFAULT CURRENT_DATE,
   published    BOOLEAN     NOT NULL DEFAULT TRUE,
@@ -66,8 +70,10 @@ CREATE TABLE IF NOT EXISTS news (
 CREATE INDEX IF NOT EXISTS idx_news_date      ON news (news_date DESC);
 CREATE INDEX IF NOT EXISTS idx_news_published ON news (published);
 
--- Для уже существующих БД: добавить колонку image, если её ещё нет
+-- Для уже существующих БД: добавить недостающие колонки, если их ещё нет
 ALTER TABLE news ADD COLUMN IF NOT EXISTS image TEXT NOT NULL DEFAULT '';
+ALTER TABLE news ADD COLUMN IF NOT EXISTS image_fit TEXT NOT NULL DEFAULT 'cover';
+ALTER TABLE news ADD COLUMN IF NOT EXISTS image_pos TEXT NOT NULL DEFAULT '50% 50%';
 
 DROP TRIGGER IF EXISTS trg_news_updated_at ON news;
 CREATE TRIGGER trg_news_updated_at

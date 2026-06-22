@@ -605,3 +605,26 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
 @media (max-width: 640px) { .ld-grid { grid-template-columns: 1fr; } }
 /* В мобильном «карточном» режиме таблицы прячем стрелку-шеврон (тапается вся карточка) */
 @media (max-width: 820px) { .lead-chev { display: none; } }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Новости: плавные модалки, видимое фото на карточке, подгонка кадра
+   ════════════════════════════════════════════════════════════════════════════ */
+.nm-ov, .eval-ov { animation: nmFade 0.2s ease; }
+@keyframes nmFade { from { opacity: 0; } to { opacity: 1; } }
+.nm-modal, .eval-modal { animation: nmPop 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes nmPop { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
+
+/* Фото новости теперь видно на карточке (раньше было полоской 6px) */
+.nm-card .bar.has-img { height: 150px; }
+
+/* Подгонка фото: переключатель режима + сетка точек фокуса */
+.nm-fit { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.nm-fit-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.nm-fit-lab { font-size: 12px; color: var(--ink-soft); min-width: 90px; }
+.nm-focus { display: grid; grid-template-columns: repeat(3, 30px); grid-auto-rows: 30px; gap: 4px; }
+.nm-focus button { background: var(--card); border: 1px solid var(--line); border-radius: 7px; color: var(--ink-soft); font-size: 14px; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: border-color 0.15s, background 0.15s, color 0.15s; }
+.nm-focus button:hover { border-color: var(--line-2); color: var(--ink); }
+.nm-focus button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+[data-theme='dark'] .nm-focus button.on { color: #04122e; }
+
+@media (prefers-reduced-motion: reduce) { .nm-ov, .eval-ov, .nm-modal, .eval-modal { animation: none; } }

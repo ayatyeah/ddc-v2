@@ -271,7 +271,7 @@ app.post('/api/leads', formLimiter, async (req, res) => {
 
 // ── Публичные новости (только опубликованные) ─────────────────────────────────
 const NEWS_COLS = `id, title_ru, title_kk, title_en, excerpt_ru, excerpt_kk, excerpt_en,
-                   body_ru, body_kk, body_en, color, image, news_date, published,
+                   body_ru, body_kk, body_en, color, image, image_fit, image_pos, news_date, published,
                    created_at, updated_at`;
 
 app.get('/api/news', async (req, res) => {
@@ -563,11 +563,16 @@ function normalizeNews(body = {}) {
   // image: data-URL (base64) или http(s)-ссылка, иначе пусто
   let image = String(body.image ?? '').slice(0, 4_000_000);
   if (!/^data:image\/[a-z0-9.+-]+;base64,/i.test(image) && !/^https?:\/\//i.test(image)) image = '';
+  // подгонка фото под карточку: fit (cover|contain) + фокус кадрирования (object-position)
+  let image_fit = s(body.image_fit, 10).trim().toLowerCase();
+  if (image_fit !== 'contain') image_fit = 'cover';
+  let image_pos = s(body.image_pos, 24).trim();
+  if (!/^\d{1,3}% \d{1,3}%$/.test(image_pos)) image_pos = '50% 50%';
   return {
     title_ru: s(body.title_ru, 300), title_kk: s(body.title_kk, 300), title_en: s(body.title_en, 300),
     excerpt_ru: s(body.excerpt_ru, 600), excerpt_kk: s(body.excerpt_kk, 600), excerpt_en: s(body.excerpt_en, 600),
     body_ru: s(body.body_ru, 8000), body_kk: s(body.body_kk, 8000), body_en: s(body.body_en, 8000),
-    color, image, news_date: date,
+    color, image, image_fit, image_pos, news_date: date,
     published: body.published === undefined ? true : !!body.published,
   };
 }
@@ -593,11 +598,11 @@ app.post('/api/admin/news', auth, requireRole('admin', 'editor'), async (req, re
     const { rows } = await db.query(
       `INSERT INTO news
         (title_ru,title_kk,title_en,excerpt_ru,excerpt_kk,excerpt_en,
-         body_ru,body_kk,body_en,color,image,news_date,published)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         body_ru,body_kk,body_en,color,image,image_fit,image_pos,news_date,published)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING ${NEWS_COLS}`,
       [n.title_ru,n.title_kk,n.title_en,n.excerpt_ru,n.excerpt_kk,n.excerpt_en,
-       n.body_ru,n.body_kk,n.body_en,n.color,n.image,n.news_date,n.published]
+       n.body_ru,n.body_kk,n.body_en,n.color,n.image,n.image_fit,n.image_pos,n.news_date,n.published]
     );
     logAudit(req, 'news', rows[0].id, 'create', `Создана новость: ${rows[0].title_ru || rows[0].title_en || rows[0].title_kk || ('#'+rows[0].id)}`);
     res.status(201).json(rows[0]);
@@ -617,11 +622,11 @@ app.put('/api/admin/news/:id', auth, requireRole('admin', 'editor'), async (req,
         title_ru=$1,title_kk=$2,title_en=$3,
         excerpt_ru=$4,excerpt_kk=$5,excerpt_en=$6,
         body_ru=$7,body_kk=$8,body_en=$9,
-        color=$10,image=$11,news_date=$12,published=$13
-       WHERE id=$14
+        color=$10,image=$11,image_fit=$12,image_pos=$13,news_date=$14,published=$15
+       WHERE id=$16
        RETURNING ${NEWS_COLS}`,
       [n.title_ru,n.title_kk,n.title_en,n.excerpt_ru,n.excerpt_kk,n.excerpt_en,
-       n.body_ru,n.body_kk,n.body_en,n.color,n.image,n.news_date,n.published, id]
+       n.body_ru,n.body_kk,n.body_en,n.color,n.image,n.image_fit,n.image_pos,n.news_date,n.published, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Новость не найдена' });
     logAudit(req, 'news', id, 'update', `Изменена новость: ${rows[0].title_ru || rows[0].title_en || rows[0].title_kk || ('#'+id)}`);
@@ -1180,6 +1185,12 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`ЦЦР backend слушает на :${PORT} (${PROD ? 'production' : 'development'})`);
+  // Лёгкая идемпотентная авто-миграция — чтобы деплой не требовал ручного `npm run init-db`.
+  db.query(
+    `ALTER TABLE news ADD COLUMN IF NOT EXISTS image_fit TEXT NOT NULL DEFAULT 'cover';
+     ALTER TABLE news ADD COLUMN IF NOT EXISTS image_pos TEXT NOT NULL DEFAULT '50% 50%';`
+  ).then(() => console.log('✓ Колонки новостей image_fit/image_pos на месте'))
+   .catch((e) => console.error('Авто-миграция новостей:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);
 });

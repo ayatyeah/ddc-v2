@@ -3,12 +3,19 @@ import { getJSON, sendJSON, apiFetch } from '../api.js';
 
 const LANGS = [['ru', 'RU'], ['kk', 'KZ'], ['en', 'EN']];
 
+// 9 точек кадрирования (object-position) для режима «Заполнить»
+const POSES = [
+  ['0% 0%', '↖'], ['50% 0%', '↑'], ['100% 0%', '↗'],
+  ['0% 50%', '←'], ['50% 50%', '•'], ['100% 50%', '→'],
+  ['0% 100%', '↙'], ['50% 100%', '↓'], ['100% 100%', '↘'],
+];
+
 function blank() {
   return {
     title_ru: '', title_kk: '', title_en: '',
     excerpt_ru: '', excerpt_kk: '', excerpt_en: '',
     body_ru: '', body_kk: '', body_en: '',
-    color: '#1a4aaa', image: '',
+    color: '#1a4aaa', image: '', image_fit: 'cover', image_pos: '50% 50%',
     news_date: new Date().toISOString().slice(0, 10),
     published: true,
   };
@@ -107,7 +114,9 @@ function Editor({ initial, onClose, onSaved, onAuthLost }) {
           <div>
             <label className="nm-lab">Изображение новости</label>
             <div className="nm-img">
-              <div className="nm-img-prev" style={form.image ? { backgroundImage: `url(${form.image})` } : { background: form.color }}>
+              <div className="nm-img-prev" style={form.image
+                ? { backgroundImage: `url(${form.image})`, backgroundSize: form.image_fit === 'contain' ? 'contain' : 'cover', backgroundPosition: form.image_pos, backgroundColor: form.color, backgroundRepeat: 'no-repeat' }
+                : { background: form.color }}>
                 {!form.image && <span>Цветная заглушка</span>}
               </div>
               <div className="nm-img-ctrl">
@@ -119,6 +128,29 @@ function Editor({ initial, onClose, onSaved, onAuthLost }) {
                 <div className="nm-hint">JPG/PNG. Покажется вместо цветной заглушки на карточке и в окне новости.</div>
               </div>
             </div>
+
+            {form.image && (
+              <div className="nm-fit">
+                <div className="nm-fit-row">
+                  <span className="nm-fit-lab">Как вписать</span>
+                  <div className="nm-langtabs">
+                    <button className={form.image_fit === 'cover' ? 'active' : ''} onClick={() => setForm((f) => ({ ...f, image_fit: 'cover' }))}>Заполнить</button>
+                    <button className={form.image_fit === 'contain' ? 'active' : ''} onClick={() => setForm((f) => ({ ...f, image_fit: 'contain' }))}>Вписать целиком</button>
+                  </div>
+                </div>
+                {form.image_fit === 'cover' && (
+                  <div className="nm-fit-row">
+                    <span className="nm-fit-lab">Фокус кадра</span>
+                    <div className="nm-focus">
+                      {POSES.map(([p, ic]) => (
+                        <button key={p} type="button" className={form.image_pos === p ? 'on' : ''} title={p}
+                          onClick={() => setForm((f) => ({ ...f, image_pos: p }))}>{ic}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="nm-2col">
@@ -205,7 +237,9 @@ export default function NewsManager({ onAuthLost, canEdit = true }) {
         <div className="nm-grid">
           {items.map((row) => (
             <div className="nm-card" key={row.id}>
-              <div className="bar" style={row.image ? { backgroundImage: `url(${row.image})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: row.color || '#1a4aaa' }} />
+              <div className={`bar ${row.image ? 'has-img' : ''}`} style={row.image
+                ? { backgroundImage: `url(${row.image})`, backgroundSize: row.image_fit === 'contain' ? 'contain' : 'cover', backgroundPosition: row.image_pos || 'center', backgroundColor: row.color || '#1a4aaa', backgroundRepeat: 'no-repeat' }
+                : { background: row.color || '#1a4aaa' }} />
               <div className="in">
                 <div className="nm-tags">
                   <time>{fmtDate(row.news_date || row.created_at)}</time>

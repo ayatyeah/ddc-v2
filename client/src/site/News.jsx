@@ -106,8 +106,9 @@ export default function News() {
                 <div className="nc-track" ref={trackRef} onScroll={onScroll}>
                   {items.map((row) => (
                     <article className="nc-card" key={row.id} onClick={() => setActive(row)}>
-                      <div className="ph" style={row.image ? undefined : { background: row.color || '#1a4aaa' }}>
-                        {row.image && <img src={row.image} alt={pick(row, 'title', lang)} loading="lazy" />}
+                      <div className="ph" style={{ background: row.color || '#1a4aaa' }}>
+                        {row.image && <img src={row.image} alt={pick(row, 'title', lang)} loading="lazy"
+                          style={{ objectFit: row.image_fit || 'cover', objectPosition: row.image_pos || '50% 50%' }} />}
                       </div>
                       <div className="body">
                         <time>{fmtDate(row.news_date || row.created_at, lang)}</time>
@@ -172,7 +173,7 @@ export default function News() {
         <div className="modal-ov" onClick={() => setActive(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             {active.image
-              ? <div className="bar" style={{ height: 200, padding: 0 }}><img src={active.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              ? <div className="bar" style={{ height: 200, padding: 0, background: active.color || '#1a4aaa' }}><img src={active.image} alt="" style={{ width: '100%', height: '100%', objectFit: active.image_fit || 'cover', objectPosition: active.image_pos || '50% 50%' }} /></div>
               : <div className="bar" style={{ background: active.color || '#1a4aaa' }} />}
             <div className="inner">
               <button className="x" onClick={() => setActive(null)} aria-label={t(lang, 'news.close')}>×</button>
