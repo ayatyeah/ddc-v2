@@ -587,6 +587,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .inp:focus { border-color: var(--blue); }
 textarea.inp { resize: vertical; min-height: 110px; }
+.form-consent { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
+.form-consent input { margin-top: 2px; width: 16px; height: 16px; flex: none; accent-color: var(--blue); cursor: pointer; }
 .form .btn-primary { justify-content: center; margin-top: 4px; }
 .form .btn-primary.ok { background: #1f9d57; }
 .form .btn-primary.bad { background: #c0455a; }

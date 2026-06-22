@@ -9,6 +9,7 @@ const EMPTY = { full_name: '', email: '', phone: '', subject: '', message: '' };
 export default function Contact() {
   const lang = useLang();
   const [form, setForm] = useState(EMPTY);
+  const [consent, setConsent] = useState(false);
   const [state, setState] = useState('idle'); // idle | sending | sent | error
   const [err, setErr] = useState('');
 
@@ -21,6 +22,7 @@ export default function Contact() {
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       setErr(t(lang, 'contact.err.email')); setState('error'); return;
     }
+    if (!consent) { setErr(t(lang, 'contact.err.consent')); setState('error'); return; }
     setState('sending'); setErr('');
     try {
       await sendJSON('/api/leads', 'POST', {
@@ -32,6 +34,7 @@ export default function Contact() {
       });
       setState('sent');
       setForm(EMPTY);
+      setConsent(false);
       setTimeout(() => setState('idle'), 3500);
     } catch {
       setErr(t(lang, 'contact.err.server'));
@@ -74,6 +77,10 @@ export default function Contact() {
                 value={form.subject} onChange={set('subject')} />
               <textarea className="inp" placeholder={t(lang, 'contact.message')} aria-label={t(lang, 'contact.message')}
                 value={form.message} onChange={set('message')} />
+              <label className="form-consent">
+                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
+                <span>{t(lang, 'contact.consent')}</span>
+              </label>
               <button type="submit" className={btnClass} disabled={state === 'sending'} aria-busy={state === 'sending'}>{btnLabel}</button>
               <span className="form-status" role="status" aria-live="polite">
                 {state === 'error' ? err : state === 'sent' ? t(lang, 'contact.sent') : ''}
