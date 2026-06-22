@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '../store.js';
 import { useRoute } from './router.js';
 import { ROUTES } from './pages.jsx';
@@ -7,17 +7,31 @@ import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Background3D from './Background3D.jsx';
+import MobileBackground from './MobileBackground.jsx';
 import Fog from './Fog.jsx';
 import Particles from './Particles.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 
+// Мобила (<=760px) — лёгкий 2D-фон вместо тяжёлой WebGL-сцены. Реагируем на смену брейкпоинта.
+function useIsMobile() {
+  const [m, setM] = useState(() => window.matchMedia('(max-width: 760px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 760px)');
+    const on = () => setM(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return m;
+}
+
 export default function Site() {
   const theme = useTheme();
   const path = useRoute();
   const route = ROUTES[path] || ROUTES['/'];
   const Page = route.Comp;
+  const isMobile = useIsMobile();
 
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
@@ -103,9 +117,9 @@ export default function Site() {
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
       <ErrorBoundary fallback={null}>
-        <Background3D onReady={onReady} />
+        {isMobile ? <MobileBackground /> : <Background3D onReady={onReady} />}
       </ErrorBoundary>
-      <Particles />
+      {!isMobile && <Particles />}
       <Fog />
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
