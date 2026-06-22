@@ -317,12 +317,21 @@ export function initScene(canvas) {
   // ── Звёздное поле далеко позади: заполняет «пустое» небо за картой/зданиями ───
   // Один Points + лёгкий шейдер мерцания; позиции статичны (в кадре меняется только
   // время/прозрачность) — дёшево и не грузит мобильные. Уходит при выходе в вид сверху.
-  const STAR_N = 760;   // полное звёздное поле везде (как десктоп)
+  const STAR_N = 1200;   // плотное звёздное поле (десктоп) — наполняет фон
   const sPos = new Float32Array(STAR_N * 3), sRnd = new Float32Array(STAR_N);
   for (let i = 0; i < STAR_N; i++) {
-    sPos[i * 3]     = (Math.random() - 0.5) * 460;
-    sPos[i * 3 + 1] = 6 + Math.random() * 190;
-    sPos[i * 3 + 2] = -80 - Math.random() * 180;
+    if (i % 2 === 0) {
+      // «небо»: высоко и далеко — для hero и облических ракурсов
+      sPos[i * 3]     = (Math.random() - 0.5) * 540;
+      sPos[i * 3 + 1] = 18 + Math.random() * 205;
+      sPos[i * 3 + 2] = -70 - Math.random() * 230;
+    } else {
+      // «поле»: кольцо точек вокруг страны (низко по Y) — заполняет пустоту при виде сверху
+      const ang = Math.random() * 6.2831, rad = 95 + Math.random() * 240;
+      sPos[i * 3]     = Math.cos(ang) * rad;
+      sPos[i * 3 + 1] = -3 + Math.random() * 9;
+      sPos[i * 3 + 2] = -9 + Math.sin(ang) * rad * 0.7;
+    }
     sRnd[i] = Math.random();
   }
   const starGeo = new THREE.BufferGeometry();
@@ -508,9 +517,9 @@ export function initScene(canvas) {
     // На мобиле они отключены (выставлены invisible при создании) ради плавности —
     // остаётся «облегчённая» 3D-сцена: башни, карта, надпись DDC, неон, движение камеры.
     if (!mobile) {
-      // звёзды мерцают и уходят, когда камера встаёт строго над картой (небо покидает кадр)
+      // звёзды/поле остаются всегда — наполняют фон и при виде сверху (раньше гасли)
       starMat.uniforms.uTime.value = t;
-      starMat.uniforms.uOpacity.value = 1 - smooth(p, 0.32, 0.50);
+      starMat.uniforms.uOpacity.value = 1;
 
       // облака появляются, пока башни тают, и расходятся после — мягкое исчезновение
       const cloudOp = smooth(p, 0.06, 0.16) * (1 - smooth(p, 0.26, 0.34));
@@ -530,10 +539,10 @@ export function initScene(canvas) {
       const breathe = reduce ? 1 : 1 + Math.sin(t * 0.5) * 0.012; // мягкое «дыхание» размера
       planet.scale.setScalar(L.kzS * PLANET_K * breathe);
       planet.position.set(0, L.planetY - 6, CZ - 22 + (reduce ? 0 : Math.sin(t * 0.4) * 0.18));
-      // планета уходит, когда камера встаёт строго над картой (иначе «висела» бы в кадре).
-      const planetOp = 0.85 * (1 - smooth(p, 0.30, 0.48));
-      planet.material.opacity = planetOp;
-      planet.visible = planetOp > 0.02;
+      // планета ВОЗВРАЩЕНА как постоянный задний фон: держится почти весь скролл,
+      // лишь у самого вида сверху слегка притухает (раньше полностью исчезала к середине).
+      planet.material.opacity = 0.82 * (1 - 0.5 * smooth(p, 0.55, 0.82));
+      planet.visible = true;
     }
 
     // Надпись «DDC» из частиц проявляется над хабом к середине скролла, с лёгким
