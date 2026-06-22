@@ -25,111 +25,138 @@ function fmtDate(iso) {
   } catch { return iso || ''; }
 }
 
-function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onAssign, showAssignee, expanded, onToggleScore, onOpenEval, colCount }) {
+function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onAssign, showAssignee, expanded, onToggle, onOpenEval, colCount }) {
   const [comment, setComment] = useState(row.admin_comment || '');
   const [saved, setSaved] = useState(false);
+  useEffect(() => { setComment(row.admin_comment || ''); }, [row.admin_comment]);
 
   const patch = (body) => onPatch(row.id, body);
-
   const saveComment = async () => {
     await patch({ admin_comment: comment });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+    setSaved(true); setTimeout(() => setSaved(false), 1500);
   };
-
   const axes = row.score_json && row.score_json.axes;
 
   return (
     <>
-      <tr id={`lead-${row.id}`} className={highlight ? 'lead-flash' : ''}>
+      {/* Сводка — кликабельна, разворачивает панель редактирования */}
+      <tr id={`lead-${row.id}`} className={`lead-row ${highlight ? 'lead-flash' : ''} ${expanded ? 'is-open' : ''}`}
+        onClick={() => onToggle(row.id)}>
         <td data-label="Клиент">
           <div className="who-name">{row.full_name}</div>
           <div className="who-sub">{row.email || '—'}{row.phone ? ` · ${row.phone}` : ''}</div>
         </td>
         <td data-label="Вопрос">
-          <div>{row.subject || '—'}</div>
-          {row.message && <div className="who-sub">{row.message}</div>}
+          <div className="lead-subject">{row.subject || '—'}</div>
+          {row.message && <div className="who-sub lead-msg-1">{row.message}</div>}
         </td>
-        <td data-label="Статус">
-          <select
-            className={`status-select st-${row.status}`}
-            value={row.status}
-            disabled={!canEdit}
-            onChange={(e) => patch({ status: e.target.value })}
-          >
-            {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-          </select>
-        </td>
-        <td data-label="Оценка">
-          <div className="stars">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button
-                key={n}
-                className={`star ${n <= (row.rating || 0) ? 'on' : ''}`}
-                disabled={!canEdit}
-                onClick={() => patch({ rating: n === row.rating ? 0 : n })}
-                aria-label={`${n}`}
-              >★</button>
-            ))}
-          </div>
-        </td>
+        <td data-label="Статус"><span className={`st-badge st-${row.status}`}>{STATUS_LABELS[row.status]}</span></td>
         <td data-label="Скор">
-          {row.score != null ? (
-            <button className={`score-badge ${scoreClass(row.score)}`} onClick={() => onToggleScore(row.id)} title="Разбор по 7 осям">{row.score}</button>
-          ) : (
-            <span className="score-badge s-none">—</span>
-          )}
-        </td>
-        <td data-label="Комментарий">
-          <div className="comment-box">
-            <textarea className="adm-input" value={comment} readOnly={!canEdit} onChange={(e) => setComment(e.target.value)} />
-            {canEdit && (
-              <div className="save-row">
-                <button className="btn-sm" onClick={saveComment}>Сохранить</button>
-                <span className={`saved-tag ${saved ? 'show' : ''}`}>Сохранено ✓</span>
-              </div>
-            )}
-          </div>
+          {row.score != null
+            ? <span className={`score-badge ${scoreClass(row.score)}`}>{row.score}</span>
+            : <span className="score-badge s-none">—</span>}
         </td>
         {showAssignee && (
           <td data-label="Исполнитель">
-            {canAssign ? (
-              <select className="adm-input assignee-select" value={row.assignee_id || ''}
-                onChange={(e) => onAssign(row.id, e.target.value)}>
-                <option value="">— не назначен —</option>
-                {staff.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {(s.full_name || s.username)}{s.department ? ` · ${s.department}` : ''}{s.role === 'manager' ? ' (нач.)' : ''}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="who-name">{row.assignee_name || row.assignee_username || '—'}</span>
-            )}
+            <span className={row.assignee_name || row.assignee_username ? 'who-name' : 'who-sub'}>
+              {row.assignee_name || row.assignee_username || '— не назначен'}
+            </span>
           </td>
         )}
         <td data-label="Дата" className="nowrap">
           <div>{fmtDate(row.created_at)}</div>
-          {canEdit && <button className={`eval-btn ${row.has_evaluation ? 'done' : ''}`} onClick={() => onOpenEval(row)}>{row.has_evaluation ? 'Лист ✓' : 'Оценочный лист'}</button>}
-          {canEdit && <button className="lead-del" onClick={() => onDelete(row.id, row.full_name)}>Удалить</button>}
+          {row.rating ? <div className="lead-rating-mini">{'★★★★★'.slice(0, row.rating)}<span className="off">{'★★★★★'.slice(row.rating)}</span></div> : null}
+        </td>
+        <td className="lead-chev" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
         </td>
       </tr>
-      {expanded && axes && (
-        <tr className="score-detail">
+
+      {/* Детальная панель: всё редактирование собрано здесь */}
+      {expanded && (
+        <tr className="lead-detail">
           <td colSpan={colCount}>
-            {AXIS_ORDER.map((k) => {
-              const a = axes[k] || { score: 0, reason: '' };
-              return (
-                <div key={k}>
-                  <div className="axis-row">
-                    <div className="axis-name">{AXIS_LABELS[k][0]}<small>{AXIS_LABELS[k][1]}</small></div>
-                    <div className={`axis-bar ${k === 'risk' ? 'risk' : ''}`}><span style={{ width: `${a.score}%` }} /></div>
-                    <div className="axis-val">{a.score}</div>
-                  </div>
-                  {a.reason && <div className="axis-reason">{a.reason}</div>}
+            <div className="ld-grid">
+              <div className="ld-block ld-full">
+                <div className="ld-lab">Вопрос клиента</div>
+                <div className="ld-subject">{row.subject || '—'}</div>
+                {row.message && <p className="ld-msg">{row.message}</p>}
+              </div>
+
+              <div className="ld-block">
+                <div className="ld-lab">Статус</div>
+                <select className={`status-select st-${row.status}`} value={row.status} disabled={!canEdit}
+                  onChange={(e) => patch({ status: e.target.value })}>
+                  {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                </select>
+              </div>
+
+              {showAssignee && (
+                <div className="ld-block">
+                  <div className="ld-lab">Исполнитель</div>
+                  {canAssign ? (
+                    <select className="adm-input" value={row.assignee_id || ''} onChange={(e) => onAssign(row.id, e.target.value)}>
+                      <option value="">— не назначен —</option>
+                      {staff.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {(s.full_name || s.username)}{s.department ? ` · ${s.department}` : ''}{s.role === 'manager' ? ' (нач.)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : <div className="who-name">{row.assignee_name || row.assignee_username || '—'}</div>}
                 </div>
-              );
-            })}
+              )}
+
+              <div className="ld-block">
+                <div className="ld-lab">Оценка клиента</div>
+                <div className="stars">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button key={n} className={`star ${n <= (row.rating || 0) ? 'on' : ''}`} disabled={!canEdit}
+                      onClick={() => patch({ rating: n === row.rating ? 0 : n })} aria-label={`${n}`}>★</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="ld-block ld-full">
+                <div className="ld-lab">Комментарий менеджера</div>
+                <textarea className="adm-input" value={comment} readOnly={!canEdit} onChange={(e) => setComment(e.target.value)} />
+                {canEdit && (
+                  <div className="save-row">
+                    <button className="btn-sm" onClick={saveComment}>Сохранить</button>
+                    <span className={`saved-tag ${saved ? 'show' : ''}`}>Сохранено ✓</span>
+                  </div>
+                )}
+              </div>
+
+              {axes && (
+                <div className="ld-block ld-full">
+                  <div className="ld-lab">AI-разбор по 7 осям</div>
+                  {AXIS_ORDER.map((k) => {
+                    const a = axes[k] || { score: 0, reason: '' };
+                    return (
+                      <div key={k}>
+                        <div className="axis-row">
+                          <div className="axis-name">{AXIS_LABELS[k][0]}<small>{AXIS_LABELS[k][1]}</small></div>
+                          <div className={`axis-bar ${k === 'risk' ? 'risk' : ''}`}><span style={{ width: `${a.score}%` }} /></div>
+                          <div className="axis-val">{a.score}</div>
+                        </div>
+                        {a.reason && <div className="axis-reason">{a.reason}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {canEdit && (
+                <div className="ld-block ld-full ld-actions">
+                  <button className={`eval-btn ${row.has_evaluation ? 'done' : ''}`} onClick={() => onOpenEval(row)}>
+                    {row.has_evaluation ? 'Оценочный лист ✓' : 'Оценочный лист'}
+                  </button>
+                  <span className="sp" />
+                  <button className="lead-del" onClick={() => onDelete(row.id, row.full_name)}>Удалить заявку</button>
+                </div>
+              )}
+            </div>
           </td>
         </tr>
       )}
@@ -149,7 +176,7 @@ export default function Leads({ onAuthLost, canEdit = true, canAssign = false, i
   const [sortScore, setSortScore] = useState(false);
   const debRef = useRef(0);
   const showAssignee = !isStaff;
-  const colCount = showAssignee ? 8 : 7;
+  const colCount = showAssignee ? 7 : 6;
 
   const toggleScore = (id) => setExpanded((prev) => {
     const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
@@ -256,16 +283,17 @@ export default function Leads({ onAuthLost, canEdit = true, canAssign = false, i
         <table className="adm-table">
           <thead>
             <tr>
-              <th>Клиент</th><th>Вопрос</th><th>Статус</th><th>Оценка</th><th>Скор</th><th>Комментарий</th>
+              <th>Клиент</th><th>Вопрос</th><th>Статус</th><th>Скор</th>
               {showAssignee && <th>Исполнитель</th>}
               <th className="nowrap">Дата</th>
+              <th aria-hidden="true" />
             </tr>
           </thead>
           <tbody>
             {(sortScore ? [...rows].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)) : rows).map((row) => (
               <Row key={row.id} row={row} onPatch={patch} canEdit={canEdit} highlight={focusId === row.id} onDelete={del}
                 canAssign={canAssign} staff={staff} onAssign={assign} showAssignee={showAssignee}
-                expanded={expanded.has(row.id)} onToggleScore={toggleScore} onOpenEval={setEvalLead} colCount={colCount} />
+                expanded={expanded.has(row.id)} onToggle={toggleScore} onOpenEval={setEvalLead} colCount={colCount} />
             ))}
           </tbody>
         </table>
