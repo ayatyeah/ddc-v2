@@ -3,7 +3,6 @@ import BuildingShot from './BuildingShot.jsx';
 import Services from './Services.jsx';
 import Showcase from './Showcase.jsx';
 import Stats from './Stats.jsx';
-import Workstation from './Workstation.jsx';
 import About from './About.jsx';
 import News from './News.jsx';
 import Contact from './Contact.jsx';
@@ -15,7 +14,7 @@ export function ServicesPage() {
   return (<div className="page-top"><Showcase /><Services /></div>);
 }
 export function AboutPage() {
-  return (<div className="page-top"><About /><Workstation /><BuildingShot /></div>);
+  return (<div className="page-top"><About /><BuildingShot /></div>);
 }
 export function ContactPage() {
   return (<div className="page-top"><Contact /></div>);
