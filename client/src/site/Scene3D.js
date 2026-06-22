@@ -383,11 +383,18 @@ export function initScene(canvas) {
   }
 
   let lastW = 0;
+  // На мобильных адресная строка при скролле постоянно меняет ВЫСОТУ вьюпорта. Если на это
+  // менять размер буфера и camera.aspect — кадр «дышит» по ширине и фризит. Поэтому на телефоне
+  // рендерим в стабильную (максимальную) высоту экрана и канвас сайзим в CSS-пикселях (низ просто
+  // уходит под фолд), а реагируем ТОЛЬКО на смену ширины/ориентации.
+  const stableH = Math.max(window.innerHeight, (window.screen && window.screen.height) || 0);
   function doResize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = window.innerWidth;
+    const h = mobile ? stableH : window.innerHeight;
     L = layout();
     renderer.setPixelRatio(curDpr);   // уважаем текущее адаптивное качество (не сбрасываем на ресайзе)
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.setSize(w, h, mobile);   // mobile: фиксируем CSS-размер канваса (без растяжения при адресной строке)
+    camera.aspect = w / h; camera.updateProjectionMatrix();
     if (edgeGlowMat) edgeGlowMat.resolution.set(w, h);   // px-толщина неон-границы зависит от размера канваса
     if (edgeCoreMat) edgeCoreMat.resolution.set(w, h);
     pMat.uniforms.uSize.value = 3.0;
@@ -397,16 +404,9 @@ export function initScene(canvas) {
     placePlanet();
     lastW = w;
   }
-  // На мобильных скролл прячет/показывает адресную строку и сыплет resize'ами ТОЛЬКО по высоте.
-  // Реаллокация WebGL-буфера (setSize) на каждом таком кадре — главный источник фризов при скролле.
-  // Поэтому изменения только-по-высоте обрабатываем с дебаунсом (фон чуть растянется на доли секунды —
-  // для размытого заднего плана незаметно), а на смену ширины/ориентации реагируем сразу.
-  let rzT = 0;
   function resize() {
-    if (mobile && window.innerWidth === lastW) {
-      clearTimeout(rzT); rzT = setTimeout(doResize, 250); return;
-    }
-    clearTimeout(rzT); doResize();
+    if (mobile && window.innerWidth === lastW) return;   // изменилась только высота (адресная строка) — игнор
+    doResize();
   }
   window.addEventListener('resize', resize); doResize();
 
@@ -531,16 +531,21 @@ export function initScene(canvas) {
 
     // Надпись «DDC» из частиц проявляется над хабом к середине скролла, с лёгким
     // «живым» мерцанием/дрожанием частиц (центральный логотип цифровой экосистемы).
-    pMat.uniforms.uOpacity.value = smooth(p, 0.34, 0.54);
-    const wob = reduce ? 0 : 1;
-    for (let i = 0; i < N; i++) {
-      const a = i * 3;
-      pos[a]     = ddc[a]     + wob * Math.sin(i * 1.3 + t) * 0.18;
-      pos[a + 1] = ddc[a + 1] + wob * Math.cos(i * 0.7 + t) * 0.18;
-      pos[a + 2] = ddc[a + 2] + wob * Math.sin(i + t) * 0.22;
-    }
-    pGeo.attributes.position.needsUpdate = true; pState = 1;
-    pMat.uniforms.uTime.value = t;                            // горящие огоньки + блики
+    const pOp = smooth(p, 0.34, 0.54);
+    pMat.uniforms.uOpacity.value = pOp;
+    pMat.uniforms.uTime.value = t;
+    // Надпись видна только во второй половине скролла. На hero и в начале скролла НЕ пересчитываем
+    // 1500 частиц и не льём буфер в GPU каждый кадр — это снимает фризы при старте скролла.
+    if (pOp > 0.01) {
+      const wob = reduce ? 0 : 1;
+      for (let i = 0; i < N; i++) {
+        const a = i * 3;
+        pos[a]     = ddc[a]     + wob * Math.sin(i * 1.3 + t) * 0.18;
+        pos[a + 1] = ddc[a + 1] + wob * Math.cos(i * 0.7 + t) * 0.18;
+        pos[a + 2] = ddc[a + 2] + wob * Math.sin(i + t) * 0.22;
+      }
+      pGeo.attributes.position.needsUpdate = true; pState = 1;
+    }                            // горящие огоньки + блики
     renderer.render(scene, camera);
   }
 
@@ -557,7 +562,6 @@ export function initScene(canvas) {
     setPage() { pageVar++; drawPlanet(pageVar); if (!running && !document.hidden) start(); },
     dispose() {
       stop();
-      clearTimeout(rzT);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
       window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);

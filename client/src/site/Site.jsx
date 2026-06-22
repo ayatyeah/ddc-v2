@@ -47,20 +47,24 @@ export default function Site() {
     sceneRef.current?.setYaw?.(route.yaw ?? 0);   // у каждой страницы свой угол доворота карты
     if (path === '/') {
       let raf = 0;
+      // Кэшируем высоту прокрутки и пересчитываем только на resize — чтобы НЕ читать
+      // scrollHeight (reflow) на каждом кадре скролла. На мобиле это заметно для плавности.
+      let maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
+      const recalc = () => { maxScroll = Math.max(1, root.scrollHeight - window.innerHeight); };
       const apply = () => {
         raf = 0;
-        const max = root.scrollHeight - window.innerHeight;
-        const sp = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+        const sp = Math.min(1, Math.max(0, window.scrollY / maxScroll));
         sceneRef.current?.setTarget(0.04 + sp * 0.56);
         if (fogEl) fogEl.style.setProperty('--fog', Math.min(0.85, sp * 1.25).toFixed(3));
       };
       const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-      apply();
+      const onResize = () => { recalc(); onScroll(); };
+      recalc(); apply();
       window.addEventListener('scroll', onScroll, { passive: true });
-      window.addEventListener('resize', onScroll, { passive: true });
+      window.addEventListener('resize', onResize, { passive: true });
       return () => {
         window.removeEventListener('scroll', onScroll);
-        window.removeEventListener('resize', onScroll);
+        window.removeEventListener('resize', onResize);
         if (raf) cancelAnimationFrame(raf);
       };
     }
