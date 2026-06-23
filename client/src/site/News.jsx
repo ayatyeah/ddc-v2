@@ -10,8 +10,13 @@ function pick(row, base, lang) { return row[`${base}_${lang}`] || row[`${base}_r
 
 // AI-лента: поле может быть строкой (старый кэш) или объектом {ru,kk,en} (мультиязычно).
 function pickT(v, lang) {
-  if (v && typeof v === 'object') return v[lang] || v.ru || v.en || v.kk || '';
-  return v || '';
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object') {
+    const r = v[lang] ?? v.ru ?? v.en ?? v.kk;
+    return typeof r === 'string' ? r : '';   // не отдаём объект наружу — иначе «[object Object]»
+  }
+  return String(v);
 }
 
 function fmtDate(value, lang) {
