@@ -18,8 +18,10 @@ export default function Services() {
     <section className="section" id="services">
       <div className="wrap">
         <Reveal className="section-head">
-          <div className="eyebrow">{t(lang, 'services.eyebrow')}</div>
-          <h2 className="h2">{t(lang, 'services.title')}</h2>
+          <div className="text-glass svc-head">
+            <div className="eyebrow">{t(lang, 'services.eyebrow')}</div>
+            <h2 className="h2">{t(lang, 'services.title')}</h2>
+          </div>
         </Reveal>
         <div className="svc-grid">
           {ITEMS.map(({ k, Ico, c }, i) => (

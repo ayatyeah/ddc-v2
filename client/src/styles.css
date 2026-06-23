@@ -55,7 +55,8 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+/* Базовый кегль чуть крупнее (16 → 17px) — всё на rem-единицах масштабируется по сайту. */
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; font-size: 106.25%; }
 body {
   font-family: var(--sans);
   color: var(--ink);
@@ -287,11 +288,30 @@ button { font-family: inherit; cursor: pointer; }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: 0.02em; font-size: 17px; }
 .brand .brand-logo { width: 34px; height: 34px; object-fit: contain; display: block; }
 
-/* Стеклянный островок со всеми элементами навигации — у правого края */
+/* Островок навигации — «liquid glass»: сильное размытие + диагональный блик-градиент
+   поверх стеклянной подложки, светящаяся кромка и объёмные тени с внутренней подсветкой. */
 .nav-island {
   display: flex; align-items: center; gap: 8px; padding: 7px;
-  background: var(--nav-glass); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border: 1px solid var(--line); border-radius: 980px; box-shadow: var(--shadow-card);
+  /* слой блика (за контентом — кнопки остаются чёткими) поверх тонированного стекла */
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04) 40%, rgba(255,255,255,0.12)),
+    rgba(251, 251, 253, 0.34);
+  backdrop-filter: saturate(190%) blur(44px); -webkit-backdrop-filter: saturate(190%) blur(44px);
+  border: 1px solid rgba(255,255,255,0.22); border-radius: 980px;
+  box-shadow:
+    0 10px 34px rgba(4, 9, 22, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.10);
+}
+[data-theme='dark'] .nav-island {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02) 40%, rgba(255,255,255,0.06)),
+    rgba(8, 12, 24, 0.34);
+  border-color: rgba(255,255,255,0.16);
+  box-shadow:
+    0 10px 34px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.05);
 }
 .nav-links { display: flex; gap: 2px; }
 .nav-links a {
@@ -320,15 +340,63 @@ button { font-family: inherit; cursor: pointer; }
   .nav-links {
     display: flex; flex-direction: column; gap: 6px;
     position: fixed; top: 0; right: 0; z-index: 120;
-    width: min(86vw, 460px); height: 100vh; height: 100dvh;
+    /* Левый край панели — у ЛЕВОГО края надписи (сразу за логотипом): виден только
+       логотип, текст Digital Development Center уходит под панель. */
+    width: calc(100vw - 118px); height: 100vh; height: 100dvh;
     padding: 92px 22px calc(28px + env(safe-area-inset-bottom));
-    background: var(--nav-glass); backdrop-filter: saturate(180%) blur(22px); -webkit-backdrop-filter: saturate(180%) blur(22px);
-    border-left: 1px solid var(--line); box-shadow: -22px 0 60px rgba(0, 0, 0, 0.28);
+    /* «Liquid glass»: прозрачная стеклянная панель с бликом и сильным размытием */
+    background:
+      linear-gradient(160deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.05)),
+      rgba(9, 13, 24, 0.76);
+    backdrop-filter: saturate(180%) blur(24px); -webkit-backdrop-filter: saturate(180%) blur(24px);
+    border-left: 1px solid rgba(255,255,255,0.22);
+    box-shadow: -22px 0 60px rgba(0, 0, 0, 0.30), inset 1px 0 0 rgba(255,255,255,0.30);
     transform: translateX(105%); pointer-events: none;
     transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
   }
+  [data-theme='dark'] .nav-links {
+    background:
+      linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015) 45%, rgba(255,255,255,0.035)),
+      rgba(3, 5, 11, 0.86);
+    border-left-color: rgba(255,255,255,0.10);
+    box-shadow: -22px 0 60px rgba(0, 0, 0, 0.5), inset 1px 0 0 rgba(255,255,255,0.14);
+  }
   .nav-links.open { transform: translateX(0); pointer-events: auto; }
-  .nav-links a { font-size: 18px; padding: 14px 18px; border-radius: 14px; }
+  .nav-links a {
+    font-size: 18px; padding: 14px 18px; border-radius: 14px;
+    border: 1px solid transparent;
+    transition: background 0.22s var(--ease), border-color 0.22s var(--ease),
+                box-shadow 0.22s var(--ease), color 0.2s, transform 0.12s;
+  }
+  /* Наведение / нажатие / активный пункт — оборачиваем в стекло (liquid glass) */
+  .nav-links a:hover, .nav-links a:focus-visible, .nav-links a.active {
+    color: var(--ink);
+    background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.05) 55%, rgba(255,255,255,0.10));
+    border-color: rgba(255,255,255,0.24);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 8px 24px rgba(0,0,0,0.28);
+  }
+  .nav-links a:active { transform: scale(0.98); }
+  [data-theme='dark'] .nav-links a:hover, [data-theme='dark'] .nav-links a:focus-visible, [data-theme='dark'] .nav-links a.active {
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03) 55%, rgba(255,255,255,0.07));
+    border-color: rgba(255,255,255,0.16);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.20), 0 8px 24px rgba(0,0,0,0.45);
+  }
+
+  /* ВАЖНО: у островка снимаем backdrop-filter на мобиле — иначе он становится «backdrop-root»
+     и размытие дочерней панели меню видит только область пилюли, а не страницу (панель выглядит
+     прозрачной). Без него backdrop-filter самой панели корректно размывает фон страницы.
+     Пилюле даём плотноватый стеклянный фон (без блюра она всё равно читается). */
+  .nav-island {
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04) 40%, rgba(255,255,255,0.10)),
+      rgba(247, 248, 252, 0.82);
+  }
+  [data-theme='dark'] .nav-island {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 40%, rgba(255,255,255,0.05)),
+      rgba(10, 15, 28, 0.82);
+  }
 }
 
 /* ── Интро-локап: крупный логотип + надпись Digital / Development / Center рядом ── */
@@ -347,6 +415,8 @@ button { font-family: inherit; cursor: pointer; }
   .brandlock { left: 22px; gap: 9px; }
   .brandlock .bl-logo { width: 42px; height: 42px; }
   .brandlock .bl-word { font-size: 13px; }
+  /* на мобиле логотип меньше — край панели у левого края надписи (сразу за логотипом) */
+  .nav-links { width: calc(100vw - 82px); }
 }
 
 /* ── Hero ────────────────────────────────────────────────────────────────────── */

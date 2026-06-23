@@ -11,6 +11,9 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+import helvetikerBold from 'three/examples/fonts/helvetiker_bold.typeface.json';
 import { PARTICLE_N, DDC_PTS } from './particlePoints.js';
 import { KZ_OUTLINE, KZ_NODES, KZ_HUB } from './kzGeo.js';
 
@@ -249,66 +252,71 @@ export function initScene(canvas) {
     gMap.position.y = 0.0;
   })();
 
-  // ── Звёзды-частицы: надпись «DDC», лежащая ПЛАШМЯ на карте ───────────────────
-  // Частицы в ЛОКАЛЬНЫХ координатах gMap (надпись жёстко привязана к карте). TEXT_Y/TEXT_S
-  // и рамка AX×AZ заданы выше (рядом с картой), чтобы линии стартовали с краёв надписи.
+  // ── Надпись «DDC»: статичный 3D-меш + неоновый контур по буквам ──────────────
+  // Лежит ПЛАШМЯ на карте (XZ), «верх» букв -> к северу (-z). Грузится ОДИН РАЗ
+  // (никакого обновления буфера каждый кадр, как было у частиц) -> легче для телефона.
+  // TEXT_Y/TEXT_S и рамка AX×AZ заданы выше (надпись жёстко привязана к карте gMap).
   const CZ = -26;
-  const N = mobile ? Math.round(PARTICLE_N * 0.6) : PARTICLE_N;   // на мобиле меньше частиц (облегчённая сцена)
-  const kz = new Float32Array(N * 3), ddc = new Float32Array(N * 3);
-  const zoff = new Float32Array(N);
-  for (let i = 0; i < N; i++) zoff[i] = (Math.random() - 0.5) * 4;
   function layout() {
     return { mobile: 0, camZ: 112, eyeY: 56, lookY: 5, cy: 20, planetY: 20,
              kzCX: 0, kzS: 18, ddcCX: 0, ddcS: 15 };
   }
   let L = layout();
-  function buildTargets() {
-    // Частицы образуют «DDC» на карте (локальные коорд. gMap; «верх» букв -> к северу -z).
-    for (let i = 0; i < N; i++) {
-      ddc[i * 3]     = DDC_PTS[i * 2] * TEXT_S;                    // x — ширина надписи
-      ddc[i * 3 + 1] = TEXT_Y + zoff[i] * 0.12;                   // лежит на карте, лёгкий разброс по высоте
-      ddc[i * 3 + 2] = -DDC_PTS[i * 2 + 1] * TEXT_S;              // z — высота букв (к северу)
-      kz[i * 3] = ddc[i * 3]; kz[i * 3 + 1] = ddc[i * 3 + 1]; kz[i * 3 + 2] = ddc[i * 3 + 2];
+
+  const ddcGroup = new THREE.Group(); ddcGroup.visible = false; gMap.add(ddcGroup);
+  const ddcMeshMats = [];     // материалы тела букв (fade по скроллу)
+  const ddcLineMats = [];     // материалы неон-контура (fade + пульс); их resolution обновляем в resize
+  (() => {
+    const font = new FontLoader().parse(helvetikerBold);
+    const shapes = font.generateShapes('DDC', 10);
+    // габариты в координатах шрифта -> центрируем и вписываем по ширине в рамку AX
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const sh of shapes) for (const p of sh.getPoints(10)) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
     }
-  }
-  buildTargets();
-  const pos = new Float32Array(kz);
-  const aRand = new Float32Array(N);
-  for (let i = 0; i < N; i++) aRand[i] = Math.random();
-  const pGeo = new THREE.BufferGeometry();
-  pGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  pGeo.setAttribute('aRand', new THREE.BufferAttribute(aRand, 1));
-  // горящие светло-синие огоньки с индивидуальным мерцанием/бликами
-  const pMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
-    uniforms: {
-      uTime: { value: 0 }, uSize: { value: 3.0 }, uOpacity: { value: 0 },
-      uColor: { value: new THREE.Color(0x6fdde6) },
-      uHot: { value: new THREE.Color(0xffffff) },
-    },
-    vertexShader: `
-      attribute float aRand; uniform float uTime, uSize; varying float vTw;
-      void main(){
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        float tw = 0.5 + 0.5 * sin(uTime * 2.2 + aRand * 6.2831);
-        vTw = tw;
-        gl_PointSize = uSize * (0.6 + 0.7 * tw) * (220.0 / -mv.z);
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: `
-      uniform vec3 uColor, uHot; uniform float uOpacity; varying float vTw;
-      void main(){
-        vec2 d = gl_PointCoord - 0.5; float r = length(d);
-        if (r > 0.5) discard;
-        float core = smoothstep(0.5, 0.0, r);
-        float glow = pow(core, 2.2);
-        vec3 col = mix(uColor, uHot, glow * (0.4 + 0.6 * vTw));
-        float a = glow * (0.55 + 0.45 * vTw) * uOpacity;
-        gl_FragColor = vec4(col, a);
-      }`,
-  });
-  // Надпись — потомок карты (gMap): жёстко привязана, поворачивается вместе с картой.
-  const points = new THREE.Points(pGeo, pMat); gMap.add(points);
+    const cxf = (minX + maxX) / 2, cyf = (minY + maxY) / 2;
+    const s = (AX * 2 * 0.92) / ((maxX - minX) || 1);   // масштаб шрифт→world
+    const TH = 1.4;                                      // толщина букв (world)
+    const depth = TH / s;                                // depth в координатах шрифта (после scale -> TH)
+    const topY = TEXT_Y + TH + 0.06;                     // верхняя грань — там неон-контур
+
+    // тело букв (extrude). После rotateX(-90°): верх букв (y шрифта) -> -z (север).
+    const geo = new TextGeometry('DDC', {
+      font, size: 10, height: depth, curveSegments: 6,
+      bevelEnabled: true, bevelThickness: depth * 0.12, bevelSize: depth * 0.08, bevelSegments: 1,
+    });
+    geo.translate(-cxf, -cyf, 0); geo.scale(s, s, s); geo.rotateX(-Math.PI / 2); geo.translate(0, TEXT_Y, 0);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x12386e, metalness: 0.55, roughness: 0.32, envMapIntensity: 1.0,
+      emissive: 0x0a2452, emissiveIntensity: 0.45, transparent: true, opacity: 0,
+    });
+    bodyMat.userData = { baseOp: 1 };
+    const mesh = new THREE.Mesh(geo, bodyMat); mesh.renderOrder = 6; ddcGroup.add(mesh); ddcMeshMats.push(bodyMat);
+
+    // неон-контур по буквам: внешний контур + «дырки» (счётчик в D), на верхней грани.
+    const W0 = window.innerWidth, H0 = window.innerHeight;
+    const glowMat = new LineMaterial({ color: 0x3aa0ff, linewidth: 4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
+    const coreMat = new LineMaterial({ color: 0xcdeeff, linewidth: 1.4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
+    glowMat.resolution.set(W0, H0); coreMat.resolution.set(W0, H0);
+    glowMat.userData = { baseOp: 0.5, glow: true }; coreMat.userData = { baseOp: 0.95 };
+    ddcLineMats.push(glowMat, coreMat);
+    const toWorld = (p) => [(p.x - cxf) * s, topY, -((p.y - cyf) * s)];
+    const addContour = (pts) => {
+      if (!pts || pts.length < 2) return;
+      const flat = [];
+      for (const p of pts) { const w = toWorld(p); flat.push(w[0], w[1], w[2]); }
+      const f0 = toWorld(pts[0]); flat.push(f0[0], f0[1], f0[2]);   // замкнуть контур
+      const g = new LineGeometry(); g.setPositions(flat);
+      const glow = new Line2(g, glowMat); glow.renderOrder = 7; ddcGroup.add(glow);
+      const core = new Line2(g, coreMat); core.renderOrder = 8; ddcGroup.add(core);
+    };
+    for (const sh of shapes) {
+      const ep = sh.extractPoints(10);   // { shape, holes }
+      addContour(ep.shape);
+      for (const hole of ep.holes) addContour(hole);
+    }
+  })();
 
   // ── Планета за зданиями: на ней крупно повторяется «DDC» (вращается, всегда в кадре).
   //    Текстура перерисовывается при смене страницы — узор слегка меняется. ─────
@@ -432,7 +440,7 @@ export function initScene(canvas) {
   // ── (3D-логотип убран — бренд показывается DOM-локапом) ─────────────────────
 
   // ── Камера / целевое состояние (задаётся маршрутом) ─────────────────────────
-  let progress = 0, tx = 0, ty = 0, px = 0, py = 0, pState = -1;
+  let progress = 0, tx = 0, ty = 0, px = 0, py = 0;
   let viewYaw = 0, dispYaw = 0;   // целевой/сглаженный угол «ровного» разворота карты (свой для каждой страницы)
   const onPointer = (e) => { tx = (e.clientX / window.innerWidth - 0.5) * 2; ty = (e.clientY / window.innerHeight - 0.5) * 2; };
   if (!reduce && !LIGHT) window.addEventListener('pointermove', onPointer, { passive: true });
@@ -468,10 +476,7 @@ export function initScene(canvas) {
     camera.aspect = w / h; camera.updateProjectionMatrix();
     if (edgeGlowMat) edgeGlowMat.resolution.set(w, h);   // px-толщина неон-границы зависит от размера канваса
     if (edgeCoreMat) edgeCoreMat.resolution.set(w, h);
-    pMat.uniforms.uSize.value = 3.0;
-    buildTargets();
-    if (pState === 1) pos.set(ddc); else pos.set(kz);
-    pGeo.attributes.position.needsUpdate = true;
+    for (const m of ddcLineMats) m.resolution.set(w, h);  // px-толщина неон-контура DDC
     placePlanet();
     lastW = w;
   }
@@ -602,23 +607,17 @@ export function initScene(canvas) {
       // планета отключена в 3D — фон-глобус теперь 2D-слоем #bg-planet (в DOM).
     }
 
-    // Надпись «DDC» из частиц проявляется над хабом к середине скролла, с лёгким
-    // «живым» мерцанием/дрожанием частиц (центральный логотип цифровой экосистемы).
+    // Надпись «DDC» (3D-меш + неон-контур) проявляется над хабом к середине скролла.
+    // Статичная геометрия — только меняем прозрачность материалов (без per-frame буфера).
     const pOp = smooth(p, 0.34, 0.54);
-    pMat.uniforms.uOpacity.value = pOp;
-    pMat.uniforms.uTime.value = t;
-    // Надпись видна только во второй половине скролла. На hero и в начале скролла НЕ пересчитываем
-    // 1500 частиц и не льём буфер в GPU каждый кадр — это снимает фризы при старте скролла.
-    if (pOp > 0.01) {
-      const wob = reduce ? 0 : 1;
-      for (let i = 0; i < N; i++) {
-        const a = i * 3;
-        pos[a]     = ddc[a]     + wob * Math.sin(i * 1.3 + t) * 0.18;
-        pos[a + 1] = ddc[a + 1] + wob * Math.cos(i * 0.7 + t) * 0.18;
-        pos[a + 2] = ddc[a + 2] + wob * Math.sin(i + t) * 0.22;
+    ddcGroup.visible = pOp > 0.01;
+    if (ddcGroup.visible) {
+      for (const m of ddcMeshMats) m.opacity = (m.userData?.baseOp ?? 1) * pOp;
+      for (const m of ddcLineMats) {
+        const base = m.userData?.baseOp ?? 0.9;
+        m.opacity = Math.min(1, base * pOp * (m.userData?.glow ? (0.7 + 0.6 * pulse) : 1));
       }
-      pGeo.attributes.position.needsUpdate = true; pState = 1;
-    }                            // горящие огоньки + блики
+    }
     renderer.render(scene, camera);
   }
 
@@ -639,7 +638,7 @@ export function initScene(canvas) {
       window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
       window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);
       window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
-      pMat.dispose(); pGeo.dispose(); planetTex.dispose(); cloudTex.dispose(); satTex.dispose(); [facadeA, facadeB].forEach((x) => x.dispose());
+      planetTex.dispose(); cloudTex.dispose(); satTex.dispose(); [facadeA, facadeB].forEach((x) => x.dispose());
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const mm = o.material; (Array.isArray(mm) ? mm : [mm]).forEach((x) => x.dispose()); } });
       pmrem.dispose(); renderer.dispose();
     },
