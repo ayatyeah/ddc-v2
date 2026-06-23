@@ -35,6 +35,18 @@ export default function Site() {
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
 
+  // Параллакс слоёв: публикуем scrollY в CSS-переменную --sy (px), а слои двигаем через
+  // calc(var(--sy) * factor) в CSS — дальний фон медленнее, текст быстрее → ощущение глубины.
+  useEffect(() => {
+    const root = document.documentElement;
+    let raf = 0;
+    const apply = () => { raf = 0; root.style.setProperty('--sy', window.scrollY + 'px'); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    apply();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+
   // SEO: обновляем заголовок и meta-описание при смене страницы (SPA-навигация)
   useEffect(() => {
     if (route.title) document.title = route.title;

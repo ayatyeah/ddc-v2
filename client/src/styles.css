@@ -191,29 +191,12 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ── Reveal по скроллу ───────────────────────────────────────────────────────── */
 /* Появление плашек через «вспышку»: короткий световой блик + свечение, затем проявление */
-.reveal { opacity: 0; transform: translateY(16px) scale(0.99); position: relative; }
-/* Появление «как фокусировка объектива»: размытие → резкость → лёгкое свечение.
-   Браузер делает по сути один blur, но мозг читает это как «технологично». */
-.reveal.in { animation: revealFocus 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.reveal { opacity: 0; transform: translateY(16px) scale(0.99); }
+/* Появление «как фокусировка объектива»: размытие → резкость. Без вспышки/свечения. */
+.reveal.in { animation: revealFocus 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
 @keyframes revealFocus {
-  0%   { opacity: 0; transform: translateY(16px) scale(0.99); filter: blur(9px); }
-  45%  { opacity: 1; transform: translateY(0) scale(1.004); filter: blur(0); }                  /* резкость */
-  62%  { filter: drop-shadow(0 0 16px rgba(150,195,255,0.5)) brightness(1.14); }                 /* лёгкое свечение */
-  100% { opacity: 1; transform: translateY(0) scale(1); filter: none; }
-}
-/* Мягкий световой бликоверлей — расцветает ПОСЛЕ фокуса, не резкая вспышка */
-.reveal.in::after {
-  content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit;
-  background: radial-gradient(120% 120% at 50% 0%, rgba(255,255,255,0.4) 0%, rgba(170,205,255,0.22) 32%, transparent 66%);
-  mix-blend-mode: screen; opacity: 0; animation: flashGlow 0.9s ease-out both;
-}
-@keyframes flashGlow {
-  0%, 38% { opacity: 0; }
-  60%     { opacity: 1; }
-  100%    { opacity: 0; }
-}
-[data-theme='dark'] .reveal.in::after {
-  background: radial-gradient(120% 120% at 50% 0%, rgba(180,215,255,0.42) 0%, rgba(110,160,255,0.2) 32%, transparent 66%);
+  0%   { opacity: 0; transform: translateY(16px) scale(0.99); filter: blur(8px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
 
 /* ── Кнопки ──────────────────────────────────────────────────────────────────── */
@@ -327,6 +310,11 @@ button { font-family: inherit; cursor: pointer; }
 .hero-cta { justify-content: flex-start; }
 .hero-sub { max-width: 44ch; }
 .hero-orbs { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+/* Параллакс слоёв: дальний фон (орбы) двигается медленно, текст — чуть быстрее → глубина.
+   scrollY приходит из --sy (Site.jsx), слои смещаем calc'ом — браузеру почти бесплатно. */
+.hero-orbs { transform: translate3d(0, calc(var(--sy, 0px) * 0.18), 0); will-change: transform; }
+.hero-inner { transform: translate3d(0, calc(var(--sy, 0px) * -0.045), 0); }
+@media (prefers-reduced-motion: reduce) { .hero-orbs, .hero-inner { transform: none; } }
 .orb { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.5; }
 .orb.o1 { width: 460px; height: 460px; left: -120px; top: 6%; background: radial-gradient(circle, var(--blue), transparent 70%); }
 .orb.o2 { width: 380px; height: 380px; right: -100px; top: 30%; background: radial-gradient(circle, var(--gold-soft), transparent 70%); opacity: 0.35; }
