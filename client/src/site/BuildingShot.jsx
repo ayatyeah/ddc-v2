@@ -11,10 +11,12 @@ export default function BuildingShot() {
       <div className="wrap">
         <div className="hq-grid">
           <Reveal>
-            <div className="eyebrow">{t(lang, 'hq.eyebrow')}</div>
-            <h2 className="h2" style={{ marginTop: 14 }}>{t(lang, 'hq.title')}</h2>
-            <p className="lede" style={{ marginTop: 18 }}>{t(lang, 'hq.sub')}</p>
-            <div className="hq-caption">{t(lang, 'hq.caption')}</div>
+            <div className="text-glass">
+              <div className="eyebrow">{t(lang, 'hq.eyebrow')}</div>
+              <h2 className="h2" style={{ marginTop: 14 }}>{t(lang, 'hq.title')}</h2>
+              <p className="lede" style={{ marginTop: 18 }}>{t(lang, 'hq.sub')}</p>
+              <div className="hq-caption">{t(lang, 'hq.caption')}</div>
+            </div>
           </Reveal>
           <Reveal delay={120}>
             <figure className="hq-figure">

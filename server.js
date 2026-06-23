@@ -37,6 +37,7 @@ const compression = require('compression');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
+const { buildReportPDF, fontsAvailable } = require('./pdfReport');
 
 const app = express();
 const PROD = process.env.NODE_ENV === 'production';
@@ -581,6 +582,43 @@ app.post('/api/leads/:id/evaluation', auth, requireRole('admin', 'manager', 'sta
     logAudit(req, 'lead', id, 'evaluation', `Оценочный лист по лиду #${id} сохранён`);
     res.json(rows[0]);
   } catch (e) { console.error('POST evaluation:', e.message); res.status(500).json({ error: 'Не удалось сохранить лист' }); }
+});
+
+// ── PDF-отчёт по клиенту (серверная генерация) ───────────────────────────────
+// Доступен только для обслуженных клиентов с ИИ-скором и заполненным оценочным листом.
+// staff — только по своим лидам; admin/manager/editor — по любым.
+function reportFileName(name) {
+  const safe = String(name || '').trim().replace(/\s+/g, '_').replace(/[\\/:*?"<>|.]+/g, '').slice(0, 80);
+  return `${safe || 'Клиент'}_Отчёт.pdf`;
+}
+
+app.get('/api/leads/:id/report.pdf', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
+  try {
+    if (!(await leadOwnedOrManager(req, id))) return res.status(403).json({ error: 'Это не ваш лид' });
+    const lead = await fetchLeadRow(id);
+    if (!lead) return res.status(404).json({ error: 'Клиент не найден' });
+    if (lead.status !== 'served' || lead.score == null || !lead.has_evaluation) {
+      return res.status(400).json({ error: 'Отчёт доступен только для обслуженных клиентов с ИИ-оценкой и оценочным листом' });
+    }
+    if (!fontsAvailable()) return res.status(500).json({ error: 'Шрифты для PDF не найдены на сервере (assets/fonts)' });
+
+    const evq = await db.query(`SELECT * FROM evaluations WHERE lead_id = $1`, [id]);
+    const ev = { ...(evq.rows[0] || {}), prior_orders: await priorOrdersCount(id) };
+    const pdf = await buildReportPDF(lead, ev);
+
+    const fname = reportFileName(lead.full_name);
+    res.setHeader('Content-Type', 'application/pdf');
+    // ASCII-fallback + RFC 5987 (UTF-8) — корректное кириллическое имя файла в браузере.
+    res.setHeader('Content-Disposition', `attachment; filename="report_${id}.pdf"; filename*=UTF-8''${encodeURIComponent(fname)}`);
+    res.setHeader('Content-Length', pdf.length);
+    logAudit(req, 'lead', id, 'report', `Сформирован PDF-отчёт по лиду #${id}`);
+    res.send(pdf);
+  } catch (e) {
+    console.error('GET /api/leads/:id/report.pdf:', e.message);
+    res.status(500).json({ error: 'Не удалось сформировать отчёт' });
+  }
 });
 
 // ── Админ: новости (CRUD) ─────────────────────────────────────────────────────

@@ -338,7 +338,7 @@ export function initScene(canvas) {
   );
   planet.rotation.z = 0.34;                       // наклон оси — объёмнее смотрится
   scene.add(planet);
-  if (mobile) planet.visible = false;             // тяжёлый эффект — на мобиле выключен
+  planet.visible = false;                          // 3D-планета отключена — фон-планета теперь 2D (#bg-planet в DOM)
 
   const PLANET_K = 0.98;             // планета — сдержанный фон, а не во весь экран
   function placePlanet() {
@@ -591,20 +591,7 @@ export function initScene(canvas) {
         sp.position.x = sp.userData.bx + Math.sin(t * 0.14 + sp.userData.bx) * 1.4;
       }
 
-      // планета: тихий ДАЛЬНИЙ ФОН — медленно вращается и «дышит».
-      const spin = reduce ? 0 : t * 0.12;             // постоянное автовращение глобуса
-      planet.rotation.y = spin + t * 0.3 + p * 1.2;
-      if (!reduce) {
-        planet.rotation.z = 0.34 + Math.sin(t * 0.18) * 0.05;   // лёгкое покачивание оси наклона
-        planet.rotation.x = Math.sin(t * 0.13) * 0.03;
-      }
-      const breathe = reduce ? 1 : 1 + Math.sin(t * 0.5) * 0.012; // мягкое «дыхание» размера
-      planet.scale.setScalar(L.kzS * PLANET_K * breathe);
-      planet.position.set(0, L.planetY - 6, CZ - 22 + (reduce ? 0 : Math.sin(t * 0.4) * 0.18));
-      // планета ВОЗВРАЩЕНА как постоянный задний фон: держится почти весь скролл,
-      // лишь у самого вида сверху слегка притухает (раньше полностью исчезала к середине).
-      planet.material.opacity = 0.82 * (1 - 0.5 * smooth(p, 0.55, 0.82));
-      planet.visible = true;
+      // планета отключена в 3D — фон-глобус теперь 2D-слоем #bg-planet (в DOM).
     }
 
     // Надпись «DDC» из частиц проявляется над хабом к середине скролла, с лёгким

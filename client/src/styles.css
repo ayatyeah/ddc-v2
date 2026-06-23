@@ -123,6 +123,29 @@ button { font-family: inherit; cursor: pointer; }
   width: 100%; height: 100%; display: block; opacity: 0.85;
 }
 
+/* 2D-планета на заднем фоне (вместо прежней 3D-планеты). Сидит позади 3D-сцены,
+   медленно «дышит» и слегка дрейфует — тихий глобус в небе над страной. */
+#bg-planet {
+  position: fixed; z-index: -4; pointer-events: none;
+  top: 6vh; right: 9vw; width: 340px; height: 340px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(120,170,255,0.18), rgba(120,170,255,0) 72%),
+    radial-gradient(circle at 36% 30%, #5a86c4, #244c84 50%, #102a4e 78%, #0a1c38 100%);
+  box-shadow:
+    0 0 90px rgba(70, 130, 230, 0.30),
+    inset -22px -26px 64px rgba(0, 6, 18, 0.6),
+    inset 20px 18px 54px rgba(160, 200, 255, 0.22);
+  opacity: 0.6;
+  animation: planetFloat 22s ease-in-out infinite;
+}
+[data-theme='dark'] #bg-planet { opacity: 0.72; }
+@keyframes planetFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(14px) scale(1.015); }
+}
+@media (prefers-reduced-motion: reduce) { #bg-planet { animation: none; } }
+@media (max-width: 760px) { #bg-planet { width: 200px; height: 200px; top: 4vh; right: 6vw; opacity: 0.5; } }
+
 /* Полноэкранный 3D-фон (Scene3D) — башни DDC, параллакс-проезд по скроллу. */
 #bg3d {
   position: fixed; inset: 0; z-index: -3; pointer-events: none;
@@ -141,6 +164,40 @@ button { font-family: inherit; cursor: pointer; }
 #particles {
   position: fixed; inset: 0; z-index: -2; pointer-events: none;
 }
+
+/* Потоки данных — светящиеся пакеты, бегущие по вертикальным каналам (DataFlow.jsx). */
+#dataflow {
+  position: fixed; inset: 0; z-index: -2; pointer-events: none; opacity: 0.7;
+}
+
+/* ── Кастомный курсор: кольцо-«спутник», догоняющее указатель ─────────────────── */
+.cursor-dot {
+  position: fixed; top: 0; left: 0; z-index: 9999; pointer-events: none;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1.5px solid rgba(150, 205, 255, 0.85);
+  background: radial-gradient(circle, rgba(120, 200, 255, 0.18), rgba(120, 200, 255, 0) 70%);
+  box-shadow: 0 0 14px rgba(90, 170, 255, 0.5), inset 0 0 10px rgba(120, 200, 255, 0.3);
+  opacity: 0; will-change: transform, width, height, opacity;
+  transition: opacity 0.25s ease, width 0.22s var(--ease), height 0.22s var(--ease),
+              border-color 0.22s ease, background 0.22s ease;
+}
+.cursor-dot.on { opacity: 1; }
+/* Над iframe (карта) кольцо не отслеживается — прячем, работает системный курсор */
+.cursor-dot.over-iframe { opacity: 0; }
+/* Над кликабельным — кольцо крупнее и ярче */
+.cursor-dot.hot {
+  width: 52px; height: 52px;
+  border-color: rgba(190, 225, 255, 0.95);
+  background: radial-gradient(circle, rgba(120, 200, 255, 0.26), rgba(120, 200, 255, 0) 70%);
+}
+/* Нажатие — короткий пульс (сжатие + вспышка свечения) */
+.cursor-dot.down { animation: cursorPulse 0.42s var(--ease); }
+@keyframes cursorPulse {
+  0%   { box-shadow: 0 0 14px rgba(90, 170, 255, 0.5), inset 0 0 10px rgba(120, 200, 255, 0.3); }
+  35%  { box-shadow: 0 0 0 10px rgba(120, 200, 255, 0), 0 0 26px rgba(120, 200, 255, 0.85), inset 0 0 16px rgba(150, 215, 255, 0.6); }
+  100% { box-shadow: 0 0 14px rgba(90, 170, 255, 0.5), inset 0 0 10px rgba(120, 200, 255, 0.3); }
+}
+@media (prefers-reduced-motion: reduce) { .cursor-dot { display: none; } }
 
 /* «Дым»/облака снизу — проявляются при скролле (через #fog opacity var --fog). */
 #fog {
@@ -188,14 +245,33 @@ button { font-family: inherit; cursor: pointer; }
 /* Матовая подложка под текстовый блок: супер-прозрачный фон + лёгкое размытие сцены
    за ним — текст всегда читается, а 3D-фон по-прежнему просвечивает. */
 .text-glass {
-  background: rgba(8, 13, 28, 0.24);
-  backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
-  border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 20px;
+  position: relative;
+  /* Тёмное стекло: основа достаточно плотная для читаемости, блик только в углу */
+  background: linear-gradient(135deg, rgba(20,30,54,0.58), rgba(8,13,28,0.62) 55%, rgba(4,8,20,0.66));
+  backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px;
+  box-shadow:
+    0 10px 40px rgba(4, 9, 22, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
   padding: 28px 32px;
 }
+/* Текст внутри стекла — заметная тень, чтобы читался поверх любого блика/сцены */
+.text-glass h1, .text-glass .h2, .text-glass h2,
+.text-glass .lede, .text-glass p, .text-glass .eyebrow {
+  text-shadow: 0 1px 2px rgba(2, 6, 16, 0.85), 0 2px 14px rgba(2, 6, 16, 0.7);
+}
+/* Тонкий глянцевый блик по верхней кромке — «стекло ловит свет», но мягко */
+.text-glass::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 22%);
+}
 @media (max-width: 760px) {
-  /* На телефоне backdrop-filter отключаем (перф) — компенсируем чуть плотнее фоном */
-  .text-glass { background: rgba(8, 13, 28, 0.5); backdrop-filter: none; -webkit-backdrop-filter: none; padding: 22px 20px; }
+  /* На телефоне backdrop-filter отключаем (перф) — компенсируем плотнее фоном */
+  .text-glass {
+    background: linear-gradient(135deg, rgba(20,30,54,0.78), rgba(6,10,22,0.82));
+    backdrop-filter: none; -webkit-backdrop-filter: none; padding: 22px 20px;
+  }
 }
 /* В тёмной теме крупные заголовки и заголовки новостей — фирменный синий. */
 [data-theme='dark'] h1,

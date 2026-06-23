@@ -233,6 +233,16 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .eval-btn { background: none; border: 1px solid var(--line-2); color: var(--ink-soft); border-radius: 8px; font-family: inherit; font-size: 12px; padding: 5px 10px; cursor: pointer; margin-top: 6px; }
 .eval-btn:hover { border-color: var(--blue, #2f6fe0); color: var(--blue, #2f6fe0); }
 .eval-btn.done { color: #0a8a5a; border-color: rgba(10,138,90,0.4); }
+
+/* Кнопка скачивания PDF-отчёта по клиенту (обслуженные + ИИ-скор + оценочный лист) */
+.report-btn {
+  background: #005500; border: 1px solid #005500; color: #fff; border-radius: 9px;
+  font-family: inherit; font-size: 13px; font-weight: 600; padding: 9px 16px; cursor: pointer;
+  transition: filter 0.15s, transform 0.12s;
+}
+.report-btn:hover { filter: brightness(1.14); }
+.report-btn:active { transform: scale(0.98); }
+
 .eval-ov { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.45); display: grid; place-items: center; padding: 24px; }
 .eval-modal { width: min(560px, 100%); max-height: 88vh; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: 0 24px 70px rgba(0,0,0,0.3); }
 .eval-modal h3 { margin: 0 0 4px; }

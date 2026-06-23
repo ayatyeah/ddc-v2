@@ -9,6 +9,8 @@ import Assistant from './Assistant.jsx';
 import Background3D from './Background3D.jsx';
 import Fog from './Fog.jsx';
 import Particles from './Particles.jsx';
+import DataFlow from './DataFlow.jsx';
+import Cursor from './Cursor.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
@@ -126,11 +128,14 @@ export default function Site() {
       <a href="#main" className="skip-link">К основному содержимому</a>
       <div id="scroll-bg" aria-hidden="true" />
       <div id="scroll-aurora" aria-hidden="true" />
+      <div id="bg-planet" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
       <ErrorBoundary fallback={null}>
         <Background3D onReady={onReady} />
       </ErrorBoundary>
       {!isMobile && <Particles />}
+      {!isMobile && <DataFlow />}
+      {!isMobile && <Cursor />}
       <Fog />
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />

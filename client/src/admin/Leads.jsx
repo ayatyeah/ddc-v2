@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getJSON, sendJSON } from '../api.js';
 import EvaluationModal from './EvaluationModal.jsx';
+import { downloadClientReport } from './clientReport.js';
 
 const STATUS_LABELS = { new: 'Новый', in_progress: 'В процессе', on_hold: 'Отложен', served: 'Обслужен', rejected: 'Отказ' };
 const STATUS_ORDER = ['new', 'in_progress', 'on_hold', 'served', 'rejected'];
@@ -144,6 +145,15 @@ function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onA
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* PDF-отчёт доступен для обслуженных клиентов с ИИ-скором и оценочным листом */}
+              {row.status === 'served' && row.score != null && row.has_evaluation && (
+                <div className="ld-block ld-full">
+                  <button className="report-btn" onClick={() => downloadClientReport(row)}>
+                    ⬇ Скачать PDF-отчёт
+                  </button>
                 </div>
               )}
 
