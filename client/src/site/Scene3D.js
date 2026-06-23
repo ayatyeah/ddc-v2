@@ -90,7 +90,8 @@ export function initScene(canvas) {
     beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0xe6c789, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
     gTowers.traverse((o) => { if (o.material) { o.material.transparent = true; towerMats.push(o.material); } });
   })();
-  gBuild.rotation.y = -0.62;   // разворот как на фото: видно фронт + правый бок башен
+  const HERO_YAW = -0.62;      // угол, под которым конструкция «встречает» на главной (3/4-вид)
+  gBuild.rotation.y = HERO_YAW;
 
   // ── 3D-карта Казахстана у подножия башен (extrude по контуру границы) ────────
   // Карта лежит горизонтально (XZ), башни стоят на ней в точке-хабе (Астана).
@@ -429,7 +430,7 @@ export function initScene(canvas) {
   if (!reduce && !mobile) window.addEventListener('pointermove', onPointer, { passive: true });
 
   // ── Перетаскивание здания: только по горизонтали (рыскание), без наклона ─────
-  let dragging = false, lastX = 0, yawVel = 0, dragYaw = -0.62;   // управляемый разворот зданий (на hero как фото)
+  let dragging = false, lastX = 0, yawVel = 0, dragYaw = HERO_YAW;   // стартовый разворот = угол приветствия
   const isUi = (el) => el && el.closest && el.closest('button, a, input, textarea, select, label, .modal, .nav-island, .af-card, .chip, .chip-info, .news-track');
   const onDown = (e) => {
     if ((e.button != null && e.button !== 0) || progress > 0.4 || isUi(e.target)) return; // только когда здание видно и не на UI

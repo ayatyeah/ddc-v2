@@ -25,7 +25,7 @@ export default function Services() {
           {ITEMS.map(({ k, Ico, c }, i) => (
             <Reveal key={k} className="svc" delay={i * 70}>
               <span className="num">{String(i + 1).padStart(2, '0')}</span>
-              <div className="svc-ico" style={{ background: c }}><Ico size={24} /></div>
+              <div className="svc-ico" style={{ '--c': c }}><Ico size={24} /></div>
               <h3>{t(lang, `services.${k}t`)}</h3>
               <p>{t(lang, `services.${k}d`)}</p>
             </Reveal>

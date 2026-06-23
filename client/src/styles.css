@@ -309,7 +309,12 @@ button { font-family: inherit; cursor: pointer; }
   align-items: center; justify-content: flex-start; text-align: left;
   padding: 96px 0 64px; overflow: hidden;
 }
-.hero .wrap { width: 100%; }
+/* Тёмная вуаль слева под текстом — гарантирует контраст заголовка над светлой 3D-сценой */
+.hero::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(100deg, rgba(4,9,22,0.62) 0%, rgba(4,9,22,0.32) 42%, transparent 66%);
+}
+.hero .wrap { width: 100%; position: relative; z-index: 1; }
 .hero-inner { max-width: 560px; }
 .hero-loc {
   margin-top: 28px; display: inline-flex; align-items: center; gap: 8px;
@@ -327,15 +332,16 @@ button { font-family: inherit; cursor: pointer; }
 .orb.o3 { width: 520px; height: 520px; left: 30%; bottom: -180px; background: radial-gradient(circle, var(--blue-bright), transparent 70%); opacity: 0.3; }
 .hero-inner { position: relative; z-index: 1; max-width: 920px; }
 .hero h1 {
-  font-size: clamp(2.5rem, 6vw, 4.8rem); font-weight: 300; letter-spacing: -0.035em;
+  font-size: clamp(2.5rem, 6vw, 4.8rem); font-weight: 400; letter-spacing: -0.035em;
   line-height: 1.06; margin: 18px 0 0;
+  text-shadow: 0 2px 32px rgba(4,9,22,0.6), 0 1px 4px rgba(4,9,22,0.55);   /* читаемость над сценой */
 }
 .hero h1 .grad {
   background: linear-gradient(120deg, var(--blue), var(--gold)); -webkit-background-clip: text;
   background-clip: text; color: transparent;
 }
-.hero-sub { margin: 24px auto 0; max-width: 48ch; font-size: clamp(1.02rem, 1.4vw, 1.22rem); color: var(--ink-soft); line-height: 1.5; }
-.hero-cta { margin-top: 36px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hero-sub { margin: 22px 0 0; max-width: 48ch; font-size: clamp(1.02rem, 1.4vw, 1.22rem); color: var(--ink); opacity: 0.92; line-height: 1.5; text-shadow: 0 1px 16px rgba(4,9,22,0.55); }
+.hero-cta { margin-top: 36px; display: flex; gap: 12px; justify-content: flex-start; flex-wrap: wrap; }
 /* На телефоне делаем призыв к действию явным: кнопки в столбик во всю ширину,
    крупный тап-таргет — первый заход сразу понимает, куда идти («Наши услуги»). */
 @media (max-width: 600px) {
@@ -368,7 +374,14 @@ button { font-family: inherit; cursor: pointer; }
   transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease);
 }
 .svc:hover { transform: translateY(-6px); box-shadow: var(--shadow-pop); }
-.svc-ico { width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; color: #fff; margin-bottom: 20px; }
+/* Иконка услуги — сдержанная тонированная плитка (акцентный цвет иконки + лёгкая рамка),
+   вместо ярких заливок — выглядит профессиональнее/корпоративнее. */
+.svc-ico {
+  width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; margin-bottom: 20px;
+  color: var(--c, var(--blue));
+  background: color-mix(in srgb, var(--c, var(--blue)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c, var(--blue)) 32%, transparent);
+}
 .svc h3 { font-size: 1.18rem; font-weight: 600; letter-spacing: -0.01em; }
 .svc p { margin-top: 10px; color: var(--ink-soft); font-size: 0.98rem; line-height: 1.55; }
 .svc .num { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); float: right; }
