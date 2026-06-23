@@ -539,16 +539,19 @@ button { font-family: inherit; cursor: pointer; }
 .nc-card .more { margin-top: 16px; font-size: 13px; font-weight: 600; color: var(--blue); }
 
 .nc-arrow {
-  position: absolute; top: 84px; z-index: 3; width: 44px; height: 44px; border-radius: 50%;
-  display: grid; place-items: center; cursor: pointer; color: var(--ink);
-  background: var(--card-glass); backdrop-filter: blur(12px); border: 1px solid var(--line);
-  box-shadow: var(--shadow-card); transition: transform 0.2s var(--ease), opacity 0.2s;
+  position: absolute; top: 46%; transform: translateY(-50%); z-index: 3;
+  width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; color: var(--blue);
+  background: var(--nav-glass); backdrop-filter: saturate(160%) blur(14px); -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border: 1px solid var(--line-2); box-shadow: var(--shadow-pop);
+  transition: transform 0.2s var(--ease), background 0.2s, color 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
-.nc-arrow:hover { transform: scale(1.08); }
-.nc-arrow:disabled { opacity: 0.35; cursor: default; transform: none; }
-.nc-arrow.prev { left: -8px; }
+.nc-arrow:hover { transform: translateY(-50%) scale(1.1); background: var(--blue); color: #fff; box-shadow: 0 10px 26px rgba(45,111,224,0.4); }
+[data-theme='dark'] .nc-arrow:hover { color: #04122e; }
+.nc-arrow:disabled { opacity: 0.3; cursor: default; transform: translateY(-50%); box-shadow: var(--shadow-card); }
+.nc-arrow.prev { left: -14px; }
 .nc-arrow.prev svg { transform: rotate(180deg); }
-.nc-arrow.next { right: -8px; }
+.nc-arrow.next { right: -14px; }
 .nc-dots { display: flex; gap: 8px; justify-content: center; margin-top: 18px; }
 .nc-dot { width: 8px; height: 8px; border-radius: 50%; border: none; cursor: pointer; padding: 0;
   background: var(--line-2); transition: all 0.25s var(--ease); }

@@ -209,11 +209,11 @@ export function initScene(canvas) {
 
       // сияющая изогнутая линия от основания башен к узлу (QuadraticBezier, приподнят).
       // end.y приподнят над поверхностью (карта сверху на y≈0), чтобы дуга не «ложилась» в текстуру.
-      const end = new THREE.Vector3(nx, 1.0, nz);
+      const end = new THREE.Vector3(nx, 1.2, nz);
       const mid = origin.clone().add(end).multiplyScalar(0.5);
-      // Невысокая дуга: линии стелются НАД картой от здания к узлу, а не улетают в небо
-      // над дальними (западными) узлами. Поэтому подъём небольшой и жёстко ограничен.
-      mid.y += Math.min(4, origin.distanceTo(end) * 0.10);
+      // Дуга выше: линии идут ВОЗДУШНЫМ лучом над картой, поэтому над вогнутыми участками
+      // границы не «ложатся» на кромку и не пересекают грань карты неприятно.
+      mid.y += Math.min(9, origin.distanceTo(end) * 0.20);
       const curve = new THREE.QuadraticBezierCurve3(origin.clone(), mid, end);
       const pts = curve.getPoints(40);
       const lGeo = new THREE.BufferGeometry().setFromPoints(pts);
