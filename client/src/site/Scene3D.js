@@ -17,7 +17,15 @@ import { KZ_OUTLINE, KZ_NODES, KZ_HUB } from './kzGeo.js';
 export function initScene(canvas) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const mobile = window.matchMedia('(max-width: 760px)').matches;
-  const DPR_CAP = 2;                   // потолок качества (как десктоп) — и на телефоне тоже
+  // Слабое устройство (мало ядер/памяти или просьба о пониженной анимации): отключаем
+  // тяжёлые полноэкранные эффекты (звёзды/облака/спутники) и снижаем потолок разрешения —
+  // как на мобиле, но и на слабом десктопе. Так нет фризов и лагов фона.
+  const lowPower = (() => {
+    try { return reduce || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4; }
+    catch { return false; }
+  })();
+  const LIGHT = mobile || lowPower;   // «облегчённая» сцена
+  const DPR_CAP = lowPower ? 1.25 : 2; // потолок качества; на слабых — ниже (меньше пикселей на кадр)
   // Адаптивное разрешение рендера: стартуем с максимума, а в кадре сами держим плавность —
   // на слабом телефоне тихо снижаем (для размытого фона незаметно), на сильном — десктопное.
   let curDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
@@ -383,7 +391,7 @@ export function initScene(canvas) {
         gl_FragColor = vec4(uColor, a); }`,
   });
   const stars = new THREE.Points(starGeo, starMat); stars.frustumCulled = false; scene.add(stars);
-  if (mobile) stars.visible = false;   // тяжёлый эффект — на мобиле выключен
+  if (LIGHT) stars.visible = false;   // тяжёлый эффект — на мобиле/слабом устройстве выключен
 
   // ── Спутники-огоньки: несколько светящихся точек на орбитах над страной — добавляют
   //    «жизни» и наполняют фон (десктоп). Дёшево: спрайты с одной glow-текстурой. ──
@@ -401,7 +409,7 @@ export function initScene(canvas) {
   for (const d of satDefs) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: satTex, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.9 }));
     sp.scale.set(d.s, d.s, 1); sp.userData = d; sats.push(sp); scene.add(sp);
-    if (mobile) sp.visible = false;
+    if (LIGHT) sp.visible = false;
   }
 
   // ── Облака: смягчают исчезновение зданий (здания «растворяются» в них) ───────
@@ -416,7 +424,7 @@ export function initScene(canvas) {
   for (const [cx, cyy, cz, cs] of cloudDefs) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
     sp.position.set(cx, cyy, cz); sp.scale.set(cs, cs * 0.6, 1); sp.userData.bx = cx;
-    if (mobile) sp.visible = false;     // тяжёлый эффект — на мобиле выключен
+    if (LIGHT) sp.visible = false;     // тяжёлый эффект — на мобиле/слабом устройстве выключен
     clouds.push(sp); scene.add(sp);
   }
 
@@ -427,7 +435,7 @@ export function initScene(canvas) {
   let progress = 0, tx = 0, ty = 0, px = 0, py = 0, pState = -1;
   let viewYaw = 0, dispYaw = 0;   // целевой/сглаженный угол «ровного» разворота карты (свой для каждой страницы)
   const onPointer = (e) => { tx = (e.clientX / window.innerWidth - 0.5) * 2; ty = (e.clientY / window.innerHeight - 0.5) * 2; };
-  if (!reduce && !mobile) window.addEventListener('pointermove', onPointer, { passive: true });
+  if (!reduce && !LIGHT) window.addEventListener('pointermove', onPointer, { passive: true });
 
   // ── Перетаскивание здания: только по горизонтали (рыскание), без наклона ─────
   let dragging = false, lastX = 0, yawVel = 0, dragYaw = HERO_YAW;   // стартовый разворот = угол приветствия
@@ -568,10 +576,10 @@ export function initScene(canvas) {
       pkt.material.opacity = Math.min(1, (0.5 + 0.5 * Math.sin(t * 4 + u.t * 6)) * boost);
     }
 
-    // Тяжёлые fullscreen-эффекты (звёзды, облака, планета) — ТОЛЬКО на десктопе.
-    // На мобиле они отключены (выставлены invisible при создании) ради плавности —
+    // Тяжёлые fullscreen-эффекты (звёзды, облака, спутники) — ТОЛЬКО на сильном десктопе.
+    // На мобиле и слабых устройствах они отключены (invisible при создании) ради плавности —
     // остаётся «облегчённая» 3D-сцена: башни, карта, надпись DDC, неон, движение камеры.
-    if (!mobile) {
+    if (!LIGHT) {
       // звёзды/поле остаются всегда — наполняют фон и при виде сверху (раньше гасли)
       starMat.uniforms.uTime.value = t;
       starMat.uniforms.uOpacity.value = 1;

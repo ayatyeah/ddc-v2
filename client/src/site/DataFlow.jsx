@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 
-/* Потоки данных: вертикальные «каналы» (faint lines), по которым вниз бегут светящиеся
-   пакеты с кометным хвостом — ощущение живой передачи данных через всю страницу.
-   Лёгкий слой: один canvas, additive-блендинг, спрайт-свечение рисуется один раз.
-   Только десктоп; замирает в фоновой вкладке и при reduce-motion (статичный кадр). */
+/* Потоки данных: вертикальные «каналы», по которым вниз бегут светящиеся пакеты
+   с кометным хвостом. Оптимизировано под слабые устройства:
+   • градиент канала кэшируется (1 раз на ресайз, а не каждый кадр),
+   • хвост пакета — заранее отрисованный спрайт (drawImage вместо createLinearGradient в кадре),
+   • DPR ограничен 1.5, число каналов умеренное.
+   Замирает в фоновой вкладке и при reduce-motion (рисуем один статичный кадр). */
 export default function DataFlow() {
   const ref = useRef(null);
 
@@ -13,47 +15,62 @@ export default function DataFlow() {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const ctx = canvas.getContext('2d', { alpha: true });
     let w = 0, h = 0, raf = 0, running = false;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
-    let lanes = [];     // вертикальные каналы
-    let packets = [];   // бегущие пакеты
+    let lanes = [];        // вертикальные каналы { x }
+    let packets = [];      // бегущие пакеты
+    let laneGrad = null;   // кэш градиента канала (одинаков для всех — вертикаль 0..h)
 
-    // Спрайт-свечение пакета (рисуется один раз)
-    const sprite = document.createElement('canvas');
-    const sctx = sprite.getContext('2d');
-    const SP = 48;
-    sprite.width = sprite.height = SP;
+    // Спрайт головы пакета (свечение) — рисуется один раз
+    const head = document.createElement('canvas');
+    const hctx = head.getContext('2d');
+    const HS = 40; head.width = head.height = HS;
     (() => {
-      const c = SP / 2;
-      const g = sctx.createRadialGradient(c, c, 0, c, c, c);
+      const c = HS / 2;
+      const g = hctx.createRadialGradient(c, c, 0, c, c, c);
       g.addColorStop(0, 'rgba(228, 248, 255, 1)');
       g.addColorStop(0.25, 'rgba(120, 205, 255, 0.85)');
-      g.addColorStop(0.6, 'rgba(70, 150, 255, 0.25)');
+      g.addColorStop(0.6, 'rgba(70, 150, 255, 0.22)');
       g.addColorStop(1, 'rgba(70, 150, 255, 0)');
-      sctx.fillStyle = g;
-      sctx.beginPath(); sctx.arc(c, c, c, 0, Math.PI * 2); sctx.fill();
+      hctx.fillStyle = g;
+      hctx.beginPath(); hctx.arc(c, c, c, 0, Math.PI * 2); hctx.fill();
     })();
 
-    const makePacket = (lane, startTop) => ({
+    // Спрайт хвоста: вертикальный градиент (низ — ярко, верх — прозрачно), тянем по высоте
+    const tail = document.createElement('canvas');
+    const tctx = tail.getContext('2d');
+    tail.width = 6; tail.height = 64;
+    (() => {
+      const g = tctx.createLinearGradient(0, 64, 0, 0);
+      g.addColorStop(0, 'rgba(150, 215, 255, 0.55)');
+      g.addColorStop(1, 'rgba(150, 215, 255, 0)');
+      tctx.fillStyle = g; tctx.fillRect(0, 0, 6, 64);
+    })();
+
+    const makePacket = (lane, top) => ({
       lane,
-      y: startTop ? -Math.random() * h : Math.random() * h,
-      sp: 60 + Math.random() * 140,          // px/сек
-      len: 40 + Math.random() * 90,          // длина хвоста
-      size: 5 + Math.random() * 6,
-      a: 0.5 + Math.random() * 0.5,
+      y: top ? -Math.random() * h : Math.random() * h,
+      sp: 55 + Math.random() * 120,          // px/сек
+      len: 38 + Math.random() * 80,          // длина хвоста
+      size: 5 + Math.random() * 5,
+      a: 0.45 + Math.random() * 0.5,
     });
 
     const build = () => {
-      // Каналы редкие, неравномерные — не «сетка», а отдельные русла данных.
-      const count = Math.max(5, Math.round(w / 240));
+      const count = Math.max(4, Math.round(w / 300));   // умеренная плотность
       lanes = Array.from({ length: count }, (_, i) => ({
-        x: (i + 0.5) * (w / count) + (Math.random() - 0.5) * 60,
+        x: Math.round((i + 0.5) * (w / count) + (Math.random() - 0.5) * 50),
       }));
       packets = [];
       for (const lane of lanes) {
         const n = 1 + Math.floor(Math.random() * 2);
         for (let k = 0; k < n; k++) packets.push(makePacket(lane, false));
       }
+      // Кэш градиента канала (вертикаль во всю высоту — общий для всех каналов)
+      laneGrad = ctx.createLinearGradient(0, 0, 0, h);
+      laneGrad.addColorStop(0, 'rgba(120, 180, 255, 0)');
+      laneGrad.addColorStop(0.5, 'rgba(120, 180, 255, 0.05)');
+      laneGrad.addColorStop(1, 'rgba(120, 180, 255, 0)');
     };
 
     const resize = () => {
@@ -72,17 +89,12 @@ export default function DataFlow() {
 
       ctx.clearRect(0, 0, w, h);
 
-      // Тусклые каналы
+      // Тусклые каналы (кэшированный градиент, без пересоздания в кадре)
       ctx.globalCompositeOperation = 'source-over';
-      ctx.lineWidth = 1;
-      for (const lane of lanes) {
-        const grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, 'rgba(120, 180, 255, 0)');
-        grad.addColorStop(0.5, 'rgba(120, 180, 255, 0.06)');
-        grad.addColorStop(1, 'rgba(120, 180, 255, 0)');
-        ctx.strokeStyle = grad;
-        ctx.beginPath(); ctx.moveTo(lane.x, 0); ctx.lineTo(lane.x, h); ctx.stroke();
-      }
+      ctx.strokeStyle = laneGrad; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const lane of lanes) { ctx.moveTo(lane.x, 0); ctx.lineTo(lane.x, h); }
+      ctx.stroke();
 
       // Пакеты с хвостом (additive)
       ctx.globalCompositeOperation = 'lighter';
@@ -90,21 +102,14 @@ export default function DataFlow() {
         if (!reduce) p.y += p.sp * dt;
         if (p.y - p.len > h) { Object.assign(p, makePacket(p.lane, true)); continue; }
         const x = p.lane.x;
-
-        // Хвост — вытянутый градиент вверх от головы пакета
-        const tg = ctx.createLinearGradient(0, p.y, 0, p.y - p.len);
-        tg.addColorStop(0, `rgba(150, 215, 255, ${0.5 * p.a})`);
-        tg.addColorStop(1, 'rgba(150, 215, 255, 0)');
-        ctx.strokeStyle = tg;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(x, p.y); ctx.lineTo(x, p.y - p.len); ctx.stroke();
-
-        // Голова — свечение
         ctx.globalAlpha = p.a;
+        // хвост: спрайт растянут от головы вверх на длину len
+        ctx.drawImage(tail, x - 3, p.y - p.len, 6, p.len);
+        // голова
         const s = p.size * 2.6;
-        ctx.drawImage(sprite, x - s / 2, p.y - s / 2, s, s);
-        ctx.globalAlpha = 1;
+        ctx.drawImage(head, x - s / 2, p.y - s / 2, s, s);
       }
+      ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
 
       if (running && !reduce) raf = requestAnimationFrame(render);
@@ -122,7 +127,7 @@ export default function DataFlow() {
     const onVis = () => { document.hidden ? stop() : start(); };
     document.addEventListener('visibilitychange', onVis);
 
-    if (reduce) requestAnimationFrame(render);
+    if (reduce) requestAnimationFrame(render);    // один статичный кадр
     else if (!document.hidden) start();
 
     return () => {

@@ -10,7 +10,6 @@ import Background3D from './Background3D.jsx';
 import Fog from './Fog.jsx';
 import Particles from './Particles.jsx';
 import DataFlow from './DataFlow.jsx';
-import Cursor from './Cursor.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
@@ -27,12 +26,24 @@ function useIsMobile() {
   return m;
 }
 
+// Слабое устройство: мало ядер/памяти или просьба о пониженной анимации. На таких
+// НЕ грузим дополнительные canvas-слои (частицы, потоки данных) — только адаптивную сцену.
+function isLowPowerDevice() {
+  try {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+    const cores = navigator.hardwareConcurrency || 8;
+    const mem = navigator.deviceMemory || 8;
+    return cores <= 4 || mem <= 4;
+  } catch { return false; }
+}
+
 export default function Site() {
   const theme = useTheme();
   const path = useRoute();
   const route = ROUTES[path] || ROUTES['/'];
   const Page = route.Comp;
   const isMobile = useIsMobile();
+  const lowPower = useState(isLowPowerDevice)[0];   // считаем один раз на маунте
 
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
@@ -133,9 +144,8 @@ export default function Site() {
       <ErrorBoundary fallback={null}>
         <Background3D onReady={onReady} />
       </ErrorBoundary>
-      {!isMobile && <Particles />}
-      {!isMobile && <DataFlow />}
-      {!isMobile && <Cursor />}
+      {!isMobile && !lowPower && <Particles />}
+      {!isMobile && !lowPower && <DataFlow />}
       <Fog />
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
