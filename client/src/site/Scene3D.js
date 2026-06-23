@@ -43,7 +43,7 @@ export function initScene(canvas) {
   const key = new THREE.DirectionalLight(0xffffff, 1.15); key.position.set(14, 28, 20); scene.add(key);
   const rim = new THREE.DirectionalLight(0x9fc0ff, 0.8); rim.position.set(-16, 12, 8); scene.add(rim);  // холодный контровой свет — чётче кромки стеклянных башен
   // Направленный прожектор НА башни — драматичный «свет оттуда»: тёмные здания, яркая подсветка.
-  const spot = new THREE.SpotLight(0xe2eeff, 3.4, 0, Math.PI / 5, 0.4, 0);   // distance 0, decay 0 -> предсказуемая яркость
+  const spot = new THREE.SpotLight(0xe2eeff, 4.4, 0, Math.PI / 5, 0.4, 0);   // distance 0, decay 0 -> предсказуемая яркость
   spot.position.set(8, 72, 40); spot.target.position.set(0, 12, -9);
   scene.add(spot); scene.add(spot.target);
 
@@ -69,8 +69,8 @@ export function initScene(canvas) {
     // синева стекла «горят» изнутри, как на ночном референсе, а не выглядят блекло.
     // Лёгкий холодный тон + чуть глаже стекло -> насыщеннее синева и чётче блики.
     const towerMat = (tex) => new THREE.MeshStandardMaterial({
-      map: tex, color: 0x515f7a, roughness: 0.22, metalness: 0.42, envMapIntensity: 0.95,  // ещё темнее стекло
-      emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.4,                         // окна светятся (чуть тише)
+      map: tex, color: 0x5c6a86, roughness: 0.22, metalness: 0.42, envMapIntensity: 1.1,   // тёмное стекло, но с подсветкой
+      emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.48,                        // окна светятся ярче
     });
     const tower = (w, d, h, x, tex) => {
       const tg = new THREE.Group();
@@ -166,18 +166,15 @@ export function initScene(canvas) {
     const edgeGlow = new Line2(edgeGeo, edgeGlowMat); edgeGlow.renderOrder = 4; gMap.add(edgeGlow);
     const edgeCore = new Line2(edgeGeo, edgeCoreMat); edgeCore.renderOrder = 5; gMap.add(edgeCore);
 
-    // Нижний светящийся контур плиты (тот же неон, пульсирует вместе с верхним) — объём
-    // плиты. ТОЛЬКО на десктопе: на мобиле это лишние fat-line отрисовки.
-    if (!mobile) {
-      extrude.computeBoundingBox();
-      const slabBottom = extrude.boundingBox.min.y + mapMesh.position.y + 0.05;
-      const bottomFlat = [];
-      for (const [lo, la] of KZ_OUTLINE) bottomFlat.push(lo * MAP_S - hub2.x, slabBottom, -la * MAP_S + hub2.z);
-      bottomFlat.push(bottomFlat[0], bottomFlat[1], bottomFlat[2]);
-      const bottomGeo = new LineGeometry(); bottomGeo.setPositions(bottomFlat);
-      const bEdgeGlow = new Line2(bottomGeo, edgeGlowMat); bEdgeGlow.renderOrder = 3; gMap.add(bEdgeGlow);
-      const bEdgeCore = new Line2(bottomGeo, edgeCoreMat); bEdgeCore.renderOrder = 4; gMap.add(bEdgeCore);
-    }
+    // Нижний контур плиты — мягкая подсветка низа: берём ТОЛЬКО свечение (без яркого ядра),
+    // чтобы низ читался как объём, а не вторая яркая граница. Одна линия — лёгкая (и на мобиле).
+    extrude.computeBoundingBox();
+    const slabBottom = extrude.boundingBox.min.y + mapMesh.position.y + 0.04;
+    const bottomFlat = [];
+    for (const [lo, la] of KZ_OUTLINE) bottomFlat.push(lo * MAP_S - hub2.x, slabBottom, -la * MAP_S + hub2.z);
+    bottomFlat.push(bottomFlat[0], bottomFlat[1], bottomFlat[2]);
+    const bottomGeo = new LineGeometry(); bottomGeo.setPositions(bottomFlat);
+    const bEdge = new Line2(bottomGeo, edgeGlowMat); bEdge.renderOrder = 3; gMap.add(bEdge);
 
     // узлы-точки по стране (сияющие диски-спрайты)
     const dotCv = document.createElement('canvas'); dotCv.width = dotCv.height = 64;
