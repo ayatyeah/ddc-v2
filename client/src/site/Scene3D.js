@@ -126,20 +126,23 @@ export function initScene(canvas) {
     extrude.rotateX(-Math.PI / 2);    // положить плашмя: shape.y(lat) -> -z
     extrude.translate(0, 0, hub2.z);  // сдвиг чтобы хаб попал под башни (z)
 
-    // Процедурный «рельеф» поверхности (шум) — как roughness/bump-map: карта выглядит
-    // как реальная поверхность под светом, а не плоский светящийся силуэт.
-    const mcv = document.createElement('canvas'); mcv.width = mcv.height = 256;
-    const mc = mcv.getContext('2d');
-    mc.fillStyle = '#7a7a7a'; mc.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 150; i++) {
-      const x = (i * 71) % 256, y = (i * 153 + 30) % 256, r = 9 + (i % 8) * 9;
-      const c = i % 2 ? 255 : 0;
-      mc.fillStyle = `rgba(${c},${c},${c},${0.04 + (i % 5) / 80})`;
-      mc.beginPath(); mc.ellipse(x, y, r, r * 0.75, i, 0, 6.283); mc.fill();
+    // Процедурный «рельеф» поверхности (шум) как roughness/bump-map — карта выглядит как
+    // реальная поверхность под светом. ТОЛЬКО на десктопе: на мобиле bump-шейдинг лишний.
+    let mapTex = null;
+    if (!mobile) {
+      const mcv = document.createElement('canvas'); mcv.width = mcv.height = 256;
+      const mc = mcv.getContext('2d');
+      mc.fillStyle = '#7a7a7a'; mc.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 150; i++) {
+        const x = (i * 71) % 256, y = (i * 153 + 30) % 256, r = 9 + (i % 8) * 9;
+        const c = i % 2 ? 255 : 0;
+        mc.fillStyle = `rgba(${c},${c},${c},${0.04 + (i % 5) / 80})`;
+        mc.beginPath(); mc.ellipse(x, y, r, r * 0.75, i, 0, 6.283); mc.fill();
+      }
+      mapTex = new THREE.CanvasTexture(mcv);
+      mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.06, 0.06);
     }
-    const mapTex = new THREE.CanvasTexture(mcv);
-    mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.06, 0.06);
-    // Меньше эмиссии и металличности, выше шероховатость, тёплый рельеф -> реалистичная суша.
+    // Меньше эмиссии и металличности, выше шероховатость -> реалистичная суша.
     const mapMat = new THREE.MeshStandardMaterial({
       color: 0x1b3f6e, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.6,
       metalness: 0.2, roughness: 0.82, emissive: 0x0a1f3c, emissiveIntensity: 0.16,
@@ -163,16 +166,18 @@ export function initScene(canvas) {
     const edgeGlow = new Line2(edgeGeo, edgeGlowMat); edgeGlow.renderOrder = 4; gMap.add(edgeGlow);
     const edgeCore = new Line2(edgeGeo, edgeCoreMat); edgeCore.renderOrder = 5; gMap.add(edgeCore);
 
-    // Нижний светящийся контур плиты (тот же неон, тот же материал → пульсирует вместе с
-    // верхним) — карта-плита получает чёткую нижнюю кромку и читается как объём.
-    extrude.computeBoundingBox();
-    const slabBottom = extrude.boundingBox.min.y + mapMesh.position.y + 0.05;
-    const bottomFlat = [];
-    for (const [lo, la] of KZ_OUTLINE) bottomFlat.push(lo * MAP_S - hub2.x, slabBottom, -la * MAP_S + hub2.z);
-    bottomFlat.push(bottomFlat[0], bottomFlat[1], bottomFlat[2]);
-    const bottomGeo = new LineGeometry(); bottomGeo.setPositions(bottomFlat);
-    const bEdgeGlow = new Line2(bottomGeo, edgeGlowMat); bEdgeGlow.renderOrder = 3; gMap.add(bEdgeGlow);
-    const bEdgeCore = new Line2(bottomGeo, edgeCoreMat); bEdgeCore.renderOrder = 4; gMap.add(bEdgeCore);
+    // Нижний светящийся контур плиты (тот же неон, пульсирует вместе с верхним) — объём
+    // плиты. ТОЛЬКО на десктопе: на мобиле это лишние fat-line отрисовки.
+    if (!mobile) {
+      extrude.computeBoundingBox();
+      const slabBottom = extrude.boundingBox.min.y + mapMesh.position.y + 0.05;
+      const bottomFlat = [];
+      for (const [lo, la] of KZ_OUTLINE) bottomFlat.push(lo * MAP_S - hub2.x, slabBottom, -la * MAP_S + hub2.z);
+      bottomFlat.push(bottomFlat[0], bottomFlat[1], bottomFlat[2]);
+      const bottomGeo = new LineGeometry(); bottomGeo.setPositions(bottomFlat);
+      const bEdgeGlow = new Line2(bottomGeo, edgeGlowMat); bEdgeGlow.renderOrder = 3; gMap.add(bEdgeGlow);
+      const bEdgeCore = new Line2(bottomGeo, edgeCoreMat); bEdgeCore.renderOrder = 4; gMap.add(bEdgeCore);
+    }
 
     // узлы-точки по стране (сияющие диски-спрайты)
     const dotCv = document.createElement('canvas'); dotCv.width = dotCv.height = 64;
