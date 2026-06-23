@@ -53,7 +53,7 @@ export default function Showcase() {
     <section className="section showcase" ref={sectionRef}>
       <div className="wrap">
         <div className="show-grid">
-          <Reveal>
+          <Reveal className="text-glass">
             <div className="eyebrow">{t(lang, 'showcase.eyebrow')}</div>
             <h2 className="h2" style={{ marginTop: 14 }}>{t(lang, 'showcase.title')}</h2>
             <p className="lede" style={{ marginTop: 18 }}>{t(lang, 'showcase.sub')}</p>

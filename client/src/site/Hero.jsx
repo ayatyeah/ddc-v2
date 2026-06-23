@@ -9,7 +9,7 @@ export default function Hero() {
   return (
     <header className="hero" id="top">
       <div className="wrap">
-        <div className="hero-inner">
+        <div className="hero-inner text-glass">
           <div className="eyebrow">{t(lang, 'hq.eyebrow')}</div>
           <h1>{t(lang, 'hq.title')}</h1>
           <p className="hero-sub">{t(lang, 'hero.sub')}</p>

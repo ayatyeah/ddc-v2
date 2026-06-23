@@ -44,7 +44,7 @@ export default function Workstation() {
               <canvas ref={canvasRef} />
             </div>
           </Reveal>
-          <Reveal delay={120}>
+          <Reveal delay={120} className="text-glass">
             <div className="eyebrow">{t(lang, 'work.eyebrow')}</div>
             <h2 className="h2" style={{ marginTop: 14 }}>{t(lang, 'work.title')}</h2>
             <p className="lede" style={{ marginTop: 18 }}>{t(lang, 'work.sub')}</p>

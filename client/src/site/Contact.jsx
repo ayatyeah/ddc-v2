@@ -53,7 +53,7 @@ export default function Contact() {
       <div className="wrap">
         <div className="contact-grid">
           <Reveal>
-            <div className="contact-info">
+            <div className="contact-info text-glass">
               <div className="eyebrow">{t(lang, 'contact.eyebrow')}</div>
               <h2 className="h2" style={{ marginTop: 14 }}>{t(lang, 'contact.title')}</h2>
               <p className="lede" style={{ marginTop: 18 }}>{t(lang, 'contact.sub')}</p>

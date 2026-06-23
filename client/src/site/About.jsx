@@ -42,11 +42,11 @@ export default function About() {
       <section className="section" id="about">
         <div className="wrap">
           <Reveal className="about-grid">
-            <div>
+            <div className="text-glass">
               <div className="eyebrow">{t(lang, 'about.eyebrow')}</div>
               <p className="about-text" style={{ marginTop: 16 }}>{t(lang, 'about.title')}</p>
             </div>
-            <div>
+            <div className="text-glass">
               <p className="about-body">{t(lang, 'about.text')}</p>
               <p className="about-vision"><span className="av-label">{t(lang, 'about.vision')}</span>{t(lang, 'about.visionText')}</p>
               <div className="values">
