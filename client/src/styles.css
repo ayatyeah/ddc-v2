@@ -167,20 +167,23 @@ button { font-family: inherit; cursor: pointer; }
 .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 
 /* ── Типографика-помощники ──────────────────────────────────────────────────── */
+/* Единый читаемый стиль текста поверх 3D-сцены: мягкая тёмная тень-ореол лифтит текст
+   с любого фона; заголовки чуть плотнее, подзаголовки ярче. */
 .eyebrow {
   font-family: var(--mono);
-  font-size: 12px; font-weight: 500;
+  font-size: 12px; font-weight: 600;
   letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--blue);
+  color: var(--blue); text-shadow: 0 1px 12px rgba(4,9,22,0.6);
 }
 .h2 {
   font-size: clamp(1.75rem, 3.4vw, 2.7rem);
-  font-weight: 300; letter-spacing: -0.025em; line-height: 1.12;
+  font-weight: 400; letter-spacing: -0.025em; line-height: 1.12;
+  text-shadow: 0 1px 22px rgba(4,9,22,0.65), 0 1px 3px rgba(4,9,22,0.55);
 }
 .lede {
   font-size: clamp(1rem, 1.3vw, 1.18rem);
-  color: var(--ink-soft); font-weight: 400; line-height: 1.5;
-  max-width: 42ch;
+  color: var(--ink); opacity: 0.92; font-weight: 400; line-height: 1.55;
+  max-width: 42ch; text-shadow: 0 1px 14px rgba(4,9,22,0.6);
 }
 /* В тёмной теме крупные заголовки и заголовки новостей — фирменный синий. */
 [data-theme='dark'] h1,
@@ -582,8 +585,17 @@ button { font-family: inherit; cursor: pointer; }
 /* ── Контакты ────────────────────────────────────────────────────────────────── */
 .contact-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 50px; align-items: start; }
 @media (max-width: 820px) { .contact-grid { grid-template-columns: 1fr; gap: 30px; } }
-.contact-info p { color: var(--ink-soft); margin-top: 8px; }
-.contact-info a { color: var(--blue); display: block; margin-top: 14px; font-weight: 500; }
+.contact-info p { color: var(--ink); opacity: 0.92; margin-top: 8px; text-shadow: 0 1px 14px rgba(4,9,22,0.6); }
+.contact-info a { color: var(--blue); display: block; margin-top: 14px; font-weight: 600; text-shadow: 0 1px 12px rgba(4,9,22,0.55); }
+
+/* ── Юридическая страница (политика конфиденциальности) ───────────────────────── */
+.legal { max-width: 820px; margin-top: 28px; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 32px 34px; box-shadow: var(--shadow-card); }
+.legal-note { color: var(--ink-faint); font-size: 13px; margin-bottom: 6px; }
+.legal-block { margin-top: 22px; }
+.legal-block h3 { font-size: 1.05rem; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+.legal-block p { color: var(--ink-soft); line-height: 1.65; font-size: 0.98rem; }
+@media (max-width: 600px) { .legal { padding: 22px 18px; } }
 .contact-map {
   position: relative; margin-top: 40px; border-radius: 16px; overflow: hidden;
   border: 1px solid var(--line); background: var(--card); height: 380px;

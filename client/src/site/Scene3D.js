@@ -90,7 +90,7 @@ export function initScene(canvas) {
     beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0xe6c789, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
     gTowers.traverse((o) => { if (o.material) { o.material.transparent = true; towerMats.push(o.material); } });
   })();
-  const HERO_YAW = -1;      // угол, под которым конструкция «встречает» на главной (3/4-вид)
+  const HERO_YAW = -1.2;      // угол, под которым конструкция «встречает» на главной (3/4-вид)
   gBuild.rotation.y = HERO_YAW;
 
   // ── 3D-карта Казахстана у подножия башен (extrude по контуру границы) ────────
