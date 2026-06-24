@@ -4,6 +4,8 @@ node_modules/
 client/node_modules/
 public/assets/
 public/index.html
+public/*.br
+public/*.gz
 *.log
 .DS_Store
 .vscode/

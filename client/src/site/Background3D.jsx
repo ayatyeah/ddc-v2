@@ -10,6 +10,10 @@ export default function Background3D({ onReady }) {
   useEffect(() => {
     if (!sceneRef.current) return;
     const scene = initScene(sceneRef.current);
+    // Плавное проявление сцены после инициализации (ленивый чанк подгрузился).
+    // Снимаем инлайновый opacity:0 → канвас плавно доходит до значения из CSS (тема).
+    const el = sceneRef.current;
+    requestAnimationFrame(() => { if (el) el.style.opacity = ''; });
     const inst = {
       setTarget(p) { scene.setTarget(p); },
       setYaw(y) { scene.setYaw?.(y); },
@@ -21,7 +25,7 @@ export default function Background3D({ onReady }) {
   }, [onReady]);
   return (
     <>
-      <canvas id="bg3d" ref={sceneRef} aria-hidden="true" />
+      <canvas id="bg3d" ref={sceneRef} aria-hidden="true" style={{ opacity: 0 }} />
     </>
   );
 }

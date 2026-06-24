@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
-import Site from './site/Site.jsx';
-import Admin from './admin/Admin.jsx';
+import { lazy, Suspense, useEffect, useState } from 'react';
+
+/* Сайт и админка — отдельные ленивые чанки: посетитель сайта не качает код админки,
+   и наоборот. Это режет первичную загрузку, не меняя внешний вид. */
+const Site = lazy(() => import('./site/Site.jsx'));
+const Admin = lazy(() => import('./admin/Admin.jsx'));
 
 /* Простейший роутинг по pathname: /admin → админка, всё остальное → сайт.
    SPA-fallback на сервере отдаёт index.html для любого пути. */
@@ -26,5 +29,10 @@ export default function App() {
     return () => { window.removeEventListener('popstate', onPop); document.removeEventListener('click', onClick); };
   }, []);
 
-  return path.startsWith('/admin') ? <Admin /> : <Site />;
+  // fallback=null: фон страницы тёмный, кратковременная пустота незаметна
+  return (
+    <Suspense fallback={null}>
+      {path.startsWith('/admin') ? <Admin /> : <Site />}
+    </Suspense>
+  );
 }

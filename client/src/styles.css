@@ -151,7 +151,9 @@ button { font-family: inherit; cursor: pointer; }
 #bg3d {
   position: fixed; inset: 0; z-index: -3; pointer-events: none;
   width: 100%; height: 100%; display: block; opacity: 0.72;
+  transition: opacity 0.8s ease;   /* плавное проявление сцены после ленивой загрузки */
 }
+@media (prefers-reduced-motion: reduce) { #bg3d { transition: none; } }
 [data-theme='dark'] #bg3d { opacity: 1; }
 
 /* Летающий 3D-логотип в боковых полях (за контентом). Скрыт на узких экранах. */

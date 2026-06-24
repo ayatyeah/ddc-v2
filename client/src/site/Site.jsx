@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '../store.js';
 import { useRoute } from './router.js';
 import { ROUTES } from './pages.jsx';
@@ -6,8 +6,11 @@ import Nav from './Nav.jsx';
 import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
-import Background3D from './Background3D.jsx';
 import Fog from './Fog.jsx';
+
+// Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
+// ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
+const Background3D = lazy(() => import('./Background3D.jsx'));
 import Particles from './Particles.jsx';
 import DataFlow from './DataFlow.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
@@ -142,7 +145,9 @@ export default function Site() {
       <div id="bg-planet" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
       <ErrorBoundary fallback={null}>
-        <Background3D onReady={onReady} />
+        <Suspense fallback={null}>
+          <Background3D onReady={onReady} />
+        </Suspense>
       </ErrorBoundary>
       {!isMobile && !lowPower && <Particles />}
       {!isMobile && !lowPower && <DataFlow />}

@@ -34,6 +34,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const compression = require('compression');
+const expressStaticGzip = require('express-static-gzip');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
@@ -114,11 +115,17 @@ app.use(cors({
 app.use(express.json({ limit: '3mb' }));   // под фото новостей (base64); 8mb был избыточен для DoS
 app.use(cookieParser());
 
-// Раздаём собранный фронт как статику (с кешем для иммутабельных ассетов)
-app.use(express.static(STATIC_DIR, {
-  maxAge: PROD ? '1y' : 0,
-  setHeaders: (res, filePath) => {
-    if (/\.(html)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+// Раздаём собранный фронт как статику. express-static-gzip отдаёт предсжатые .br/.gz
+// (их генерит vite-plugin-compression при сборке), если клиент их поддерживает —
+// меньше трафик. Падение на обычный файл, если предсжатого нет.
+app.use(expressStaticGzip(STATIC_DIR, {
+  enableBrotli: true,
+  orderPreference: ['br', 'gz'],
+  serveStatic: {
+    maxAge: PROD ? '1y' : 0,
+    setHeaders: (res, filePath) => {
+      if (/\.(html)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+    },
   },
 }));
 
