@@ -33,7 +33,6 @@ export function initScene(canvas) {
   // на слабом телефоне тихо снижаем (для размытого фона незаметно), на сильном — десктопное.
   let curDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
   const FRAME_MS = 0;         // без ограничения кадров — 60fps везде
-  const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
   const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });

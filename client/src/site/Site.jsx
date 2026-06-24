@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useTheme } from '../store.js';
 import { useRoute } from './router.js';
 import { ROUTES } from './pages.jsx';
 import Nav from './Nav.jsx';
@@ -41,7 +40,6 @@ function isLowPowerDevice() {
 }
 
 export default function Site() {
-  const theme = useTheme();
   const path = useRoute();
   const route = ROUTES[path] || ROUTES['/'];
   const Page = route.Comp;
@@ -117,7 +115,7 @@ export default function Site() {
   const curRef = useRef(null);
   useEffect(() => {
     const bg = document.getElementById('scroll-bg'); if (!bg) return;
-    const target = () => (theme === 'dark' ? route.dark : route.light);
+    const target = () => route.dark;   // тема всегда тёмная
     if (!curRef.current) { const t = target(); curRef.current = { top: hex(t.top), a: hex(t.a), b: hex(t.b) }; }
     let raf = 0;
     const set = (k, c) => bg.style.setProperty(k, `rgb(${c[0]|0}, ${c[1]|0}, ${c[2]|0})`);
@@ -135,7 +133,7 @@ export default function Site() {
     };
     tick();
     return () => { if (raf) cancelAnimationFrame(raf); };
-  }, [route, theme]);
+  }, [route]);
 
   return (
     <>

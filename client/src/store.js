@@ -1,6 +1,6 @@
 /* Минималистичное глобальное состояние без внешних библиотек.
-   Хранит язык (ru/kk/en) и тему (light/dark), синхронизирует с localStorage
-   и <html data-theme lang>. Компоненты подписываются через хуки useLang/useTheme. */
+   Хранит язык (ru/kk/en), синхронизирует с localStorage и <html lang>.
+   Тема всегда тёмная (data-theme="dark" выставляется один раз) — переключения нет. */
 import { useSyncExternalStore } from 'react';
 
 const LANGS = ['ru', 'kk', 'en'];
@@ -15,7 +15,6 @@ function read(key, fallback, allowed) {
 
 let state = {
   lang: read('ddc_lang', 'ru', LANGS),
-  theme: 'dark',
 };
 
 const listeners = new Set();
@@ -31,20 +30,10 @@ export function setLang(lang) {
   emit();
 }
 
-export function setTheme() {
-  // Тема зафиксирована: только тёмная (строгая изумрудная).
-  state = { ...state, theme: 'dark' };
-  document.documentElement.setAttribute('data-theme', 'dark');
-  emit();
-}
-
-export function toggleTheme() { /* тема зафиксирована тёмной */ }
-
-// Применяем сохранённые значения к <html> сразу при загрузке модуля.
+// Применяем сразу при загрузке модуля: язык + фиксированная тёмная тема.
 document.documentElement.lang = state.lang;
 document.documentElement.setAttribute('data-theme', 'dark');
 
 export function useStore() { return useSyncExternalStore(subscribe, snapshot); }
 export function useLang() { return useStore().lang; }
-export function useTheme() { return useStore().theme; }
 export { LANGS };

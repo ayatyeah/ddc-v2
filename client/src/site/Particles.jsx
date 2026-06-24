@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { useTheme } from '../store.js';
 
 /* Летающие светящиеся частицы на заднем фоне (#particles в styles.css).
    Голубые искорки мягко дрейфуют, пульсируют яркостью и светятся.
@@ -9,9 +8,6 @@ import { useTheme } from '../store.js';
    reduce-motion. */
 export default function Particles() {
   const ref = useRef(null);
-  const theme = useTheme();
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
 
   useEffect(() => {
     const canvas = ref.current;
@@ -23,16 +19,14 @@ export default function Particles() {
     const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 2);  // дешевле на телефоне
     let pts = [];
 
-    // Офскрин-спрайт искорки (ядро + ореол) — рисуется один раз на тему
+    // Офскрин-спрайт искорки (ядро + ореол) — рисуется один раз (тема всегда тёмная)
     const sprite = document.createElement('canvas');
     const sctx = sprite.getContext('2d');
     const SPRITE = 64; // px
-    let spriteTheme = null;
 
     const buildSprite = () => {
-      const dark = themeRef.current === 'dark';
-      const core = dark ? '230, 244, 255' : '120, 175, 255';
-      const glow = dark ? '90, 160, 255' : '40, 110, 230';
+      const core = '230, 244, 255';
+      const glow = '90, 160, 255';
       sprite.width = SPRITE; sprite.height = SPRITE;
       sctx.clearRect(0, 0, SPRITE, SPRITE);
       const c = SPRITE / 2;
@@ -44,7 +38,6 @@ export default function Particles() {
       g.addColorStop(1, `rgba(${glow}, 0)`);
       sctx.fillStyle = g;
       sctx.beginPath(); sctx.arc(c, c, c, 0, Math.PI * 2); sctx.fill();
-      spriteTheme = themeRef.current;
     };
 
     const make = () => {
@@ -71,7 +64,6 @@ export default function Particles() {
 
     const render = () => {
       raf = 0;
-      if (spriteTheme !== themeRef.current) buildSprite();
       ctx.clearRect(0, 0, w, h);
       ctx.globalCompositeOperation = 'lighter';
       for (const a of pts) {
