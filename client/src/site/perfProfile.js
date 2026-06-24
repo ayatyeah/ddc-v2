@@ -1,23 +1,33 @@
 /* perfProfile.js — единый профиль производительности фона.
-   Определяет браузерный движок и возможности устройства ОДИН раз, ставит
-   <html data-engine="…"> (для per-engine правил в CSS) и отдаёт флаги для 3D-сцены.
+   Определяет браузер + движок и возможности устройства ОДИН раз, ставит
+   <html data-engine="…" data-browser="…"> (для правил в CSS) и отдаёт флаги для сцены.
 
-   Зачем per-engine: Firefox (gecko) ощутимо тяжелее тянет backdrop-filter и
-   большой CSS-blur, чем Chrome/Edge (blink). Поэтому ему даём «спокойный» профиль
-   (ниже DPR, без MSAA, мягче размытия). Поверх этого в сцене работает адаптивный
-   DPR — он ловит реальные просадки FPS независимо от движка. */
+   Движки:
+   • blink  — Chrome, Edge, Yandex, Opera, Samsung Internet (полный профиль: best качество)
+   • gecko  — Firefox (спокойный профиль: ниже DPR, без MSAA, мягче backdrop-blur)
+   • webkit — Safari и ВСЕ браузеры на iOS (там движок всегда WebKit)
+   Поверх этого в сцене работает адаптивный DPR — он ловит реальные просадки FPS. */
 
-function detectEngine() {
+function detect() {
+  let engine = 'blink', browser = 'chrome';
   try {
     const ua = navigator.userAgent || '';
-    if (/firefox|fxios/i.test(ua)) return 'gecko';
-    // Safari = WebKit, но НЕ Chrome/Chromium/Edge/Opera/прочие
-    if (/safari/i.test(ua) && !/chrome|chromium|crios|edg|opr|samsungbrowser/i.test(ua)) return 'webkit';
-    return 'blink';
-  } catch { return 'blink'; }
+    const iOS = /iphone|ipad|ipod/i.test(ua) || /crios|fxios|edgios/i.test(ua);
+    if (iOS) {
+      engine = 'webkit';
+      browser = /crios/i.test(ua) ? 'chrome' : /fxios/i.test(ua) ? 'firefox' : /edgios/i.test(ua) ? 'edge' : 'safari';
+    } else if (/firefox/i.test(ua)) { engine = 'gecko'; browser = 'firefox'; }
+    else if (/edg/i.test(ua)) { engine = 'blink'; browser = 'edge'; }            // Edge (Chromium)
+    else if (/yabrowser/i.test(ua)) { engine = 'blink'; browser = 'yandex'; }    // Yandex Browser
+    else if (/opr|opera/i.test(ua)) { engine = 'blink'; browser = 'opera'; }
+    else if (/samsungbrowser/i.test(ua)) { engine = 'blink'; browser = 'samsung'; }
+    else if (/chrome|chromium/i.test(ua)) { engine = 'blink'; browser = 'chrome'; }
+    else if (/safari/i.test(ua)) { engine = 'webkit'; browser = 'safari'; }
+  } catch { /* оставляем дефолт blink/chrome */ }
+  return { engine, browser };
 }
 
-const engine = detectEngine();
+const { engine, browser } = detect();
 
 let lowPower = false;
 try {
@@ -27,10 +37,14 @@ try {
 } catch { /* старый браузер — оставляем дефолт */ }
 
 // Потолок разрешения рендера WebGL и MSAA по движку/устройству.
+// blink/webkit — полное качество; gecko — спокойнее; слабые устройства — ещё ниже.
 const dprCap = lowPower ? 1.25 : engine === 'gecko' ? 1.5 : 1.75;
 const antialias = !(lowPower || engine === 'gecko');
 
-// Метка движка на <html> — её используют per-engine правила в styles.css
-try { document.documentElement.dataset.engine = engine; } catch { /* SSR/edge */ }
+// Метки на <html> — их используют per-engine/per-browser правила в styles.css
+try {
+  document.documentElement.dataset.engine = engine;
+  document.documentElement.dataset.browser = browser;
+} catch { /* SSR/edge */ }
 
-export const perf = { engine, lowPower, dprCap, antialias };
+export const perf = { engine, browser, lowPower, dprCap, antialias };
