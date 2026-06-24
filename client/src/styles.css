@@ -156,21 +156,9 @@ button { font-family: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { #bg3d { transition: none; } }
 [data-theme='dark'] #bg3d { opacity: 1; }
 
-/* Летающий 3D-логотип в боковых полях (за контентом). Скрыт на узких экранах. */
-#logo3d {
-  position: fixed; inset: 0; z-index: -2; pointer-events: none;
-  width: 100%; height: 100%; display: block;
-}
-@media (max-width: 1100px) { #logo3d { display: none; } }
-
 /* Канва с летающими частицами. */
 #particles {
   position: fixed; inset: 0; z-index: -2; pointer-events: none;
-}
-
-/* Потоки данных — светящиеся пакеты, бегущие по вертикальным каналам (DataFlow.jsx). */
-#dataflow {
-  position: fixed; inset: 0; z-index: -2; pointer-events: none; opacity: 0.7;
 }
 
 /* «Дым»/облака снизу — проявляются при скролле (через #fog opacity var --fog). */
@@ -194,6 +182,14 @@ button { font-family: inherit; cursor: pointer; }
 [data-theme='dark'] #fog .cloud { background: radial-gradient(circle at 50% 60%, rgba(120,150,210,0.6), rgba(120,150,210,0) 70%); }
 @keyframes drift { 0%, 100% { transform: translateX(0) translateY(0); } 50% { transform: translateX(4vw) translateY(-3vh); } }
 @media (prefers-reduced-motion: reduce) { #fog .cloud { animation: none; } }
+
+/* ── Per-engine профиль: Firefox (gecko) тяжелее тянет backdrop-filter и большой CSS-blur.
+   Даём ему «спокойный» профиль — меньше радиусы размытия. (data-engine ставит perfProfile.js) ── */
+[data-engine="gecko"] #fog .cloud { filter: blur(22px); }
+[data-engine="gecko"] #scroll-aurora { filter: blur(20px); }
+[data-engine="gecko"] .nav-island {
+  backdrop-filter: saturate(180%) blur(18px); -webkit-backdrop-filter: saturate(180%) blur(18px);
+}
 
 .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 

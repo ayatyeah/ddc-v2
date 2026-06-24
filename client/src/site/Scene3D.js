@@ -16,29 +16,24 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import helvetikerBold from 'three/examples/fonts/helvetiker_bold.typeface.json';
 import { PARTICLE_N, DDC_PTS } from './particlePoints.js';
 import { KZ_OUTLINE, KZ_NODES, KZ_HUB } from './kzGeo.js';
+import { perf } from './perfProfile.js';
 
 export function initScene(canvas) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const mobile = window.matchMedia('(max-width: 760px)').matches;
-  // Слабое устройство (мало ядер/памяти или просьба о пониженной анимации): отключаем
-  // тяжёлые полноэкранные эффекты (звёзды/облака/спутники) и снижаем потолок разрешения —
-  // как на мобиле, но и на слабом десктопе. Так нет фризов и лагов фона.
-  const lowPower = (() => {
-    try { return reduce || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4; }
-    catch { return false; }
-  })();
+  // Профиль производительности (движок + устройство) — см. perfProfile.js.
+  const lowPower = perf.lowPower;
   // Лёгкая сцена для ВСЕХ устройств: без тяжёлых fullscreen-эффектов (звёзды/облака/
   // спутники/планета/параллакс) — ради плавности в браузерах. Ядро (карта/башни/неон/DDC) остаётся.
   const LIGHT = true;
-  // Потолок разрешения рендера. Фон слегка «фоновый», поэтому 1.75 вместо 2 почти незаметно,
-  // но это ~20% меньше пикселей на кадр (главный выигрыш по fill-rate в Firefox).
-  const DPR_CAP = lowPower ? 1.25 : 1.75;
+  // Потолок разрешения рендера: по движку/устройству (Firefox ниже — fill-rate тяжелее).
+  const DPR_CAP = perf.dprCap;
   // Адаптивное разрешение рендера: стартуем с максимума, а в кадре сами держим плавность —
   // на слабом телефоне тихо снижаем (для размытого фона незаметно), на сильном — десктопное.
   let curDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
   const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: perf.antialias, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(curDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
