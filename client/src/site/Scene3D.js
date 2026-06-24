@@ -27,8 +27,12 @@ export function initScene(canvas) {
     try { return reduce || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4; }
     catch { return false; }
   })();
-  const LIGHT = mobile || lowPower;   // «облегчённая» сцена
-  const DPR_CAP = lowPower ? 1.25 : 2; // потолок качества; на слабых — ниже (меньше пикселей на кадр)
+  // Лёгкая сцена для ВСЕХ устройств: без тяжёлых fullscreen-эффектов (звёзды/облака/
+  // спутники/планета/параллакс) — ради плавности в браузерах. Ядро (карта/башни/неон/DDC) остаётся.
+  const LIGHT = true;
+  // Потолок разрешения рендера. Фон слегка «фоновый», поэтому 1.75 вместо 2 почти незаметно,
+  // но это ~20% меньше пикселей на кадр (главный выигрыш по fill-rate в Firefox).
+  const DPR_CAP = lowPower ? 1.25 : 1.75;
   // Адаптивное разрешение рендера: стартуем с максимума, а в кадре сами держим плавность —
   // на слабом телефоне тихо снижаем (для размытого фона незаметно), на сильном — десктопное.
   let curDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
@@ -132,15 +136,16 @@ export function initScene(canvas) {
       i === 0 ? shape.moveTo(X, Y) : shape.lineTo(X, Y);
     });
 
-    // ExtrudeGeometry даёт настоящую толщину -> 3D-плита страны
-    const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 2, steps: 1 });
+    // ExtrudeGeometry даёт настоящую толщину -> 3D-плита страны.
+    // bevelSegments 1 (вместо 2) — вдвое меньше треугольников на фаске, на глаз не заметно.
+    const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 1, steps: 1, curveSegments: 4 });
     extrude.rotateX(-Math.PI / 2);    // положить плашмя: shape.y(lat) -> -z
     extrude.translate(0, 0, hub2.z);  // сдвиг чтобы хаб попал под башни (z)
 
     // Процедурный «рельеф» поверхности (шум) как roughness/bump-map — карта выглядит как
-    // реальная поверхность под светом. ТОЛЬКО на десктопе: на мобиле bump-шейдинг лишний.
+    // реальная поверхность под светом. Только для «полной» сцены: в LIGHT-режиме лишний.
     let mapTex = null;
-    if (!mobile) {
+    if (!LIGHT) {
       const mcv = document.createElement('canvas'); mcv.width = mcv.height = 256;
       const mc = mcv.getContext('2d');
       mc.fillStyle = '#7a7a7a'; mc.fillRect(0, 0, 256, 256);
@@ -226,7 +231,7 @@ export function initScene(canvas) {
       // границы не «ложатся» на кромку и не пересекают грань карты неприятно.
       mid.y += Math.min(9, origin.distanceTo(end) * 0.20);
       const curve = new THREE.QuadraticBezierCurve3(origin.clone(), mid, end);
-      const pts = curve.getPoints(40);
+      const pts = curve.getPoints(26);   // 40→26 точек на дугу: меньше вершин, на глаз так же гладко
       const lGeo = new THREE.BufferGeometry().setFromPoints(pts);
       // сияние: толстая мягкая линия + яркое ядро (две линии).
       // depthTest:false — дуги рисуются ПОВЕРХ карты (как и точки-узлы), иначе наклонённая

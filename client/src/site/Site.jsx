@@ -11,7 +11,6 @@ import Fog from './Fog.jsx';
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
 const Background3D = lazy(() => import('./Background3D.jsx'));
 import Particles from './Particles.jsx';
-import DataFlow from './DataFlow.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
@@ -147,8 +146,8 @@ export default function Site() {
           <Background3D onReady={onReady} />
         </Suspense>
       </ErrorBoundary>
+      {/* Немного мелких частиц на фоне (лёгкий слой). Тяжёлый DataFlow отключён ради плавности. */}
       {!isMobile && !lowPower && <Particles />}
-      {!isMobile && !lowPower && <DataFlow />}
       <Fog />
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />

@@ -41,12 +41,12 @@ export default function Particles() {
     };
 
     const make = () => {
-      const r = 0.8 + Math.random() * 2.2;
+      const r = 0.5 + Math.random() * 1.1;   // мельче, чем было (0.8..3.0)
       return {
         x: Math.random() * w, y: Math.random() * h,
         vx: (Math.random() - 0.5) * 0.18,
         vy: (Math.random() - 0.5) * 0.18 - 0.04,
-        size: r * 8,                    // экранный размер спрайта (ореол ~ в 8× ядра)
+        size: r * 6,                    // экранный размер спрайта (мелкие искорки)
         ph: Math.random() * Math.PI * 2,
         sp: 0.6 + Math.random() * 1.4,
         tw: 0.45 + Math.random() * 0.55,
@@ -58,7 +58,8 @@ export default function Particles() {
       canvas.width = w * dpr; canvas.height = h * dpr;
       canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.min(mobile ? 40 : 110, Math.round((w * h) / (mobile ? 26000 : 15000)));
+      // Мало частиц: десктоп ≤ 24, мобайл ≤ 16 (лёгкий слой, не грузит сцену)
+      const count = Math.min(mobile ? 16 : 24, Math.round((w * h) / 90000));
       pts = Array.from({ length: count }, make);
     };
 
