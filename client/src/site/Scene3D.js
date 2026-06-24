@@ -36,7 +36,6 @@ export function initScene(canvas) {
   // Адаптивное разрешение рендера: стартуем с максимума, а в кадре сами держим плавность —
   // на слабом телефоне тихо снижаем (для размытого фона незаметно), на сильном — десктопное.
   let curDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
-  const FRAME_MS = 0;         // без ограничения кадров — 60fps везде
   const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
@@ -260,7 +259,6 @@ export function initScene(canvas) {
   // Лежит ПЛАШМЯ на карте (XZ), «верх» букв -> к северу (-z). Грузится ОДИН РАЗ
   // (никакого обновления буфера каждый кадр, как было у частиц) -> легче для телефона.
   // TEXT_Y/TEXT_S и рамка AX×AZ заданы выше (надпись жёстко привязана к карте gMap).
-  const CZ = -26;
   function layout() {
     return { mobile: 0, camZ: 112, eyeY: 56, lookY: 5, cy: 20, planetY: 20,
              kzCX: 0, kzS: 18, ddcCX: 0, ddcS: 15 };
@@ -322,124 +320,10 @@ export function initScene(canvas) {
     }
   })();
 
-  // ── Планета за зданиями: на ней крупно повторяется «DDC» (вращается, всегда в кадре).
-  //    Текстура перерисовывается при смене страницы — узор слегка меняется. ─────
-  const planetCv = document.createElement('canvas'); planetCv.width = 1024; planetCv.height = 512;
-  const pc = planetCv.getContext('2d');
-  function drawPlanet(variant = 0) {
-    const W = 1024, Hh = 512;
-    const pg = pc.createLinearGradient(0, 0, 0, Hh);
-    // оттенок чуть смещается по variant — «меняется при смене страницы»
-    const hueShift = (variant % 5) * 6;
-    pg.addColorStop(0, `hsl(${214 + hueShift}, 48%, ${44}%)`);
-    pg.addColorStop(0.5, `hsl(${212 + hueShift}, 50%, ${34}%)`);
-    pg.addColorStop(1, `hsl(${214 + hueShift}, 52%, ${24}%)`);
-    pc.fillStyle = pg; pc.fillRect(0, 0, W, Hh);
-    // мягкие световые пятна (атмосфера)
-    for (let i = 0; i < 26; i++) {
-      pc.fillStyle = `rgba(180,210,245,${0.05 + ((i * 7 + variant * 13) % 10) / 60})`;
-      const rx = ((i * 137 + variant * 53) % W), ry = ((i * 89 + variant * 31) % Hh);
-      pc.beginPath(); pc.ellipse(rx, ry, 30 + (i % 5) * 16, 16 + (i % 4) * 10, (i + variant) * 0.7, 0, 6.28); pc.fill();
-    }
-    if (planetTex) planetTex.needsUpdate = true;
-  }
-  let planetTex = null;
-  drawPlanet(0);
-  planetTex = new THREE.CanvasTexture(planetCv); planetTex.colorSpace = THREE.SRGBColorSpace;
-  planetTex.wrapS = THREE.RepeatWrapping;
-  const planet = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 40, 40),          // гладкого шара хватает 40 сегментов (был 64×64)
-    new THREE.MeshStandardMaterial({
-      map: planetTex,
-      roughness: 0.9, metalness: 0.05,
-      emissive: 0xffffff, emissiveMap: planetTex, emissiveIntensity: 0.16,
-      transparent: true, opacity: 1,
-    })
-  );
-  planet.rotation.z = 0.34;                       // наклон оси — объёмнее смотрится
-  scene.add(planet);
-  planet.visible = false;                          // 3D-планета отключена — фон-планета теперь 2D (#bg-planet в DOM)
-
-  const PLANET_K = 0.98;             // планета — сдержанный фон, а не во весь экран
-  function placePlanet() {
-    planet.scale.setScalar(L.kzS * PLANET_K); planet.position.set(0, L.planetY, CZ - 9);
-  }
-  placePlanet();
-
-  // ── Звёздное поле далеко позади: заполняет «пустое» небо за картой/зданиями ───
-  // Один Points + лёгкий шейдер мерцания; позиции статичны (в кадре меняется только
-  // время/прозрачность) — дёшево и не грузит мобильные. Уходит при выходе в вид сверху.
-  const STAR_N = 1200;   // плотное звёздное поле (десктоп) — наполняет фон
-  const sPos = new Float32Array(STAR_N * 3), sRnd = new Float32Array(STAR_N);
-  for (let i = 0; i < STAR_N; i++) {
-    if (i % 2 === 0) {
-      // «небо»: высоко и далеко — для hero и облических ракурсов
-      sPos[i * 3]     = (Math.random() - 0.5) * 540;
-      sPos[i * 3 + 1] = 18 + Math.random() * 205;
-      sPos[i * 3 + 2] = -70 - Math.random() * 230;
-    } else {
-      // «поле»: кольцо точек вокруг страны (низко по Y) — заполняет пустоту при виде сверху
-      const ang = Math.random() * 6.2831, rad = 95 + Math.random() * 240;
-      sPos[i * 3]     = Math.cos(ang) * rad;
-      sPos[i * 3 + 1] = -3 + Math.random() * 9;
-      sPos[i * 3 + 2] = -9 + Math.sin(ang) * rad * 0.7;
-    }
-    sRnd[i] = Math.random();
-  }
-  const starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
-  starGeo.setAttribute('aRand', new THREE.BufferAttribute(sRnd, 1));
-  const starMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
-    uniforms: { uTime: { value: 0 }, uOpacity: { value: 1 }, uColor: { value: new THREE.Color(0x9fc6ff) } },
-    vertexShader: `attribute float aRand; uniform float uTime; varying float vTw;
-      void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        float tw = 0.5 + 0.5 * sin(uTime * 1.3 + aRand * 6.2831); vTw = tw;
-        gl_PointSize = (0.6 + 1.7 * aRand) * (0.8 + 0.6 * tw) * (300.0 / -mv.z);
-        gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying float vTw;
-      void main(){ vec2 d = gl_PointCoord - 0.5; float r = length(d); if (r > 0.5) discard;
-        float a = smoothstep(0.5, 0.0, r) * (0.22 + 0.55 * vTw) * uOpacity;
-        gl_FragColor = vec4(uColor, a); }`,
-  });
-  const stars = new THREE.Points(starGeo, starMat); stars.frustumCulled = false; scene.add(stars);
-  if (LIGHT) stars.visible = false;   // тяжёлый эффект — на мобиле/слабом устройстве выключен
-
-  // ── Спутники-огоньки: несколько светящихся точек на орбитах над страной — добавляют
-  //    «жизни» и наполняют фон (десктоп). Дёшево: спрайты с одной glow-текстурой. ──
-  const satCv = document.createElement('canvas'); satCv.width = satCv.height = 64;
-  const satC = satCv.getContext('2d');
-  const satG = satC.createRadialGradient(32, 32, 0, 32, 32, 32);
-  satG.addColorStop(0, 'rgba(224,242,255,1)'); satG.addColorStop(0.3, 'rgba(120,200,255,0.7)'); satG.addColorStop(1, 'rgba(120,200,255,0)');
-  satC.fillStyle = satG; satC.fillRect(0, 0, 64, 64);
-  const satTex = new THREE.CanvasTexture(satCv);
-  const sats = [];
-  const satDefs = [
-    { r: 72, y: 42, sp: 0.16, ph: 0.0, s: 2.6 }, { r: 98, y: 58, sp: -0.11, ph: 2.1, s: 2.2 },
-    { r: 54, y: 30, sp: 0.22, ph: 4.0, s: 3.0 }, { r: 122, y: 70, sp: 0.08, ph: 1.0, s: 2.0 },
-  ];
-  for (const d of satDefs) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: satTex, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.9 }));
-    sp.scale.set(d.s, d.s, 1); sp.userData = d; sats.push(sp); scene.add(sp);
-    if (LIGHT) sp.visible = false;
-  }
-
-  // ── Облака: смягчают исчезновение зданий (здания «растворяются» в них) ───────
-  const cloudCv = document.createElement('canvas'); cloudCv.width = cloudCv.height = 128;
-  const cctx = cloudCv.getContext('2d');
-  const cgrad = cctx.createRadialGradient(64, 64, 4, 64, 64, 64);
-  cgrad.addColorStop(0, 'rgba(255,255,255,0.95)'); cgrad.addColorStop(0.5, 'rgba(255,255,255,0.45)'); cgrad.addColorStop(1, 'rgba(255,255,255,0)');
-  cctx.fillStyle = cgrad; cctx.fillRect(0, 0, 128, 128);
-  const cloudTex = new THREE.CanvasTexture(cloudCv);
-  const clouds = [];
-  const cloudDefs = [[-9, 31, -7, 15], [8, 34, -6, 14], [0, 27, -5, 13], [-5, 39, -9, 11], [6, 25, -8, 12], [-2, 35, -4, 10]];
-  for (const [cx, cyy, cz, cs] of cloudDefs) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
-    sp.position.set(cx, cyy, cz); sp.scale.set(cs, cs * 0.6, 1); sp.userData.bx = cx;
-    if (LIGHT) sp.visible = false;     // тяжёлый эффект — на мобиле/слабом устройстве выключен
-    clouds.push(sp); scene.add(sp);
-  }
-
+  // ── Планета: теперь 2D-кружок на фоне (DOM-слой #bg-planet в Site.jsx + styles.css).
+  //    3D-планета удалена — она была невидимой и зря держала текстуру 1024×512 и
+  //    перерисовывалась при каждой навигации. Звёзды/спутники/облака тоже удалены:
+  //    в LIGHT-режиме они никогда не рисовались (мёртвый груз памяти/инициализации). ──
 
   // ── (3D-логотип убран — бренд показывается DOM-локапом) ─────────────────────
 
@@ -481,7 +365,6 @@ export function initScene(canvas) {
     if (edgeGlowMat) edgeGlowMat.resolution.set(w, h);   // px-толщина неон-границы зависит от размера канваса
     if (edgeCoreMat) edgeCoreMat.resolution.set(w, h);
     for (const m of ddcLineMats) m.resolution.set(w, h);  // px-толщина неон-контура DDC
-    placePlanet();
     lastW = w;
   }
   function resize() {
@@ -492,18 +375,11 @@ export function initScene(canvas) {
 
   scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
 
-  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, lastFrame = -1e9, prevT = 0;
+  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, prevT = 0;
   let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps для адаптивного DPR
   function loop() {
     raf = 0;
     if (running) raf = requestAnimationFrame(loop);
-    // Ограничение кадров (опционально, для слабых устройств): быстро выходим из колбэка,
-    // не трогая GPU, оставляя main-thread компоновщику скролла. Сейчас выключено (FRAME_MS=0).
-    if (FRAME_MS) {
-      const ms = clock.getElapsedTime() * 1000;
-      if (ms - lastFrame < FRAME_MS) return;
-      lastFrame = ms;
-    }
     const t = clock.getElapsedTime();
     // Сглаживание по реальному времени кадра (а не фикс-шаг): переходы одинаково
     // плавные на 60/90/120 Гц и не «дёргаются» при просадках fps. dt ограничен,
@@ -568,7 +444,7 @@ export function initScene(canvas) {
     // цифровую экосистему страны. Карта держит базовую непрозрачность.
     const aerial = smooth(p, 0.30, 0.60);
     const boost = 1 + aerial * 0.8;
-    for (const mm of mapMats) mm.opacity = (mm.userData?.baseOp ?? 0.92);
+    // (opacity карты/узлов не анимируется — задана при создании, поэтому в кадре не трогаем)
     const pulse = 0.5 + 0.5 * Math.sin(t * 1.8);
     for (const lm of lineMats) {
       if (lm.userData?.glow) lm.opacity = Math.min(1, (0.16 + pulse * 0.20) * boost);
@@ -585,31 +461,7 @@ export function initScene(canvas) {
       pkt.material.opacity = Math.min(1, (0.5 + 0.5 * Math.sin(t * 4 + u.t * 6)) * boost);
     }
 
-    // Тяжёлые fullscreen-эффекты (звёзды, облака, спутники) — ТОЛЬКО на сильном десктопе.
-    // На мобиле и слабых устройствах они отключены (invisible при создании) ради плавности —
-    // остаётся «облегчённая» 3D-сцена: башни, карта, надпись DDC, неон, движение камеры.
-    if (!LIGHT) {
-      // звёзды/поле остаются всегда — наполняют фон и при виде сверху (раньше гасли)
-      starMat.uniforms.uTime.value = t;
-      starMat.uniforms.uOpacity.value = 1;
-
-      // спутники-огоньки тихо вращаются на орбитах над страной
-      for (const sp of sats) {
-        const d = sp.userData, a = t * d.sp + d.ph;
-        sp.position.set(Math.cos(a) * d.r, d.y + Math.sin(a * 1.3) * 3, -9 + Math.sin(a) * d.r);
-        sp.material.opacity = 0.5 + 0.4 * (0.5 + 0.5 * Math.sin(t * 1.8 + d.ph));
-      }
-
-      // облака появляются, пока башни тают, и расходятся после — мягкое исчезновение
-      const cloudOp = smooth(p, 0.06, 0.16) * (1 - smooth(p, 0.26, 0.34));
-      for (const sp of clouds) {
-        sp.visible = cloudOp > 0.01;
-        sp.material.opacity = cloudOp * 0.92;
-        sp.position.x = sp.userData.bx + Math.sin(t * 0.14 + sp.userData.bx) * 1.4;
-      }
-
-      // планета отключена в 3D — фон-глобус теперь 2D-слоем #bg-planet (в DOM).
-    }
+    // (звёзды/спутники/облака/планета удалены — в LIGHT-режиме они не рисовались)
 
     // Надпись «DDC» (3D-меш + неон-контур) проявляется над хабом к середине скролла.
     // Статичная геометрия — только меняем прозрачность материалов (без per-frame буфера).
@@ -631,18 +483,17 @@ export function initScene(canvas) {
   document.addEventListener('visibilitychange', onVisibility);
   start();
 
-  let pageVar = 0;
   return {
     setTarget(p) { progress = Math.min(1, Math.max(0, p)); if (!running && !document.hidden) start(); },
     setYaw(y) { viewYaw = y || 0; if (!running && !document.hidden) start(); },
-    setPage() { pageVar++; drawPlanet(pageVar); if (!running && !document.hidden) start(); },
+    setPage() { if (!running && !document.hidden) start(); },
     dispose() {
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
       window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);
       window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
-      planetTex.dispose(); cloudTex.dispose(); satTex.dispose(); [facadeA, facadeB].forEach((x) => x.dispose());
+      [facadeA, facadeB].forEach((x) => x.dispose());
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const mm = o.material; (Array.isArray(mm) ? mm : [mm]).forEach((x) => x.dispose()); } });
       pmrem.dispose(); renderer.dispose();
     },

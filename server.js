@@ -1175,7 +1175,8 @@ async function buildFeed() {
 {"digest":{"ru":"…","kk":"…","en":"…"},"items":[{"title":{"ru":"…","kk":"…","en":"…"},"summary":{"ru":"…","kk":"…","en":"…"},"url":"ссылка из данных","source":"источник из данных","date":"дата как есть"}]}
 Новости: ${JSON.stringify(input)}`;
     const parsed = parseJsonLoose(await callGemini(prompt, 3500));
-    if (parsed && Array.isArray(parsed.items)) result = { digest: String(parsed.digest || ''), items: parsed.items };
+    // digest от ИИ — мультиязычный объект {ru,kk,en}; НЕ приводим к строке (иначе "[object Object]").
+    if (parsed && Array.isArray(parsed.items)) result = { digest: parsed.digest || '', items: parsed.items };
     else if (Array.isArray(parsed)) result = { digest: '', items: parsed };
   } catch (e) { console.error('feed Gemini:', e.message); }
   if (!result) {
