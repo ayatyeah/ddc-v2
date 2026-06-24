@@ -220,9 +220,9 @@ button { font-family: inherit; cursor: pointer; }
    за ним — текст всегда читается, а 3D-фон по-прежнему просвечивает. */
 .text-glass {
   position: relative;
-  /* Тёмное прозрачное стекло: тёмная основа с низкой непрозрачностью — фон явно просвечивает */
-  background: linear-gradient(135deg, rgba(6,10,20,0.40), rgba(4,7,16,0.44) 55%, rgba(2,4,10,0.48));
-  backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%);
+  /* Тёмная прозрачная подложка БЕЗ backdrop-blur: одинаково во всех браузерах и не грузит
+     GPU при движении 3D-сцены (раньше blur пересчитывался каждый кадр — отсюда фризы). */
+  background: linear-gradient(135deg, rgba(8,12,24,0.62), rgba(4,7,16,0.66) 55%, rgba(2,4,10,0.70));
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px;
   box-shadow:
     0 10px 40px rgba(4, 9, 22, 0.45),
@@ -317,7 +317,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .nav-links { display: flex; gap: 2px; }
 .nav-links a {
-  font-size: 15px; color: var(--ink-soft); padding: 9px 16px; border-radius: 980px;
+  font-size: 13.5px; color: var(--ink-soft); padding: 8px 14px; border-radius: 980px;
   transition: color 0.2s, background 0.2s;
 }
 .nav-links a:hover { color: var(--ink); background: var(--card-glass); }
@@ -325,7 +325,7 @@ button { font-family: inherit; cursor: pointer; }
 /* Группа языков: каждая кнопка — отдельная пилюля (без overflow:hidden, чтобы активную
    не срезало с краю), с небольшим зазором — выглядит как аккуратный сегментный переключатель. */
 .lang { display: flex; gap: 3px; }
-.lang button { background: transparent; border: none; color: var(--ink-faint); font-size: 13px; font-weight: 600; padding: 9px 13px; border-radius: 980px; cursor: pointer; transition: background 0.2s, color 0.2s; }
+.lang button { background: transparent; border: none; color: var(--ink-faint); font-size: 12px; font-weight: 600; padding: 8px 11px; border-radius: 980px; cursor: pointer; transition: background 0.2s, color 0.2s; }
 .lang button:hover { color: var(--ink); }
 .lang button.active { background: var(--blue); color: #fff; }
 [data-theme='dark'] .lang button.active { color: #04122e; }
