@@ -110,48 +110,44 @@ export default function Dashboard({ onAuthLost, onGoTab }) {
   const last14 = d.by_day?.reduce((a, x) => a + x.leads, 0) || 0;
 
   return (
-    <div className="dash">
-      <div className="dash-cards">
-        <button className="dash-card dc-leads" onClick={() => onGoTab?.('leads')}>
-          <span className="dc-num">{d.leads_total}</span>
-          <span className="dc-lbl">Заявки</span>
-          <span className="dc-sub">{d.leads_new} новых · {d.leads_progress} в работе</span>
-        </button>
-        <button className="dash-card dc-news" onClick={() => onGoTab?.('news')}>
-          <span className="dc-num">{d.news_total}</span>
-          <span className="dc-lbl">Новости</span>
-          <span className="dc-sub">{d.news_published} опубликовано</span>
-        </button>
-        <button className="dash-card dc-feed" onClick={() => onGoTab?.('news')}>
-          <span className="dc-num">{d.feed_count}</span>
-          <span className="dc-lbl">AI-лента</span>
-          <span className="dc-sub">{d.feed_updated ? 'обновлено ' + fmt(d.feed_updated) : 'нет данных'}</span>
-        </button>
-        <div className="dash-card dc-static">
-          <span className="dc-num">{last14}</span>
-          <span className="dc-lbl">Заявок за 14 дней</span>
-          <span className="dc-sub">пик {peak} в день</span>
+    <div className="dash-bento">
+      <button className="dash-card dc-leads" onClick={() => onGoTab?.('leads')}>
+        <span className="dc-num">{d.leads_total}</span>
+        <span className="dc-lbl">Заявки</span>
+        <span className="dc-sub">{d.leads_new} новых · {d.leads_progress} в работе</span>
+      </button>
+      <button className="dash-card dc-news" onClick={() => onGoTab?.('news')}>
+        <span className="dc-num">{d.news_total}</span>
+        <span className="dc-lbl">Новости</span>
+        <span className="dc-sub">{d.news_published} опубликовано</span>
+      </button>
+      <button className="dash-card dc-feed" onClick={() => onGoTab?.('news')}>
+        <span className="dc-num">{d.feed_count}</span>
+        <span className="dc-lbl">AI-лента</span>
+        <span className="dc-sub">{d.feed_updated ? 'обновлено ' + fmt(d.feed_updated) : 'нет данных'}</span>
+      </button>
+      <div className="dash-card dc-static">
+        <span className="dc-num">{last14}</span>
+        <span className="dc-lbl">Заявок за 14 дней</span>
+        <span className="dc-sub">пик {peak} в день</span>
+      </div>
+
+      <section className="chart-card chart-trend bento-2">
+        <div className="chart-head">
+          <h3>Динамика заявок</h3>
+          <span className="chart-sub">за последние 14 дней</span>
         </div>
-      </div>
+        <TrendChart data={d.by_day || []} />
+      </section>
+      <section className="chart-card chart-donut bento-2">
+        <div className="chart-head">
+          <h3>По статусам</h3>
+          <span className="chart-sub">распределение заявок</span>
+        </div>
+        <DonutChart byStatus={d.by_status || []} total={d.leads_total} />
+      </section>
 
-      <div className="dash-charts">
-        <section className="chart-card chart-trend">
-          <div className="chart-head">
-            <h3>Динамика заявок</h3>
-            <span className="chart-sub">за последние 14 дней</span>
-          </div>
-          <TrendChart data={d.by_day || []} />
-        </section>
-        <section className="chart-card chart-donut">
-          <div className="chart-head">
-            <h3>По статусам</h3>
-            <span className="chart-sub">распределение заявок</span>
-          </div>
-          <DonutChart byStatus={d.by_status || []} total={d.leads_total} />
-        </section>
-      </div>
-
-      <div className="dash-recent">
+      <div className="dash-recent bento-full">
         <div className="dash-recent-head">
           <h3>Последние изменения</h3>
           <button className="adm-ghost" onClick={() => onGoTab?.('history')}>Вся история →</button>
