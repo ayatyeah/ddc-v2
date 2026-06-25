@@ -129,11 +129,15 @@ button { font-family: inherit; cursor: pointer; }
 #bg-planet {
   position: fixed; z-index: -4; pointer-events: none;
   top: 6vh; right: 9vw; width: 340px; height: 340px; border-radius: 50%;
+  /* едва заметная светящаяся линия по контуру планеты */
+  border: 1px solid rgba(150, 200, 255, 0.22);
   background:
     radial-gradient(circle at 50% 50%, rgba(120,170,255,0.18), rgba(120,170,255,0) 72%),
     radial-gradient(circle at 36% 30%, #5a86c4, #244c84 50%, #102a4e 78%, #0a1c38 100%);
   box-shadow:
     0 0 90px rgba(70, 130, 230, 0.30),
+    0 0 8px 1px rgba(150, 200, 255, 0.18),   /* мягкое свечение вдоль контура */
+    inset 0 0 12px rgba(150, 200, 255, 0.18),
     inset -22px -26px 64px rgba(0, 6, 18, 0.6),
     inset 20px 18px 54px rgba(160, 200, 255, 0.22);
   opacity: 0.6;
@@ -804,6 +808,19 @@ textarea.inp { resize: vertical; min-height: 110px; }
 @keyframes sectionIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .page-enter, .page-enter > * { animation: none; }
+}
+
+/* ── Бесшовный переход между страницами (cross-fade поверх общего фона) ───────── */
+.page-tx { will-change: opacity, transform; }
+.page-tx.tx-in  { animation: pageIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.page-tx.tx-out { animation: pageOut 0.18s ease both; }
+@keyframes pageOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-8px); } }
+/* «Волна» появления секций — только на входе */
+.page-tx.tx-in > * { animation: sectionIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: 0.04s; }
+.page-tx.tx-in > *:nth-child(2) { animation-delay: 0.09s; }
+.page-tx.tx-in > *:nth-child(3) { animation-delay: 0.14s; }
+@media (prefers-reduced-motion: reduce) {
+  .page-tx.tx-in, .page-tx.tx-out, .page-tx.tx-in > * { animation: none; }
 }
 
 /* Логотип-локап кликабелен (на главную), фон-область остаётся «прозрачной» для кликов */

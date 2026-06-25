@@ -40,10 +40,21 @@ function isLowPowerDevice() {
 
 export default function Site() {
   const path = useRoute();
-  const route = ROUTES[path] || ROUTES['/'];
-  const Page = route.Comp;
+  const route = ROUTES[path] || ROUTES['/'];   // целевая страница (сцена/SEO реагируют сразу)
   const isMobile = useIsMobile();
   const lowPower = useState(isLowPowerDevice)[0];   // считаем один раз на маунте
+
+  // Бесшовный переход между страницами: контент гаснет (tx-out), затем подменяется и
+  // плавно проявляется (tx-in). Фон (3D-сцена) общий и не пересоздаётся — переход органичный.
+  const [shownPath, setShownPath] = useState(path);
+  const [txOut, setTxOut] = useState(false);
+  useEffect(() => {
+    if (path === shownPath) return;
+    setTxOut(true);
+    const t = setTimeout(() => { setShownPath(path); setTxOut(false); window.scrollTo(0, 0); }, 190);
+    return () => clearTimeout(t);
+  }, [path, shownPath]);
+  const ShownPage = (ROUTES[shownPath] || ROUTES['/']).Comp;
 
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
@@ -152,8 +163,8 @@ export default function Site() {
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
       <Brand />
-      <main key={path} id="main" className="page-enter">
-        <Page />
+      <main key={shownPath} id="main" className={`page-tx ${txOut ? 'tx-out' : 'tx-in'}`}>
+        <ShownPage />
       </main>
       <Footer />
       <Assistant />

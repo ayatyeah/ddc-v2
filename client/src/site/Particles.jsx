@@ -58,8 +58,8 @@ export default function Particles() {
       canvas.width = w * dpr; canvas.height = h * dpr;
       canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // Мало частиц: десктоп ≤ 24, мобайл ≤ 16 (лёгкий слой, не грузит сцену)
-      const count = Math.min(mobile ? 16 : 24, Math.round((w * h) / 90000));
+      // Чуть больше сияющих искорок (десктоп ≤ 38, мобайл ≤ 22) — лёгкий слой
+      const count = Math.min(mobile ? 22 : 38, Math.round((w * h) / 58000));
       pts = Array.from({ length: count }, make);
     };
 
