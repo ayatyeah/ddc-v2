@@ -151,10 +151,10 @@ button { font-family: inherit; cursor: pointer; }
    Размер задаётся в JS (canvas), здесь — позиция/прозрачность/синее свечение. */
 #bg-globe {
   position: fixed; z-index: -4; pointer-events: none;
-  top: 5vh; right: 5vw; opacity: 0.72;
-  filter: drop-shadow(0 0 44px rgba(40, 110, 230, 0.30));
+  top: 4vh; right: 4vw; opacity: 0.95;
+  filter: drop-shadow(0 0 50px rgba(40, 120, 240, 0.40));
 }
-@media (max-width: 760px) { #bg-globe { top: 3vh; right: 1vw; opacity: 0.6; } }
+@media (max-width: 760px) { #bg-globe { top: 3vh; right: 0; opacity: 0.85; } }
 
 /* Полноэкранный 3D-фон (Scene3D) — башни DDC, параллакс-проезд по скроллу. */
 #bg3d {

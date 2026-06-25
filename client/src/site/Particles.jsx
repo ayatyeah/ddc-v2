@@ -151,8 +151,9 @@ export default function Particles() {
     const onVis = () => { document.hidden ? stop() : start(); };
     document.addEventListener('visibilitychange', onVis);
 
+    // Старт rAF откладываем на простой главного потока — не мешаем первому заходу/скроллу.
     if (reduce) render();
-    else if (!document.hidden) start();
+    else if (!document.hidden) (window.requestIdleCallback || ((f) => setTimeout(f, 300)))(() => start());
 
     return () => {
       stop();

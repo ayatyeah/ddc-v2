@@ -263,7 +263,7 @@ export function initScene(canvas) {
   const ddcGroup = new THREE.Group(); ddcGroup.visible = false; gMap.add(ddcGroup);
   const ddcMeshMats = [];     // материалы тела букв (fade по скроллу)
   const ddcLineMats = [];     // материалы неон-контура (fade + пульс); их resolution обновляем в resize
-  (() => {
+  const buildDDC = () => {
     const font = new FontLoader().parse(helvetikerBold);
     const shapes = font.generateShapes('DDC', 10);
     // габариты в координатах шрифта -> центрируем и вписываем по ширине в рамку AX
@@ -313,7 +313,11 @@ export function initScene(canvas) {
       addContour(ep.shape);
       for (const hole of ep.holes) addContour(hole);
     }
-  })();
+  };
+  // Тяжёлую сборку надписи (парсинг шрифта + TextGeometry + триангуляция) откладываем на
+  // простой главного потока — чтобы НЕ блокировать первый заход (это и фризило скролл).
+  // DDC видна только во второй половине скролла, поэтому небольшая задержка незаметна.
+  (window.requestIdleCallback || ((f) => setTimeout(f, 400)))(buildDDC);
 
   // ── Планета: теперь 2D-кружок на фоне (DOM-слой #bg-planet в Site.jsx + styles.css).
   //    3D-планета удалена — она была невидимой и зря держала текстуру 1024×512 и
