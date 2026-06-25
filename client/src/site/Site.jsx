@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRoute } from './router.js';
 import { ROUTES } from './pages.jsx';
 import Nav from './Nav.jsx';
@@ -11,16 +11,39 @@ import Fog from './Fog.jsx';
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
 const Background3D = lazy(() => import('./Background3D.jsx'));
 import Particles from './Particles.jsx';
-import BgGlobe from './BgGlobe.jsx';
-import { perf } from './perfProfile.js';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+
+// Мобила (<=760px) — лёгкий 2D-фон вместо тяжёлой WebGL-сцены. Реагируем на смену брейкпоинта.
+function useIsMobile() {
+  const [m, setM] = useState(() => window.matchMedia('(max-width: 760px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 760px)');
+    const on = () => setM(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return m;
+}
+
+// Слабое устройство: мало ядер/памяти или просьба о пониженной анимации. На таких
+// НЕ грузим дополнительные canvas-слои (частицы, потоки данных) — только адаптивную сцену.
+function isLowPowerDevice() {
+  try {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+    const cores = navigator.hardwareConcurrency || 8;
+    const mem = navigator.deviceMemory || 8;
+    return cores <= 4 || mem <= 4;
+  } catch { return false; }
+}
 
 export default function Site() {
   const path = useRoute();
   const route = ROUTES[path] || ROUTES['/'];
   const Page = route.Comp;
+  const isMobile = useIsMobile();
+  const lowPower = useState(isLowPowerDevice)[0];   // считаем один раз на маунте
 
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
@@ -116,19 +139,15 @@ export default function Site() {
       <a href="#main" className="skip-link">К основному содержимому</a>
       <div id="scroll-bg" aria-hidden="true" />
       <div id="scroll-aurora" aria-hidden="true" />
-      {/* Фоновая планета: WebGL-глобус (cobe); на слабых устройствах — статичный 2D-кружок */}
-      <ErrorBoundary fallback={<div id="bg-planet" aria-hidden="true" />}>
-        {perf.lowPower ? <div id="bg-planet" aria-hidden="true" /> : <BgGlobe />}
-      </ErrorBoundary>
+      <div id="bg-planet" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
       <ErrorBoundary fallback={null}>
         <Suspense fallback={null}>
           <Background3D onReady={onReady} />
         </Suspense>
       </ErrorBoundary>
-      {/* Фон-слой: искорки + потоки данных. Показываем на ВСЕХ устройствах; плотность
-          и качество подстраиваются под профиль (perfProfile) + адаптивный DPR сцены. */}
-      <Particles />
+      {/* Немного мелких частиц на фоне (лёгкий слой). Тяжёлый DataFlow отключён ради плавности. */}
+      {!isMobile && !lowPower && <Particles />}
       <Fog />
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />

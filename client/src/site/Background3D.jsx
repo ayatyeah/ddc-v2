@@ -9,26 +9,19 @@ export default function Background3D({ onReady }) {
   const sceneRef = useRef(null);
   useEffect(() => {
     if (!sceneRef.current) return;
-    let scene = null, cancelled = false;
-    // Тяжёлую инициализацию сцены (WebGL, PMREM, геометрия карты) запускаем в простое
-    // главного потока — чтобы первый заход оставался отзывчивым (страница и скролл живые),
-    // а не «висли» на синхронной настройке. Сцена проявляется плавным фейдом следом.
-    const init = () => {
-      if (cancelled || !sceneRef.current) return;
-      scene = initScene(sceneRef.current);
-      const el = sceneRef.current;
-      requestAnimationFrame(() => { if (el) el.style.opacity = ''; });
-      onReady?.({
-        setTarget(p) { scene.setTarget(p); },
-        setYaw(y) { scene.setYaw?.(y); },
-        setPage() { scene.setPage?.(); },
-        dispose() { scene.dispose(); },
-      });
+    const scene = initScene(sceneRef.current);
+    // Плавное проявление сцены после инициализации (ленивый чанк подгрузился).
+    // Снимаем инлайновый opacity:0 → канвас плавно доходит до значения из CSS (тема).
+    const el = sceneRef.current;
+    requestAnimationFrame(() => { if (el) el.style.opacity = ''; });
+    const inst = {
+      setTarget(p) { scene.setTarget(p); },
+      setYaw(y) { scene.setYaw?.(y); },
+      setPage() { scene.setPage?.(); },
+      dispose() { scene.dispose(); },
     };
-    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
-    const cancelIdle = window.cancelIdleCallback || clearTimeout;
-    const id = idle(init);
-    return () => { cancelled = true; try { cancelIdle(id); } catch { /* noop */ } if (scene) scene.dispose(); };
+    onReady?.(inst);
+    return () => inst.dispose();
   }, [onReady]);
   return (
     <>
