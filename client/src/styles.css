@@ -151,11 +151,15 @@ button { font-family: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { #bg-planet { animation: none; } }
 @media (max-width: 760px) { #bg-planet { width: 200px; height: 200px; top: 4vh; right: 6vw; opacity: 0.5; } }
 
-/* Полноэкранный 3D-фон (Scene3D) — башни DDC, параллакс-проезд по скроллу. */
+/* Полноэкранный 3D-фон (Scene3D) — башни DDC, параллакс-проезд по скроллу.
+   translateZ(0) + will-change — выносим фон в отдельный GPU-слой композитора, чтобы он
+   НЕ перерисовывался в такт со скроллом (иначе в Edge/VS Code анимация «застывает» при
+   прокрутке, т.к. fixed-слой ждёт перерисовки главного потока). */
 #bg3d {
   position: fixed; inset: 0; z-index: -3; pointer-events: none;
   width: 100%; height: 100%; display: block; opacity: 0.72;
   transition: opacity 0.8s ease;   /* плавное проявление сцены после ленивой загрузки */
+  transform: translateZ(0); will-change: transform; backface-visibility: hidden;
 }
 @media (prefers-reduced-motion: reduce) { #bg3d { transition: none; } }
 [data-theme='dark'] #bg3d { opacity: 1; }
@@ -163,6 +167,7 @@ button { font-family: inherit; cursor: pointer; }
 /* Канва с летающими частицами. */
 #particles {
   position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  transform: translateZ(0); will-change: transform; backface-visibility: hidden;
 }
 
 /* «Дым»/облака снизу — проявляются при скролле (через #fog opacity var --fog). */
