@@ -40,12 +40,12 @@ export default function Showcase() {
       requestAnimationFrame(() => { cv.style.opacity = '1'; });
       window.addEventListener('scroll', onScroll, { passive: true });
     };
-    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
-    const cancelIdle = window.cancelIdleCallback || clearTimeout;
-    const id = idle(init);
+    // setTimeout (а не requestIdleCallback) — гарантированно ПОСЛЕ первой отрисовки страницы:
+    // плашки/текст видны сразу, тяжёлая 3D-модель инициализируется следом (без «пустого экрана»).
+    const tid = setTimeout(init, 180);
     return () => {
       cancelled = true;
-      try { cancelIdle(id); } catch { /* noop */ }
+      clearTimeout(tid);
       window.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
       if (inst) inst.dispose();
