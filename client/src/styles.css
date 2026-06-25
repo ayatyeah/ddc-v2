@@ -810,18 +810,11 @@ textarea.inp { resize: vertical; min-height: 110px; }
   .page-enter, .page-enter > * { animation: none; }
 }
 
-/* ── Бесшовный переход между страницами (cross-fade поверх общего фона) ───────── */
-.page-tx { will-change: opacity, transform; }
-.page-tx.tx-in  { animation: pageIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.page-tx.tx-out { animation: pageOut 0.18s ease both; }
-@keyframes pageOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-8px); } }
-/* «Волна» появления секций — только на входе */
-.page-tx.tx-in > * { animation: sectionIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: 0.04s; }
-.page-tx.tx-in > *:nth-child(2) { animation-delay: 0.09s; }
-.page-tx.tx-in > *:nth-child(3) { animation-delay: 0.14s; }
-@media (prefers-reduced-motion: reduce) {
-  .page-tx.tx-in, .page-tx.tx-out, .page-tx.tx-in > * { animation: none; }
-}
+/* ── Переход между страницами: контент подменяется СРАЗУ и быстро проявляется ──
+   (без фазы ухода/пустого экрана; фон общий, переход бесшовный). ─────────────── */
+.page-tx { animation: pageTxIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; will-change: opacity, transform; }
+@keyframes pageTxIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .page-tx { animation: none; } }
 
 /* Логотип-локап кликабелен (на главную), фон-область остаётся «прозрачной» для кликов */
 .brandlock .bl-logo, .brandlock .bl-word { pointer-events: auto; cursor: pointer; }
