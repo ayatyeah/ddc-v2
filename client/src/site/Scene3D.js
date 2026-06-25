@@ -387,13 +387,16 @@ export function initScene(canvas) {
 
     // Адаптивное качество: держим плавность. Тяжёлые кадры -> ниже разрешение рендера
     // (для размытого фона незаметно); лёгкие -> поднимаем к максимуму (десктопное качество).
+    // На Firefox (gecko) снижаем РАНЬШЕ и до меньшего пола — приоритет высокому/ровному FPS.
     perfAcc += rawDt; perfN++;
     if (t - perfT > 0.7 && perfN > 8) {
       const avg = perfAcc / perfN;                                   // средняя длительность кадра, сек
       const maxDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+      const lowerAt = perf.engine === 'gecko' ? 0.0182 : 0.025;      // gecko: реагируем уже на ~55fps
+      const floor = perf.engine === 'gecko' ? 0.85 : 1.0;
       let nd = curDpr;
-      if (avg > 0.025 && curDpr > 1.0) nd = Math.max(1.0, curDpr - 0.25);              // <~40fps -> снижаем
-      else if (avg < 0.0166 && curDpr < maxDpr) nd = Math.min(maxDpr, curDpr + 0.15);  // >~60fps -> повышаем
+      if (avg > lowerAt && curDpr > floor) nd = Math.max(floor, curDpr - 0.2);          // просадка -> ниже разрешение
+      else if (avg < 0.0166 && curDpr < maxDpr) nd = Math.min(maxDpr, curDpr + 0.15);   // запас -> выше
       if (Math.abs(nd - curDpr) > 0.02) { curDpr = nd; renderer.setPixelRatio(curDpr); renderer.setSize(window.innerWidth, window.innerHeight, false); }
       perfAcc = 0; perfN = 0; perfT = t;
     }

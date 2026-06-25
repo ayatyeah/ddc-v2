@@ -37,8 +37,9 @@ try {
 } catch { /* старый браузер — оставляем дефолт */ }
 
 // Потолок разрешения рендера WebGL и MSAA по движку/устройству.
-// blink/webkit — полное качество; gecko — спокойнее; слабые устройства — ещё ниже.
-const dprCap = lowPower ? 1.25 : engine === 'gecko' ? 1.5 : 1.75;
+// blink/webkit — полное качество; gecko (Firefox) — ниже разрешение ради высокого/стабильного
+// FPS (его fill-rate слабее → меньше пикселей = глаже анимация); слабые устройства — ещё ниже.
+const dprCap = lowPower ? 1.2 : engine === 'gecko' ? 1.3 : 1.75;
 const antialias = !(lowPower || engine === 'gecko');
 
 // Метки на <html> — их используют per-engine/per-browser правила в styles.css
