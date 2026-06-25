@@ -20,20 +20,36 @@ export default function Showcase() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const inst = initBuilding(canvasRef.current);
-    let raf = 0;
+    let inst = null, raf = 0, cancelled = false;
     const apply = () => {
       raf = 0;
       const el = sectionRef.current;
-      if (!el) return;
+      if (!el || !inst) return;
       const r = el.getBoundingClientRect();
-      const p = 1 - (r.bottom) / (window.innerHeight + r.height);
-      inst.setProgress(p);
+      inst.setProgress(1 - (r.bottom) / (window.innerHeight + r.height));
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-    apply();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); inst.dispose(); };
+    // Тяжёлую инициализацию 3D-модели откладываем на простой главного потока — бесшовный
+    // переход на страницу (плашки сразу, моделька — следом, фейдом).
+    const init = () => {
+      if (cancelled || !canvasRef.current) return;
+      const cv = canvasRef.current;
+      cv.style.transition = 'opacity 0.6s ease'; cv.style.opacity = '0';
+      inst = initBuilding(cv);
+      apply();
+      requestAnimationFrame(() => { cv.style.opacity = '1'; });
+      window.addEventListener('scroll', onScroll, { passive: true });
+    };
+    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+    const cancelIdle = window.cancelIdleCallback || clearTimeout;
+    const id = idle(init);
+    return () => {
+      cancelled = true;
+      try { cancelIdle(id); } catch { /* noop */ }
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      if (inst) inst.dispose();
+    };
   }, []);
 
   const click = (k) => (e) => {
