@@ -796,6 +796,9 @@ textarea.inp { resize: vertical; min-height: 110px; }
 
 /* ── Многостраничность ─────────────────────────────────────────────────────── */
 .page-top { padding-top: clamp(84px, 11vh, 128px); }
+/* Первая секция уже под отступом .page-top — убираем её собственный большой top-padding,
+   иначе отступ суммируется и контент «съезжает» вниз. */
+.page-top > .section:first-child { padding-top: clamp(8px, 2vh, 28px); }
 .page-enter { animation: pageIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes pageIn {
   0%   { opacity: 0; transform: translateY(14px); }
@@ -810,11 +813,18 @@ textarea.inp { resize: vertical; min-height: 110px; }
   .page-enter, .page-enter > * { animation: none; }
 }
 
-/* ── Переход между страницами: контент подменяется СРАЗУ и быстро проявляется ──
+/* ── Переход между страницами: контент подменяется СРАЗУ и плавно проявляется ──
    (без фазы ухода/пустого экрана; фон общий, переход бесшовный). ─────────────── */
-.page-tx { animation: pageTxIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; will-change: opacity, transform; }
-@keyframes pageTxIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .page-tx { animation: none; } }
+.page-tx { animation: pageTxIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; will-change: opacity, transform; }
+@keyframes pageTxIn {
+  0%   { opacity: 0; transform: translateY(18px) scale(0.99); }
+  100% { opacity: 1; transform: none; }
+}
+/* Лёгкая «волна»: вложенные блоки появляются с небольшой задержкой друг за другом */
+.page-tx > * { animation: sectionIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: 0.06s; }
+.page-tx > *:nth-child(2) { animation-delay: 0.13s; }
+.page-tx > *:nth-child(3) { animation-delay: 0.2s; }
+@media (prefers-reduced-motion: reduce) { .page-tx, .page-tx > * { animation: none; } }
 
 /* Логотип-локап кликабелен (на главную), фон-область остаётся «прозрачной» для кликов */
 .brandlock .bl-logo, .brandlock .bl-word { pointer-events: auto; cursor: pointer; }
