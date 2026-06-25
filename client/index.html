@@ -64,8 +64,31 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Загрузочный экран: показывается мгновенно (до загрузки JS), убирается, когда
+       приложение смонтировалось. Логотип крутится + кольцо-лоадер. -->
+  <style>
+    #splash { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center;
+      background: radial-gradient(circle at 50% 42%, #0a1430 0%, #04070f 70%); transition: opacity 0.55s ease; }
+    #splash.hide { opacity: 0; pointer-events: none; }
+    #splash .sp-box { position: relative; display: grid; place-items: center; width: 132px; height: 132px; }
+    #splash .sp-ring { position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid rgba(120,180,255,0.14); border-top-color: rgba(130,190,255,0.9);
+      animation: spRing 0.9s linear infinite; }
+    #splash .sp-logo { width: 76px; height: 76px; filter: drop-shadow(0 0 16px rgba(70,150,255,0.5));
+      animation: spLogo 1.5s cubic-bezier(0.65,0,0.35,1) infinite; }
+    @keyframes spRing { to { transform: rotate(360deg); } }
+    @keyframes spLogo { 0% { transform: rotateY(0); } 100% { transform: rotateY(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #splash .sp-ring, #splash .sp-logo { animation: none; } }
+  </style>
 </head>
 <body>
+  <div id="splash" aria-hidden="true">
+    <div class="sp-box">
+      <span class="sp-ring"></span>
+      <img class="sp-logo" src="/logo_ddc.svg" alt="" />
+    </div>
+  </div>
   <div id="root"></div>
   <noscript>Для работы сайта включите JavaScript. / Сайтты пайдалану үшін JavaScript-ті қосыңыз.</noscript>
   <script type="module" src="/src/main.jsx"></script>

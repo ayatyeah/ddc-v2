@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
-import Dashboard from './Dashboard.jsx';
-import History from './History.jsx';
-import Leads from './Leads.jsx';
-import NewsManager from './NewsManager.jsx';
-import Analytics from './Analytics.jsx';
-import Users from './Users.jsx';
-import AiPanel from './AiPanel.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import { hideSplash } from '../splash.js';
 import './admin.css';
+
+// Вкладки админки — ленивые чанки: грузятся по требованию, а не все сразу.
+// Первичная загрузка панели легче (особенно тяжёлые Аналитика/Новости).
+const Dashboard = lazy(() => import('./Dashboard.jsx'));
+const History = lazy(() => import('./History.jsx'));
+const Leads = lazy(() => import('./Leads.jsx'));
+const NewsManager = lazy(() => import('./NewsManager.jsx'));
+const Analytics = lazy(() => import('./Analytics.jsx'));
+const Users = lazy(() => import('./Users.jsx'));
+const AiPanel = lazy(() => import('./AiPanel.jsx'));
 
 const ROLE_LABEL = { admin: 'Администратор', manager: 'Начальник отдела', staff: 'Сотрудник', editor: 'Редактор', viewer: 'Просмотр' };
 const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', news: 'Новости', history: 'История', users: 'Пользователи' };
@@ -38,6 +42,7 @@ export default function Admin() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    hideSplash();   // админка смонтирована — убираем загрузочный экран
     let alive = true;
     getJSON('/api/me')
       .then((m) => { if (alive) { const r = m.role || 'viewer'; setMe({ username: m.username || '', role: r, id: m.id ?? null }); if (r === 'staff') setTab('leads'); setState('app'); } })
@@ -145,13 +150,15 @@ export default function Admin() {
           {me.username && <span className="who">{me.username} <span className={`us-role r-${role}`}>{ROLE_LABEL[role]}</span></span>}
         </header>
         <main className="adm-main" key={tab}>
-          {tab === 'dashboard' && !isStaff && <Dashboard onAuthLost={() => setState('login')} onGoTab={setTab} />}
-          {tab === 'leads' && <Leads onAuthLost={() => setState('login')} canEdit={canEditLeads} canAssign={canAssign} isStaff={isStaff} focusId={focusLead} />}
-          {tab === 'ai' && aiAccess && <AiPanel onAuthLost={() => setState('login')} onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />}
-          {tab === 'analytics' && !isStaff && <Analytics onAuthLost={() => setState('login')} />}
-          {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEditNews} />}
-          {tab === 'history' && <History onAuthLost={() => setState('login')} />}
-          {tab === 'users' && isAdmin && <Users onAuthLost={() => setState('login')} me={me} />}
+          <Suspense fallback={<div className="adm-hint">Загрузка…</div>}>
+            {tab === 'dashboard' && !isStaff && <Dashboard onAuthLost={() => setState('login')} onGoTab={setTab} />}
+            {tab === 'leads' && <Leads onAuthLost={() => setState('login')} canEdit={canEditLeads} canAssign={canAssign} isStaff={isStaff} focusId={focusLead} />}
+            {tab === 'ai' && aiAccess && <AiPanel onAuthLost={() => setState('login')} onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />}
+            {tab === 'analytics' && !isStaff && <Analytics onAuthLost={() => setState('login')} />}
+            {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEditNews} />}
+            {tab === 'history' && <History onAuthLost={() => setState('login')} />}
+            {tab === 'users' && isAdmin && <Users onAuthLost={() => setState('login')} me={me} />}
+          </Suspense>
         </main>
       </div>
     </div>

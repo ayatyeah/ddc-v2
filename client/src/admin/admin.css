@@ -96,9 +96,11 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .adm-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 /* Действия в колонке «Дата» — друг под другом, чтобы ничего не наезжало и было видно. */
 .adm-table .eval-btn, .adm-table .lead-del { display: block; width: -moz-fit-content; width: fit-content; }
-.adm-table thead th { text-align: left; padding: 10px 10px; font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-soft); background: color-mix(in srgb, var(--ink) 3%, transparent); border-bottom: 1px solid var(--line); white-space: nowrap; }
-.adm-table tbody td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-.adm-table tbody tr:hover { background: color-mix(in srgb, var(--blue) 5%, transparent); }
+/* Минималистичная таблица (@coss/table): прозрачная шапка, лёгкие разделители, воздух */
+.adm-table thead th { text-align: left; padding: 12px 12px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; background: transparent; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.adm-table tbody td { padding: 13px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); vertical-align: top; }
+.adm-table tbody tr:last-child td { border-bottom: none; }
+.adm-table tbody tr:hover { background: color-mix(in srgb, var(--blue) 4%, transparent); }
 .who-name { font-weight: 600; }
 .who-sub { color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
 .nowrap { white-space: nowrap; }
@@ -223,9 +225,10 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .axis-row { display: grid; grid-template-columns: 150px 1fr 38px; gap: 10px; align-items: center; margin: 6px 0; }
 .axis-name { font-size: 12.5px; color: var(--ink-soft); }
 .axis-name small { display: block; color: var(--ink-faint); font-size: 11px; }
-.axis-bar { height: 8px; border-radius: 980px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
-.axis-bar > span { display: block; height: 100%; border-radius: 980px; background: linear-gradient(90deg, #2f6fe0, #3a9fd6); }
-.axis-bar.risk > span { background: linear-gradient(90deg, #e08a0a, #e23b3b); }
+/* AI-оценка как минималистичный meter (@coss/meter): тонкая дорожка + ровная СИНЯЯ заливка */
+.axis-bar { height: 6px; border-radius: 980px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
+.axis-bar > span { display: block; height: 100%; border-radius: 980px; background: var(--blue); transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.axis-bar.risk > span { background: #d98a3a; }   /* риск — приглушённый янтарный (анти-скор) */
 .axis-val { font-size: 12.5px; font-weight: 700; text-align: right; color: var(--ink); }
 .axis-reason { grid-column: 1 / -1; font-size: 11.5px; color: var(--ink-faint); margin: -2px 0 4px; }
 

@@ -12,6 +12,7 @@ import Fog from './Fog.jsx';
 const Background3D = lazy(() => import('./Background3D.jsx'));
 import Particles from './Particles.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
+import { hideSplash } from '../splash.js';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 
@@ -44,6 +45,8 @@ export default function Site() {
   const Page = route.Comp;
   const isMobile = useIsMobile();
   const lowPower = useState(isLowPowerDevice)[0];   // считаем один раз на маунте
+
+  useEffect(() => { hideSplash(); }, []);   // контент сайта смонтирован — убираем загрузочный экран
 
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
