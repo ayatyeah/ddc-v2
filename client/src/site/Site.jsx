@@ -48,6 +48,9 @@ export default function Site() {
 
   useEffect(() => { hideSplash(); }, []);   // контент сайта смонтирован — убираем загрузочный экран
 
+  // Новая страница всегда открывается сверху (мгновенно, без smooth — переход маскирует прыжок).
+  useEffect(() => { try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch { window.scrollTo(0, 0); } }, [path]);
+
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
 

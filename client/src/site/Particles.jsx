@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { perf } from './perfProfile.js';
 
 /* Летающие светящиеся частицы на заднем фоне (#particles в styles.css).
    Голубые искорки мягко дрейфуют, пульсируют яркостью и светятся.
@@ -14,7 +15,9 @@ export default function Particles() {
     if (!canvas) return;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const ctx = canvas.getContext('2d', { alpha: true });
-    let w = 0, h = 0, raf = 0, running = false;
+    let w = 0, h = 0, raf = 0, running = false, lastMs = -1e9;
+    // Кадровый потолок слоя искорок на Firefox/слабых (~30fps) — фон декоративный
+    const FRAME_MS = (perf.lowPower || perf.engine === 'gecko') ? 33 : 0;
     const mobile = window.innerWidth < 760;
     const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 2);  // дешевле на телефоне
     let pts = [];
@@ -63,8 +66,11 @@ export default function Particles() {
       pts = Array.from({ length: count }, make);
     };
 
-    const render = () => {
+    const render = (now = 0) => {
       raf = 0;
+      if (running && !reduce) raf = requestAnimationFrame(render);
+      if (FRAME_MS && now - lastMs < FRAME_MS) return;   // пропуск кадра по потолку FPS
+      lastMs = now;
       ctx.clearRect(0, 0, w, h);
       ctx.globalCompositeOperation = 'lighter';
       for (const a of pts) {
@@ -81,7 +87,6 @@ export default function Particles() {
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
-      if (running && !reduce) raf = requestAnimationFrame(render);
     };
 
     const start = () => { if (!running) { running = true; if (!raf) raf = requestAnimationFrame(render); } };

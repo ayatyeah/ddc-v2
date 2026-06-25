@@ -28,6 +28,9 @@ export function initScene(canvas) {
   const LIGHT = true;
   // Потолок разрешения рендера: по движку/устройству (Firefox ниже — fill-rate тяжелее).
   const DPR_CAP = perf.dprCap;
+  // Ограничение кадров фоновой сцены: на Firefox/слабых — ~42fps (фон декоративный, зато GPU
+  // свободнее под скролл и переходы); на сильных blink — без ограничения (нативные 60+).
+  const FRAME_MS = (perf.lowPower || perf.engine === 'gecko') ? 24 : 0;
   // Адаптивное разрешение рендера: стартуем с максимума, а в кадре сами держим плавность —
   // на слабом телефоне тихо снижаем (для размытого фона незаметно), на сильном — десктопное.
   let curDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
@@ -370,12 +373,15 @@ export function initScene(canvas) {
 
   scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
 
-  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, prevT = 0;
+  const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, prevT = 0, lastFrameMs = -1e9;
   let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps для адаптивного DPR
   function loop() {
     raf = 0;
     if (running) raf = requestAnimationFrame(loop);
     const t = clock.getElapsedTime();
+    // Кадровый потолок: пропускаем кадр, если с прошлой отрисовки прошло мало времени
+    // (дёшево выходим до тяжёлого рендера — оставляем GPU/поток скроллу и переходам).
+    if (FRAME_MS) { const ms = t * 1000; if (ms - lastFrameMs < FRAME_MS) return; lastFrameMs = ms; }
     // Сглаживание по реальному времени кадра (а не фикс-шаг): переходы одинаково
     // плавные на 60/90/120 Гц и не «дёргаются» при просадках fps. dt ограничен,
     // чтобы после возврата из фоновой вкладки не было рывка.
