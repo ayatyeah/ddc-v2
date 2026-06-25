@@ -11,6 +11,8 @@ import Fog from './Fog.jsx';
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
 const Background3D = lazy(() => import('./Background3D.jsx'));
 import Particles from './Particles.jsx';
+import BgGlobe from './BgGlobe.jsx';
+import { perf } from './perfProfile.js';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
@@ -114,7 +116,10 @@ export default function Site() {
       <a href="#main" className="skip-link">К основному содержимому</a>
       <div id="scroll-bg" aria-hidden="true" />
       <div id="scroll-aurora" aria-hidden="true" />
-      <div id="bg-planet" aria-hidden="true" />
+      {/* Фоновая планета: WebGL-глобус (cobe); на слабых устройствах — статичный 2D-кружок */}
+      <ErrorBoundary fallback={<div id="bg-planet" aria-hidden="true" />}>
+        {perf.lowPower ? <div id="bg-planet" aria-hidden="true" /> : <BgGlobe />}
+      </ErrorBoundary>
       <div id="scroll-depth" aria-hidden="true" />
       <ErrorBoundary fallback={null}>
         <Suspense fallback={null}>
