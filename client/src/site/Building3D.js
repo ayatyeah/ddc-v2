@@ -6,7 +6,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { perf } from './perfProfile.js';
 
 export function initBuilding(canvas) {
@@ -22,8 +21,8 @@ export function initBuilding(canvas) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  // PMREM/RoomEnvironment убран — самая тяжёлая часть init (зацеп при переходе). Отражения
+  // теперь от направленного света/материалов; инициализация заметно короче.
 
   // ── Размеры башни ──────────────────────────────────────────────────────────
   const W = 5.0, D = 4.2, H = 24, podTop = 1.0;
@@ -205,7 +204,7 @@ export function initBuilding(canvas) {
     dispose() {
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); controls.dispose();
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const m = o.material; (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose()); } });
-      pmrem.dispose(); renderer.dispose();
+      renderer.dispose();
     },
   };
 }

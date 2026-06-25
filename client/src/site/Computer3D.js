@@ -4,7 +4,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { perf } from './perfProfile.js';
 
 export function initComputer(canvas, opts = {}) {
@@ -22,8 +21,8 @@ export function initComputer(canvas, opts = {}) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  // PMREM/RoomEnvironment убран — это была самая тяжёлая часть инициализации (зацеп при
+  // переходе). Отражения теперь от направленного света/материалов; init заметно короче.
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
   camera.position.set(0, 2.9, 12.5);
@@ -210,7 +209,7 @@ export function initComputer(canvas, opts = {}) {
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); controls.dispose();
       screenTex.dispose();
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const m = o.material; (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose()); } });
-      pmrem.dispose(); renderer.dispose();
+      renderer.dispose();
     },
   };
 }
