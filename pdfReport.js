@@ -36,16 +36,9 @@ const STATUS_LABELS = { new: 'Новый', in_progress: 'В процессе', o
 const SPEED = { fast: 'Быстро', medium: 'Средне', slow: 'Долго' };
 const PAID = { yes: 'Вовремя', partial: 'С задержкой', no: 'Не оплатил' };
 const CLARITY = { low: 'Низкая', medium: 'Средняя', high: 'Высокая' };
-const AXIS_ORDER = ['value_ltv', 'lead_quality', 'conversion_prob', 'satisfaction', 'repeat_potential', 'risk', 'urgency'];
-const AXIS_LABELS = {
-  value_ltv: 'Ценность / LTV', lead_quality: 'Качество заявки', conversion_prob: 'Вероятность конверсии',
-  satisfaction: 'Удовлетворённость', repeat_potential: 'Повторное сотрудничество',
-  risk: 'Риск / проблемность (ниже — лучше)', urgency: 'Срочность',
-};
 
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch { return '—'; } };
 const fmtDT = (iso) => { try { return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } };
-const verdict = (s) => (s == null ? '—' : s >= 70 ? 'Высокий потенциал' : s >= 40 ? 'Средний потенциал' : 'Низкий потенциал');
 const dash = (v) => (v === 0 || v ? String(v) : '—');
 const money = (v) => { const n = Number(v); return n ? n.toLocaleString('ru-RU') + ' ₸' : '—'; };
 
@@ -114,7 +107,7 @@ function note(doc, label, text) {
   doc.y = y + h; doc.moveDown(0.3);
 }
 
-/* Сборка PDF. lead — строка лида (с score_json, rating, assignee_name…),
+/* Сборка PDF. lead — строка лида (rating, assignee_name…),
    ev — { facts, prior_orders, notes }. Возвращает Promise<Buffer>. */
 function buildReportPDF(lead, ev) {
   return new Promise((resolve, reject) => {
@@ -128,7 +121,6 @@ function buildReportPDF(lead, ev) {
     doc.registerFont('B', FONT_B);
 
     const facts = ev && ev.facts && typeof ev.facts === 'object' ? ev.facts : {};
-    const axes = (lead.score_json && lead.score_json.axes) || {};
     const who = lead.assignee_name || lead.assignee_username || '—';
 
     // ── Шапка: логотип слева + заголовок + мета справа ──
@@ -167,7 +159,6 @@ function buildReportPDF(lead, ev) {
     table(doc, COL_R, [
       [{ text: 'Источник', font: 'B', fill: HEAD_BG }, { text: 'Оценка', font: 'B', fill: HEAD_BG }, { text: 'Комментарий', font: 'B', fill: HEAD_BG }],
       ['Оценка клиента (с сайта)', { text: lead.rating ? `${lead.rating} / 5` : '—', color: GREEN, font: 'B' }, '—'],
-      ['ИИ-скоринг (композит)', { text: lead.score != null ? `${lead.score}/100` : '—', color: GREEN, font: 'B' }, verdict(lead.score)],
       ['Оценка сотрудника', { text: facts.repeat_prob != null ? `повтор ${facts.repeat_prob}/10` : '—', color: GREEN, font: 'B' },
         [facts.conflict ? 'был конфликт' : 'без конфликтов', facts.ts_clarity ? `ТЗ: ${CLARITY[facts.ts_clarity]}` : ''].filter(Boolean).join('; ') || '—'],
     ]);
@@ -188,16 +179,6 @@ function buildReportPDF(lead, ev) {
     ]);
     note(doc, 'Комментарий сотрудника:', facts.comment || (ev && ev.notes) || '');
     note(doc, 'Комментарий менеджера:', lead.admin_comment || '');
-
-    // ── AI-разбор по 7 осям ──
-    section(doc, `ИИ-разбор по 7 осям${lead.score != null ? `  (итог: ${lead.score}/100 — ${verdict(lead.score)})` : ''}`);
-    const COL_A = [{ w: 200, font: 'B' }, { w: 50, align: 'center' }, { w: CW - 250 }];
-    const axisRows = [[{ text: 'Ось', font: 'B', fill: HEAD_BG }, { text: 'Балл', font: 'B', fill: HEAD_BG, align: 'center' }, { text: 'Обоснование ИИ', font: 'B', fill: HEAD_BG }]];
-    for (const k of AXIS_ORDER) {
-      const a = axes[k] || { score: 0, reason: '' };
-      axisRows.push([AXIS_LABELS[k], { text: String(a.score), font: 'B', align: 'center', color: GREEN }, a.reason || '—']);
-    }
-    table(doc, COL_A, axisRows);
 
     // ── Подвал ──
     doc.moveDown(1.2);

@@ -15,6 +15,7 @@ function read(key, fallback, allowed) {
 
 let state = {
   lang: read('ddc_lang', 'ru', LANGS),
+  a11y: read('ddc_a11y', 'off', ['on', 'off']),   // версия для слабовидящих
 };
 
 const listeners = new Set();
@@ -30,10 +31,23 @@ export function setLang(lang) {
   emit();
 }
 
-// Применяем сразу при загрузке модуля: язык + фиксированная тёмная тема.
+// Версия для слабовидящих: крупный шрифт, высокий контраст, без 3D/анимаций.
+// Состояние держим в <html data-a11y> — стили подхватываются из CSS.
+export function setA11y(on) {
+  const v = on ? 'on' : 'off';
+  if (state.a11y === v) return;
+  state = { ...state, a11y: v };
+  try { localStorage.setItem('ddc_a11y', v); } catch {}
+  document.documentElement.setAttribute('data-a11y', v);
+  emit();
+}
+
+// Применяем сразу при загрузке модуля: язык + фиксированная тёмная тема + режим a11y.
 document.documentElement.lang = state.lang;
 document.documentElement.setAttribute('data-theme', 'dark');
+document.documentElement.setAttribute('data-a11y', state.a11y);
 
 export function useStore() { return useSyncExternalStore(subscribe, snapshot); }
 export function useLang() { return useStore().lang; }
+export function useA11y() { return useStore().a11y === 'on'; }
 export { LANGS };

@@ -7,19 +7,6 @@ const STATUS_LABELS = { new: 'Новый', in_progress: 'В процессе', o
 const STATUS_ORDER = ['new', 'in_progress', 'on_hold', 'served', 'rejected'];
 const FILTERS = [['', 'Все'], ['new', 'Новые'], ['in_progress', 'В процессе'], ['on_hold', 'Отложены'], ['served', 'Обслужены'], ['rejected', 'Отказ']];
 
-// 7 осей AI-скоринга — для разворачиваемой разбивки под лидом
-const AXIS_ORDER = ['value_ltv', 'lead_quality', 'conversion_prob', 'satisfaction', 'repeat_potential', 'risk', 'urgency'];
-const AXIS_LABELS = {
-  value_ltv: ['Ценность / LTV', 'масштаб, бюджет, повтор'],
-  lead_quality: ['Качество заявки', 'конкретика, адекватность'],
-  conversion_prob: ['Вероятность конверсии', 'станет ли оплатой'],
-  satisfaction: ['Удовлетворённость', 'конфликт, правки, общение'],
-  repeat_potential: ['Повторное сотрудничество', 'приведёт ли ещё'],
-  risk: ['Риск / проблемность', 'анти-скоринг'],
-  urgency: ['Срочность', ''],
-};
-function scoreClass(s) { if (s == null) return 's-none'; if (s >= 70) return 's-hi'; if (s >= 40) return 's-mid'; return 's-lo'; }
-
 function fmtDate(iso) {
   try {
     return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -36,7 +23,6 @@ function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onA
     await patch({ admin_comment: comment });
     setSaved(true); setTimeout(() => setSaved(false), 1500);
   };
-  const axes = row.score_json && row.score_json.axes;
 
   return (
     <>
@@ -52,11 +38,6 @@ function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onA
           {row.message && <div className="who-sub lead-msg-1">{row.message}</div>}
         </td>
         <td data-label="Статус"><span className={`st-badge st-${row.status}`}>{STATUS_LABELS[row.status]}</span></td>
-        <td data-label="Скор">
-          {row.score != null
-            ? <span className={`score-badge ${scoreClass(row.score)}`}>{row.score}</span>
-            : <span className="score-badge s-none">—</span>}
-        </td>
         {showAssignee && (
           <td data-label="Исполнитель">
             <span className={row.assignee_name || row.assignee_username ? 'who-name' : 'who-sub'}>
@@ -129,27 +110,8 @@ function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onA
                 )}
               </div>
 
-              {axes && (
-                <div className="ld-block ld-full">
-                  <div className="ld-lab">AI-разбор по 7 осям</div>
-                  {AXIS_ORDER.map((k) => {
-                    const a = axes[k] || { score: 0, reason: '' };
-                    return (
-                      <div key={k}>
-                        <div className="axis-row">
-                          <div className="axis-name">{AXIS_LABELS[k][0]}<small>{AXIS_LABELS[k][1]}</small></div>
-                          <div className={`axis-bar ${k === 'risk' ? 'risk' : ''}`}><span style={{ width: `${a.score}%` }} /></div>
-                          <div className="axis-val">{a.score}</div>
-                        </div>
-                        {a.reason && <div className="axis-reason">{a.reason}</div>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* PDF-отчёт доступен для обслуженных клиентов с ИИ-скором и оценочным листом */}
-              {row.status === 'served' && row.score != null && row.has_evaluation && (
+              {/* PDF-отчёт доступен для обслуженных клиентов с заполненным оценочным листом */}
+              {row.status === 'served' && row.has_evaluation && (
                 <div className="ld-block ld-full">
                   <button className="report-btn" onClick={() => downloadClientReport(row)}>
                     ⬇ Скачать PDF-отчёт
@@ -183,12 +145,11 @@ export default function Leads({ onAuthLost, canEdit = true, canAssign = false, i
   const [empty, setEmpty] = useState(false);
   const [evalLead, setEvalLead] = useState(null);
   const [expanded, setExpanded] = useState(() => new Set());
-  const [sortScore, setSortScore] = useState(false);
   const debRef = useRef(0);
   const showAssignee = !isStaff;
-  const colCount = showAssignee ? 7 : 6;
+  const colCount = showAssignee ? 6 : 5;
 
-  const toggleScore = (id) => setExpanded((prev) => {
+  const toggleRow = (id) => setExpanded((prev) => {
     const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
   });
   const onSavedEval = (id) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, has_evaluation: true } : r)));
@@ -283,9 +244,6 @@ export default function Leads({ onAuthLost, canEdit = true, canAssign = false, i
             <button key={f} className={f === filter ? 'active' : ''} onClick={() => setFilter(f)}>{label}</button>
           ))}
         </div>
-        <button className={`adm-ghost ${sortScore ? 'active' : ''}`} onClick={() => setSortScore((v) => !v)}>
-          {sortScore ? 'Сортировка: по скору ▼' : 'Сортировать по скору'}
-        </button>
         <button className="adm-ghost" onClick={() => { loadStats(); loadLeads(filter, q); }}>Обновить</button>
       </div>
 
@@ -293,17 +251,17 @@ export default function Leads({ onAuthLost, canEdit = true, canAssign = false, i
         <table className="adm-table">
           <thead>
             <tr>
-              <th>Клиент</th><th>Вопрос</th><th>Статус</th><th>Скор</th>
+              <th>Клиент</th><th>Вопрос</th><th>Статус</th>
               {showAssignee && <th>Исполнитель</th>}
               <th className="nowrap">Дата</th>
               <th aria-hidden="true" />
             </tr>
           </thead>
           <tbody>
-            {(sortScore ? [...rows].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)) : rows).map((row) => (
+            {rows.map((row) => (
               <Row key={row.id} row={row} onPatch={patch} canEdit={canEdit} highlight={focusId === row.id} onDelete={del}
                 canAssign={canAssign} staff={staff} onAssign={assign} showAssignee={showAssignee}
-                expanded={expanded.has(row.id)} onToggle={toggleScore} onOpenEval={setEvalLead} colCount={colCount} />
+                expanded={expanded.has(row.id)} onToggle={toggleRow} onOpenEval={setEvalLead} colCount={colCount} />
             ))}
           </tbody>
         </table>

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useA11y } from '../store.js';
 import { useRoute } from './router.js';
 import { ROUTES } from './pages.jsx';
 import Nav from './Nav.jsx';
@@ -45,6 +46,7 @@ export default function Site() {
   const Page = route.Comp;
   const isMobile = useIsMobile();
   const lowPower = useState(isLowPowerDevice)[0];   // считаем один раз на маунте
+  const a11y = useA11y();   // версия для слабовидящих — без 3D, частиц и тумана
 
   useEffect(() => { hideSplash(); }, []);   // контент сайта смонтирован — убираем загрузочный экран
 
@@ -147,14 +149,16 @@ export default function Site() {
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="bg-planet" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
-      <ErrorBoundary fallback={null}>
-        <Suspense fallback={null}>
-          <Background3D onReady={onReady} />
-        </Suspense>
-      </ErrorBoundary>
+      {!a11y && (
+        <ErrorBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <Background3D onReady={onReady} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
       {/* Немного мелких частиц на фоне (лёгкий слой). Тяжёлый DataFlow отключён ради плавности. */}
-      {!isMobile && !lowPower && <Particles />}
-      <Fog />
+      {!isMobile && !lowPower && !a11y && <Particles />}
+      {!a11y && <Fog />}
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
       <Brand />

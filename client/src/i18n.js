@@ -58,6 +58,13 @@ export const DICT = {
     'asst.title': 'Ассистент ЦЦР', 'asst.status': 'Онлайн · отвечает сразу',
     'asst.greeting': 'Здравствуйте! Я ассистент Центра цифрового развития. Выберите вопрос — отвечу сразу.',
     'footer.rights': 'Все права защищены', 'footer.admin': 'Админ-панель',
+    'nav.projects': 'Проекты',
+    'a11y.toggle': 'Версия для слабовидящих',
+    'services.apply': 'Оставить заявку',
+    'services.select': 'Услуга',
+    'projects.eyebrow': 'Проекты и инновации',
+    'projects.title': 'Технологии национального масштаба',
+    'projects.sub': 'Ключевые продукты и инициативы, которые мы разрабатываем и сопровождаем для Национального Банка и финансового сектора Казахстана — от больших данных до цифровых активов.',
   },
   kk: {
     'nav.home': 'Басты бет', 'nav.services': 'Қызметтер', 'nav.about': 'Біз туралы', 'nav.news': 'Жаңалықтар', 'nav.contacts': 'Байланыс',
@@ -116,6 +123,13 @@ export const DICT = {
     'asst.title': 'ЦДО Көмекшісі', 'asst.status': 'Онлайн · бірден жауап береді',
     'asst.greeting': 'Сәлеметсіз бе! Мен Цифрлық даму орталығының көмекшісімін. Сұрақты таңдаңыз — бірден жауап беремін.',
     'footer.rights': 'Барлық құқықтар қорғалған', 'footer.admin': 'Әкімші панелі',
+    'nav.projects': 'Жобалар',
+    'a11y.toggle': 'Нашар көретіндерге арналған нұсқа',
+    'services.apply': 'Өтінім қалдыру',
+    'services.select': 'Қызмет',
+    'projects.eyebrow': 'Жобалар мен инновациялар',
+    'projects.title': 'Ұлттық ауқымдағы технологиялар',
+    'projects.sub': 'Ұлттық Банк пен Қазақстанның қаржы секторы үшін әзірлейтін және сүйемелдейтін негізгі өнімдер мен бастамалар — үлкен деректерден цифрлық активтерге дейін.',
   },
   en: {
     'nav.home': 'Home', 'nav.services': 'Services', 'nav.about': 'About', 'nav.news': 'News', 'nav.contacts': 'Contacts',
@@ -174,6 +188,13 @@ export const DICT = {
     'asst.title': 'DDC Assistant', 'asst.status': 'Online · instant replies',
     'asst.greeting': 'Hello! I am the Digital Development Center assistant. Pick a question — I will answer right away.',
     'footer.rights': 'All rights reserved', 'footer.admin': 'Admin panel',
+    'nav.projects': 'Projects',
+    'a11y.toggle': 'Version for the visually impaired',
+    'services.apply': 'Request service',
+    'services.select': 'Service',
+    'projects.eyebrow': 'Projects & Innovation',
+    'projects.title': 'Technology at a national scale',
+    'projects.sub': 'Key products and initiatives we build and operate for the National Bank and Kazakhstan’s financial sector — from big data to digital assets.',
   },
 };
 
@@ -239,6 +260,30 @@ export const VALUES = {
   kk: ['Инновациялар', 'Ашықтық', 'Сапа', 'Сенімділік', 'Серіктестік'],
   en: ['Innovation', 'Transparency', 'Quality', 'Reliability', 'Partnership'],
 };
+
+/* Ключевые технологические проекты ЦЦР (для раздела «Проекты и инновации»).
+   Иконка и цвет-акцент задаются в компоненте по индексу; текст — по языкам. */
+export const PROJECTS = {
+  ru: [
+    { title: 'Фабрика данных', sub: 'Data Factory', tagline: 'Корпоративная платформа дата-аналитики и управления большими данными.', desc: 'Единое хранилище, ETL-конвейеры и инструменты самообслуживания: собираем, обрабатываем и визуализируем большие данные для решений Национального Банка.', tags: ['Big Data', 'ETL', 'BI', 'Дата-аналитика'] },
+    { title: 'NBK AI Platform', sub: 'Искусственный интеллект', tagline: 'Собственная защищённая инфраструктура искусственного интеллекта Нацбанка.', desc: 'Закрытый контур для обучения и эксплуатации ИИ-моделей: безопасная работа с данными, MLOps и внутренние ИИ-сервисы без выхода во внешние облака.', tags: ['AI/ML', 'MLOps', 'Защищённый контур', 'On-premise'] },
+    { title: 'Портал госзакупок НБК', sub: 'zakup.nationalbank.kz', tagline: 'Разработка и операторство единой электронной площадки закупок.', desc: 'Прозрачные процедуры для заказчиков и поставщиков. ЦЦР — разработчик и оператор площадки с интеграцией по Open API.', tags: ['e-Procurement', 'Госуслуги', 'Open API'] },
+    { title: 'Регуляторная песочница', sub: 'Цифровые активы', tagline: 'Технологическая поддержка проектов в сфере цифровых активов.', desc: 'Среда для пилотирования финтех-решений под контролем регулятора: криптокарты, стейблкоины и токенизация активов на пути к Цифровому тенге.', tags: ['Крипто', 'Стейблкоины', 'Токенизация', 'Цифровой тенге'] },
+  ],
+  kk: [
+    { title: 'Деректер фабрикасы', sub: 'Data Factory', tagline: 'Дата-аналитика және үлкен деректерді басқарудың корпоративтік платформасы.', desc: 'Бірыңғай қойма, ETL-конвейерлер және өзіне-өзі қызмет көрсету құралдары: Ұлттық Банктің шешімдері үшін үлкен деректерді жинаймыз, өңдейміз және визуализациялаймыз.', tags: ['Big Data', 'ETL', 'BI', 'Дата-аналитика'] },
+    { title: 'NBK AI Platform', sub: 'Жасанды интеллект', tagline: 'Ұлттық Банктің жеке қорғалған жасанды интеллект инфрақұрылымы.', desc: 'ЖИ-модельдерін оқыту мен пайдалануға арналған жабық контур: деректермен қауіпсіз жұмыс, MLOps және сыртқы бұлтсыз ішкі ЖИ-сервистер.', tags: ['AI/ML', 'MLOps', 'Қорғалған контур', 'On-premise'] },
+    { title: 'НБ мемсатып алу порталы', sub: 'zakup.nationalbank.kz', tagline: 'Бірыңғай электрондық сатып алу алаңын әзірлеу және операторлық.', desc: 'Тапсырыс берушілер мен жеткізушілерге ашық рәсімдер. ЦДО — Open API интеграциясы бар алаңның әзірлеушісі әрі операторы.', tags: ['e-Procurement', 'Мемсервистер', 'Open API'] },
+    { title: 'Реттеуші құм жәшігі', sub: 'Цифрлық активтер', tagline: 'Цифрлық активтер саласындағы жобаларды технологиялық қолдау.', desc: 'Реттеуші бақылауындағы финтех-шешімдерді сынақтан өткізу ортасы: криптокарталар, стейблкоиндер және активтерді токенизациялау — Цифрлық теңгеге қарай.', tags: ['Крипто', 'Стейблкоин', 'Токенизация', 'Цифрлық теңге'] },
+  ],
+  en: [
+    { title: 'Data Factory', sub: 'Big Data', tagline: 'A corporate platform for data analytics and big-data management.', desc: 'A unified data lake, ETL pipelines and self-service tools: we collect, process and visualize big data to power National Bank decisions.', tags: ['Big Data', 'ETL', 'BI', 'Analytics'] },
+    { title: 'NBK AI Platform', sub: 'Artificial Intelligence', tagline: 'The National Bank’s own secure artificial-intelligence infrastructure.', desc: 'A closed environment to train and run AI models: secure data handling, MLOps and internal AI services with no external cloud.', tags: ['AI/ML', 'MLOps', 'Secure perimeter', 'On-premise'] },
+    { title: 'NBK Procurement Portal', sub: 'zakup.nationalbank.kz', tagline: 'Development and operation of the unified e-procurement platform.', desc: 'Transparent procedures for customers and suppliers. DDC is the platform’s developer and operator, integrated via Open API.', tags: ['e-Procurement', 'GovTech', 'Open API'] },
+    { title: 'Regulatory Sandbox', sub: 'Digital Assets', tagline: 'Technology support for digital-asset projects.', desc: 'An environment to pilot fintech solutions under regulatory oversight: crypto cards, stablecoins and asset tokenization on the path to the Digital Tenge.', tags: ['Crypto', 'Stablecoins', 'Tokenization', 'Digital Tenge'] },
+  ],
+};
+
 
 /* Факты для экрана 3D-компьютера (по языкам). */
 export const WORK_FACTS = {

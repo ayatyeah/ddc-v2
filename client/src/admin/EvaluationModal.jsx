@@ -12,7 +12,7 @@ const EMPTY = {
 };
 
 /* Оценочный лист = ФАКТЫ по сделке (заполняет сотрудник) + метрики проекта (пока вручную)
-   + авто «сколько раз клиент уже обращался». На основе этих данных ИИ выставляет скоринг. */
+   + авто «сколько раз клиент уже обращался». Эти данные попадают в PDF-отчёт по клиенту. */
 export default function EvaluationModal({ lead, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY);
   const [prior, setPrior] = useState(0);

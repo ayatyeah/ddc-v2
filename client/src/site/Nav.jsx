@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useLang, setLang, LANGS } from '../store.js';
+import { useLang, setLang, LANGS, useA11y, setA11y } from '../store.js';
 import { t } from '../i18n.js';
 import { useRoute, navigate } from './router.js';
+import { IcoEye } from './icons.jsx';
 
 const LINKS = [
   { to: '/', k: 'nav.home' },
   { to: '/uslugi', k: 'nav.services' },
+  { to: '/proekty', k: 'nav.projects' },
   { to: '/o-nas', k: 'nav.about' },
   { to: '/kontakty', k: 'nav.contacts' },
 ];
 
 export default function Nav() {
   const lang = useLang();
+  const a11y = useA11y();
   const path = useRoute();
   const [open, setOpen] = useState(false);
 
@@ -40,6 +43,10 @@ export default function Nav() {
               </button>
             ))}
           </div>
+          <button className={`icon-btn a11y-btn ${a11y ? 'active' : ''}`} onClick={() => setA11y(!a11y)}
+            aria-pressed={a11y} title={t(lang, 'a11y.toggle')} aria-label={t(lang, 'a11y.toggle')}>
+            <IcoEye size={20} />
+          </button>
           <button className="icon-btn nav-burger" onClick={() => setOpen((o) => !o)}
             aria-label={open ? 'Закрыть меню' : 'Меню'} aria-expanded={open} aria-controls="nav-menu">
             <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">

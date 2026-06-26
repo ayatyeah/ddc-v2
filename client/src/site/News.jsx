@@ -119,7 +119,7 @@ export default function News() {
                   {items.map((row) => (
                     <article className="nc-card" key={row.id} onClick={() => setActive(row)}>
                       <div className="ph" style={{ background: row.color || '#1a4aaa' }}>
-                        {row.image && <img src={row.image} alt={pick(row, 'title', lang)} loading="lazy"
+                        {row.image && <img src={row.image} alt={pick(row, 'title', lang)} loading="lazy" decoding="async"
                           style={{ objectFit: row.image_fit || 'cover', objectPosition: row.image_pos || '50% 50%' }} />}
                       </div>
                       <div className="body">

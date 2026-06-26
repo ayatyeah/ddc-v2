@@ -196,7 +196,6 @@ async function fetchLeadRow(id) {
   const { rows } = await db.query(
     `SELECT l.id, l.full_name, l.email, l.phone, l.subject, l.message, l.status,
             l.admin_comment, l.rating, l.assignee_id, l.assigned_by, l.assigned_at,
-            l.score, l.score_json, l.score_at,
             u.username AS assignee_username, u.full_name AS assignee_name,
             (e.lead_id IS NOT NULL) AS has_evaluation,
             l.created_at, l.updated_at
@@ -337,7 +336,6 @@ app.get('/api/leads', auth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT l.id, l.full_name, l.email, l.phone, l.subject, l.message, l.status,
               l.admin_comment, l.rating, l.assignee_id, l.assigned_by, l.assigned_at,
-              l.score, l.score_json, l.score_at,
               u.username AS assignee_username, u.full_name AS assignee_name,
               (e.lead_id IS NOT NULL) AS has_evaluation,
               l.created_at, l.updated_at
@@ -592,7 +590,7 @@ app.post('/api/leads/:id/evaluation', auth, requireRole('admin', 'manager', 'sta
 });
 
 // ── PDF-отчёт по клиенту (серверная генерация) ───────────────────────────────
-// Доступен только для обслуженных клиентов с ИИ-скором и заполненным оценочным листом.
+// Доступен только для обслуженных клиентов с заполненным оценочным листом.
 // staff — только по своим лидам; admin/manager/editor — по любым.
 function reportFileName(name) {
   const safe = String(name || '').trim().replace(/\s+/g, '_').replace(/[\\/:*?"<>|.]+/g, '').slice(0, 80);
@@ -606,8 +604,8 @@ app.get('/api/leads/:id/report.pdf', auth, async (req, res) => {
     if (!(await leadOwnedOrManager(req, id))) return res.status(403).json({ error: 'Это не ваш лид' });
     const lead = await fetchLeadRow(id);
     if (!lead) return res.status(404).json({ error: 'Клиент не найден' });
-    if (lead.status !== 'served' || lead.score == null || !lead.has_evaluation) {
-      return res.status(400).json({ error: 'Отчёт доступен только для обслуженных клиентов с ИИ-оценкой и оценочным листом' });
+    if (lead.status !== 'served' || !lead.has_evaluation) {
+      return res.status(400).json({ error: 'Отчёт доступен только для обслуженных клиентов с заполненным оценочным листом' });
     }
     if (!fontsAvailable()) return res.status(500).json({ error: 'Шрифты для PDF не найдены на сервере (assets/fonts)' });
 
@@ -726,6 +724,109 @@ app.delete('/api/admin/news/:id', auth, requireRole('admin', 'editor'), async (r
   } catch (e) {
     console.error('DELETE /api/admin/news:', e.message);
     res.status(500).json({ error: 'Не удалось удалить' });
+  }
+});
+
+// ── Услуги (CRUD) — управляются из админки, показываются на сайте ──────────────
+// Названия/описания на 3 языках. Иконка — ключ из фиксированного набора (тот же,
+// что и на сайте). При клике по услуге на сайте открывается форма заявки.
+const SERVICE_ICONS = ['code', 'link', 'cart', 'chart', 'support', 'shield', 'cpu', 'coin'];
+const SERVICE_COLS = `id, name_ru, name_kk, name_en, desc_ru, desc_kk, desc_en, icon, color, sort_order, published, created_at, updated_at`;
+
+function normalizeService(body = {}) {
+  const s = (v, n) => String(v ?? '').slice(0, n);
+  let color = s(body.color, 9).trim() || '#2f6fe0';
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) color = '#2f6fe0';
+  const icon = SERVICE_ICONS.includes(body.icon) ? body.icon : 'code';
+  let order = parseInt(body.sort_order, 10);
+  if (!Number.isInteger(order) || order < 0) order = 0;
+  if (order > 9999) order = 9999;
+  return {
+    name_ru: s(body.name_ru, 200), name_kk: s(body.name_kk, 200), name_en: s(body.name_en, 200),
+    desc_ru: s(body.desc_ru, 800), desc_kk: s(body.desc_kk, 800), desc_en: s(body.desc_en, 800),
+    icon, color, sort_order: order,
+    published: body.published === undefined ? true : !!body.published,
+  };
+}
+
+// Публично — только опубликованные, в порядке сортировки
+app.get('/api/services', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT ${SERVICE_COLS} FROM services WHERE published = TRUE ORDER BY sort_order ASC, id ASC LIMIT 100`
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error('GET /api/services:', e.message);
+    res.status(500).json({ error: 'Не удалось загрузить услуги' });
+  }
+});
+
+app.get('/api/admin/services', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT ${SERVICE_COLS} FROM services ORDER BY sort_order ASC, id ASC LIMIT 200`);
+    res.json(rows);
+  } catch (e) {
+    console.error('GET /api/admin/services:', e.message);
+    res.status(500).json({ error: 'Ошибка чтения услуг' });
+  }
+});
+
+app.post('/api/admin/services', auth, requireRole('admin', 'editor'), async (req, res) => {
+  const n = normalizeService(req.body);
+  if (!n.name_ru.trim() && !n.name_en.trim() && !n.name_kk.trim()) {
+    return res.status(400).json({ error: 'Укажите название хотя бы на одном языке' });
+  }
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO services (name_ru,name_kk,name_en,desc_ru,desc_kk,desc_en,icon,color,sort_order,published)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING ${SERVICE_COLS}`,
+      [n.name_ru,n.name_kk,n.name_en,n.desc_ru,n.desc_kk,n.desc_en,n.icon,n.color,n.sort_order,n.published]
+    );
+    logAudit(req, 'service', rows[0].id, 'create', `Создана услуга: ${rows[0].name_ru || rows[0].name_en || rows[0].name_kk || ('#'+rows[0].id)}`);
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    console.error('POST /api/admin/services:', e.message);
+    res.status(500).json({ error: 'Не удалось создать услугу' });
+  }
+});
+
+app.put('/api/admin/services/:id', auth, requireRole('admin', 'editor'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
+  const n = normalizeService(req.body);
+  try {
+    const { rows } = await db.query(
+      `UPDATE services SET
+        name_ru=$1,name_kk=$2,name_en=$3,desc_ru=$4,desc_kk=$5,desc_en=$6,
+        icon=$7,color=$8,sort_order=$9,published=$10,updated_at=now()
+       WHERE id=$11
+       RETURNING ${SERVICE_COLS}`,
+      [n.name_ru,n.name_kk,n.name_en,n.desc_ru,n.desc_kk,n.desc_en,n.icon,n.color,n.sort_order,n.published, id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Услуга не найдена' });
+    logAudit(req, 'service', id, 'update', `Изменена услуга: ${rows[0].name_ru || rows[0].name_en || rows[0].name_kk || ('#'+id)}`);
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('PUT /api/admin/services:', e.message);
+    res.status(500).json({ error: 'Не удалось обновить услугу' });
+  }
+});
+
+app.delete('/api/admin/services/:id', auth, requireRole('admin', 'editor'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Некорректный id' });
+  try {
+    const pre = await db.query(`SELECT name_ru, name_en, name_kk FROM services WHERE id = $1`, [id]);
+    const { rowCount } = await db.query(`DELETE FROM services WHERE id = $1`, [id]);
+    if (!rowCount) return res.status(404).json({ error: 'Услуга не найдена' });
+    const tt = pre.rows[0] ? (pre.rows[0].name_ru || pre.rows[0].name_en || pre.rows[0].name_kk) : ('#'+id);
+    logAudit(req, 'service', id, 'delete', `Удалена услуга: ${tt}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /api/admin/services:', e.message);
+    res.status(500).json({ error: 'Не удалось удалить услугу' });
   }
 });
 
@@ -907,11 +1008,11 @@ app.get('/api/admin/ai/analysis', auth, async (req, res) => {
 app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor', 'manager'), async (req, res) => {
   const force = !!(req.body && req.body.force);
   try {
-    // ИИ-анализ воронки — только по активным заявкам. Обслуженные и отказанные
-    // исключаем: по ним работа завершена (обслуженные оцениваются скорингом отдельно).
+    // ИИ-анализ людей, заполнивших форму: сегменты заявителей и частые темы запросов
+    // по ВСЕМ заявкам. DDC ничего не продаёт — воронку/конверсию здесь не считаем.
     const { rows: leads } = await db.query(
       `SELECT id, full_name, email, phone, subject, message, status, admin_comment, rating, created_at, updated_at
-       FROM leads WHERE status NOT IN ('served','rejected') ORDER BY created_at DESC LIMIT 200`
+       FROM leads ORDER BY created_at DESC LIMIT 200`
     );
     const sig = leadsSignature(leads);
 
@@ -923,21 +1024,21 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor', 'manager'
     }
 
     if (!leads.length) {
-      const empty = { summary: 'Активных заявок нет — анализировать нечего (обслуженные и отказы не анализируются).', important_clients: [], main_problems: [], recommendations: [] };
+      const empty = { summary: 'Заявок пока нет — анализировать нечего.', segments: [], topics: [], important_clients: [], recommendations: [] };
       await db.query(`INSERT INTO ai_analysis (leads_sig, content) VALUES ($1, $2)`, [sig, JSON.stringify(empty)]);
       return res.json({ analysis: empty, fromCache: false });
     }
 
     const compact = leads.slice(0, 60).map((l) => ({
       id: l.id, name: l.full_name,
-      subject: l.subject, message: (l.message || '').slice(0, 120),
+      subject: l.subject, message: (l.message || '').slice(0, 140),
       status: l.status, rating: l.rating, note: (l.admin_comment || '').slice(0, 100),
     }));
     const prompt =
-`Ты аналитик по работе с клиентами IT-компании DDC. rating (0-5) — оценка клиента сотрудником (важность/качество клиента), не отзыв клиента.
+`Ты — аналитик обращений в Центр цифрового развития (ЦЦР/DDC). DDC ничего НЕ продаёт — это центр развития, поэтому НЕ оценивай воронку, конверсию или выручку. Твоя задача — понять ЛЮДЕЙ, которые заполнили форму на сайте: кто они, зачем обращаются и какие темы запросов преобладают.
 Проанализируй заявки и верни ТОЛЬКО JSON такого вида:
-{"summary":"2-3 предложения: состояние клиентской базы","important_clients":[{"id":число,"name":"имя","priority":"high|medium|low","reason":"почему важен","action":"что конкретно сделать с этим клиентом"}],"main_problems":[{"problem":"кратко","action":"что предпринять, чтобы решить"}],"recommendations":["конкретный следующий шаг для команды"]}
-До 6 важных клиентов. В action и recommendations — конкретные действия (а не общие слова). Кратко, по-русски. Заявки: ${JSON.stringify(compact)}`;
+{"summary":"2-3 предложения: кто обращается и с чем","segments":[{"name":"короткое название сегмента заявителей","count":число_заявок_в_сегменте,"description":"кто это и что им нужно","action":"как с ними работать"}],"topics":[{"topic":"тема/тип запроса","count":число}],"important_clients":[{"id":число,"name":"имя","priority":"high|medium|low","reason":"почему обращение важно или срочно","action":"что конкретно сделать"}],"recommendations":["конкретный следующий шаг для команды"]}
+Сегментируй по сути запроса и типу заявителя (например: бизнес, госорганы, частные лица, студенты — по тому, что видно из заявок). До 6 сегментов, до 8 тем, до 6 важных обращений. В action и recommendations — конкретные действия (а не общие слова). Кратко, по-русски. Заявки: ${JSON.stringify(compact)}`;
 
     let analysis = null, lastErr = null;
     for (let attempt = 0; attempt < 2 && !analysis; attempt++) {
@@ -956,113 +1057,6 @@ app.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor', 'manager'
   } catch (e) {
     console.error('POST /api/admin/ai/analyze:', e.message);
     res.status(502).json({ error: 'ИИ-анализ недоступен: ' + e.message });
-  }
-});
-
-// ── AI-скоринг лидов по 7 осям (Gemini) ──────────────────────────────────────
-// Композит считаем В КОДЕ (модели не доверяем арифметику). Веса настраиваемые.
-const SCORE_AXES = ['value_ltv', 'lead_quality', 'conversion_prob', 'satisfaction', 'repeat_potential', 'risk', 'urgency'];
-// Веса 7 осей суммируются в 1.0 → итог = средневзвешенная оценка (0..100).
-// Ось risk входит ИНВЕРТИРОВАННОЙ (вклад = 100 − risk): чем НИЖЕ риск, тем ВЫШЕ средняя оценка.
-const SCORE_W = { value_ltv: 0.24, conversion_prob: 0.18, repeat_potential: 0.13, lead_quality: 0.12, satisfaction: 0.08, urgency: 0.05, risk: 0.20 };
-function computeComposite(axes) {
-  let total = 0;
-  for (const k in SCORE_W) {
-    let v = Number(axes?.[k]?.score);
-    if (!Number.isFinite(v)) v = 50;            // нет данных по оси → нейтрально
-    v = Math.max(0, Math.min(100, v));
-    if (k === 'risk') v = 100 - v;              // инверсия риска: низкий риск → высокий вклад
-    total += v * SCORE_W[k];
-  }
-  return Math.max(0, Math.min(100, Math.round(total)));
-}
-
-app.post('/api/admin/ai/score', auth, requireRole('admin', 'manager'), async (req, res) => {
-  const force = !!(req.body && req.body.force);
-  try {
-    // Скоринг доступен ТОЛЬКО когда есть достаточно данных для оценки:
-    //  • status='served' и заполнен оценочный лист, ЛИБО
-    //  • status='rejected' и указана причина (admin_comment не пуст).
-    const { rows: leads } = await db.query(
-      `SELECT l.id, l.full_name, l.subject, l.message, l.status, l.rating, l.admin_comment, l.updated_at, l.score, l.score_at,
-              e.facts,
-              (SELECT COUNT(*) FROM leads l2 WHERE l2.id <> l.id
-                 AND ((btrim(coalesce(l.email,'')) <> '' AND l2.email = l.email)
-                   OR (btrim(coalesce(l.phone,'')) <> '' AND l2.phone = l.phone))) AS prior_orders
-       FROM leads l LEFT JOIN evaluations e ON e.lead_id = l.id
-       WHERE (l.status = 'served'   AND e.lead_id IS NOT NULL)
-          OR (l.status = 'rejected' AND btrim(coalesce(l.admin_comment, '')) <> '')
-       ORDER BY l.created_at DESC LIMIT 120`);
-    if (!leads.length) return res.json({ scored: 0, total: 0, message: 'Нет лидов для скоринга: нужен оценочный лист (Обслужен) или причина отказа (Отказ).' });
-    // Пересчитываем только новые/изменённые лиды (или все при force) — экономим токены.
-    const need = force ? leads : leads.filter((l) => l.score == null || !l.score_at || new Date(l.updated_at) > new Date(l.score_at));
-    if (!need.length) return res.json({ scored: 0, total: leads.length, message: 'Все лиды уже оценены' });
-    const batch = need.slice(0, 40);
-    const compact = batch.map((l) => {
-      const f = l.facts && typeof l.facts === 'object' ? l.facts : null;
-      const hasFacts = f && Object.keys(f).length > 0;
-      return {
-        id: l.id, name: l.full_name, subject: l.subject, message: (l.message || '').slice(0, 140), status: l.status,
-        reason_or_note: (l.admin_comment || '').slice(0, 150) || null,   // для отказанных — причина отказа
-        prior_orders: Number(l.prior_orders) || 0,                       // сколько раз клиент уже обращался
-        facts: hasFacts ? {
-          response_speed: f.response_speed || null, revisions: f.revisions, paid_on_time: f.paid_on_time || null,
-          conflict: !!f.conflict, ts_clarity: f.ts_clarity || null, repeat_prob_0_10: f.repeat_prob,
-          cost: f.cost || null, duration_days: f.duration_days || null, messages: f.messages || null,
-          calls: f.calls || null, avg_client_response: f.avg_response || null, comment: f.comment || null,
-        } : null,
-      };
-    });
-    const prompt =
-`Ты — аналитик по клиентам IT-компании DDC. Оцени КАЖДЫЙ лид по 7 осям (0-100). Где данных нет — ставь умеренные 50 и отметь это в reason.
-Главный источник правды — поле facts (факты по сделке от сотрудника + метрики проекта) и prior_orders (сколько раз клиент уже заказывал). Используй их:
-- response_speed (fast/medium/slow), avg_client_response — скорость ответа клиента → lead_quality, satisfaction
-- revisions (кол-во правок), ts_clarity (low/medium/high — чёткость ТЗ) → satisfaction, risk (много правок/низкая чёткость = выше risk)
-- paid_on_time (yes/partial/no) → risk (no = высокий risk), conversion_prob
-- conflict (был конфликт) → выше risk, ниже satisfaction/repeat_potential
-- repeat_prob_0_10 (мнение сотрудника о повторе) и prior_orders → repeat_potential
-- cost (стоимость), duration_days (срок) → value_ltv
-- messages, calls — интенсивность общения (контекст)
-Если status='rejected' — в reason_or_note причина отказа: учитывай её (повышает risk, снижает conversion_prob/repeat_potential).
-Оси:
-- value_ltv: потенциальная ценность/LTV (масштаб проекта, бюджет, повторный доход)
-- lead_quality: качество заявки (конкретика, адекватность; спам→низко)
-- conversion_prob: вероятность стать оплатой
-- satisfaction: удовлетворённость/качество взаимодействия (конфликт, правки, коммуникация)
-- repeat_potential: потенциал повторного сотрудничества
-- risk: проблемность клиента (ВЫШЕ = ХУЖЕ; токсичность, хаос, спам)
-- urgency: срочность
-Верни ТОЛЬКО JSON: {"scores":[{"id":число,"value_ltv":{"score":0-100,"reason":"кратко"},"lead_quality":{"score":..,"reason":".."},"conversion_prob":{"score":..,"reason":".."},"satisfaction":{"score":..,"reason":".."},"repeat_potential":{"score":..,"reason":".."},"risk":{"score":..,"reason":".."},"urgency":{"score":..,"reason":".."}}]}
-reason — очень кратко по-русски. Лиды: ${JSON.stringify(compact)}`;
-
-    let parsed = null, lastErr = null;
-    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
-      try { parsed = parseJsonLoose(await callGemini(prompt, 4096)); if (!parsed) lastErr = new Error('не удалось разобрать ответ ИИ'); }
-      catch (e) { lastErr = e; }
-      if (!parsed && attempt < 1) await new Promise((r) => setTimeout(r, 700));
-    }
-    const arr = parsed && Array.isArray(parsed.scores) ? parsed.scores : (Array.isArray(parsed) ? parsed : null);
-    if (!arr) return res.status(502).json({ error: 'ИИ-скоринг недоступен: ' + (lastErr ? lastErr.message : 'неизвестная ошибка') });
-
-    let scored = 0;
-    for (const it of arr) {
-      const id = Number(it.id);
-      if (!Number.isInteger(id)) continue;
-      const axes = {};
-      for (const k of SCORE_AXES) {
-        axes[k] = { score: Math.max(0, Math.min(100, Number(it?.[k]?.score) || 0)), reason: String(it?.[k]?.reason || '').slice(0, 300) };
-      }
-      const total = computeComposite(axes);
-      // score_at = now() = updated_at (транзакционное время) → лид не считается «изменённым» снова.
-      await db.query(`UPDATE leads SET score = $1, score_json = $2, score_at = now() WHERE id = $3`,
-        [total, JSON.stringify({ axes, total, weights: SCORE_W }), id]);
-      scored++;
-    }
-    logAudit(req, 'lead', null, 'score', `AI-скоринг: оценено ${scored} лид(ов)`);
-    res.json({ scored, total: leads.length });
-  } catch (e) {
-    console.error('POST /api/admin/ai/score:', e.message);
-    res.status(502).json({ error: 'ИИ-скоринг недоступен: ' + e.message });
   }
 });
 
@@ -1288,7 +1282,7 @@ app.get('/api/admin/dashboard', auth, async (req, res) => {
 app.get('/api/admin/audit', auth, async (req, res) => {
   try {
     const params = []; let where = '';
-    if (req.query.entity && ['lead', 'news', 'feed'].includes(req.query.entity)) { params.push(req.query.entity); where = `WHERE entity = $1`; }
+    if (req.query.entity && ['lead', 'news', 'feed', 'service'].includes(req.query.entity)) { params.push(req.query.entity); where = `WHERE entity = $1`; }
     const { rows } = await db.query(
       `SELECT actor, actor_role, entity, entity_id, action, summary, created_at FROM audit_log ${where} ORDER BY id DESC LIMIT 200`, params);
     res.json(rows);
@@ -1315,14 +1309,51 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   res.status(err.status || 500).json({ error: PROD ? 'Внутренняя ошибка сервера' : String(err.message || err) });
 });
 
+// Стартовые услуги (вставляем один раз, если таблица пуста) — из прежнего статичного
+// набора сайта, чтобы раздел «Услуги» не был пустым до первого добавления из админки.
+async function seedServices() {
+  try {
+    const { rows } = await db.query(`SELECT count(*)::int AS c FROM services`);
+    if (rows[0].c > 0) return;
+    const defaults = [
+      { icon: 'code', color: '#2f6fe0', name_ru: 'Разработка ИС', name_kk: 'АЖ әзірлеу', name_en: 'IS Development', desc_ru: 'Проектируем и сопровождаем информационные системы для финансовых организаций — от ядра расчётов до клиентских сервисов.', desc_kk: 'Қаржы ұйымдары үшін ақпараттық жүйелерді жобалаймыз және сүйемелдейміз — есеп айырысу ядросынан клиенттік сервистерге дейін.', desc_en: 'We design and maintain information systems for financial institutions — from the settlement core to customer-facing services.' },
+      { icon: 'link', color: '#5a3fd6', name_ru: 'Системная интеграция', name_kk: 'Жүйелік интеграция', name_en: 'System Integration', desc_ru: 'Связываем внутренние и государственные системы в единый защищённый контур.', desc_kk: 'Ішкі және мемлекеттік жүйелерді бірыңғай қорғалған контурға біріктіреміз.', desc_en: 'We connect internal and state systems into a single secure perimeter.' },
+      { icon: 'cart', color: '#0a8a5a', name_ru: 'Портал закупок', name_kk: 'Сатып алу порталы', name_en: 'Procurement Portal', desc_ru: 'Оператор площадки zakup.nationalbank.kz — прозрачные процедуры для заказчиков и поставщиков.', desc_kk: 'zakup.nationalbank.kz операторы — тапсырыс берушілер мен жеткізушілерге ашық рәсімдер.', desc_en: 'Operator of zakup.nationalbank.kz — transparent procedures for customers and suppliers.' },
+      { icon: 'chart', color: '#b07d12', name_ru: 'Аналитика и отчётность', name_kk: 'Талдау және есептілік', name_en: 'Analytics & Reporting', desc_ru: 'Дашборды и регуляторная отчётность — данные превращаем в решения.', desc_kk: 'Дашбордтар мен реттеуші есептілік — деректерді шешімге айналдырамыз.', desc_en: 'Dashboards and regulatory reporting — turning data into decisions.' },
+      { icon: 'support', color: '#0a7aa8', name_ru: 'Поддержка 1477', name_kk: '1477 қолдау', name_en: '1477 Support', desc_ru: 'Контакт-центр пользователей по всему Казахстану — бесплатно.', desc_kk: 'Қазақстан бойынша пайдаланушыларға тегін байланыс орталығы.', desc_en: 'A free user contact center across all of Kazakhstan.' },
+      { icon: 'shield', color: '#c0455a', name_ru: 'Информационная безопасность', name_kk: 'Ақпараттық қауіпсіздік', name_en: 'Information Security', desc_ru: 'Защита данных и соответствие требованиям регулятора на каждом уровне.', desc_kk: 'Деректерді қорғау және реттеуші талаптарына сәйкестік әр деңгейде.', desc_en: 'Data protection and regulatory compliance at every layer.' },
+    ];
+    let i = 0;
+    for (const d of defaults) {
+      await db.query(
+        `INSERT INTO services (name_ru,name_kk,name_en,desc_ru,desc_kk,desc_en,icon,color,sort_order,published)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE)`,
+        [d.name_ru, d.name_kk, d.name_en, d.desc_ru, d.desc_kk, d.desc_en, d.icon, d.color, i++]
+      );
+    }
+    console.log(`✓ Услуги: засеяно ${defaults.length} стартовых записей`);
+  } catch (e) { console.error('seedServices:', e.message); }
+}
+
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`ЦЦР backend слушает на :${PORT} (${PROD ? 'production' : 'development'})`);
   // Лёгкая идемпотентная авто-миграция — чтобы деплой не требовал ручного `npm run init-db`.
   db.query(
     `ALTER TABLE news ADD COLUMN IF NOT EXISTS image_fit TEXT NOT NULL DEFAULT 'cover';
      ALTER TABLE news ADD COLUMN IF NOT EXISTS image_pos TEXT NOT NULL DEFAULT '50% 50%';
-     ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS facts JSONB NOT NULL DEFAULT '{}'::jsonb;`
-  ).then(() => console.log('✓ Колонки image_fit/image_pos/facts на месте'))
+     ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS facts JSONB NOT NULL DEFAULT '{}'::jsonb;
+     CREATE TABLE IF NOT EXISTS services (
+       id         SERIAL PRIMARY KEY,
+       name_ru    TEXT NOT NULL DEFAULT '', name_kk TEXT NOT NULL DEFAULT '', name_en TEXT NOT NULL DEFAULT '',
+       desc_ru    TEXT NOT NULL DEFAULT '', desc_kk TEXT NOT NULL DEFAULT '', desc_en TEXT NOT NULL DEFAULT '',
+       icon       TEXT NOT NULL DEFAULT 'code',
+       color      TEXT NOT NULL DEFAULT '#2f6fe0',
+       sort_order INTEGER NOT NULL DEFAULT 0,
+       published  BOOLEAN NOT NULL DEFAULT TRUE,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );`
+  ).then(() => { console.log('✓ Миграции (image_fit/image_pos/facts/services) на месте'); return seedServices(); })
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);

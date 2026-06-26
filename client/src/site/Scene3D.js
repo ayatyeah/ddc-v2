@@ -174,20 +174,20 @@ export function initScene(canvas) {
     // ExtrudeGeometry — плита страны. bevelSegments 2 -> мягкая реалистичная кромка (не гранёная).
     const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 2, steps: 1 });
 
-    // Цвета как на физической карте, распределены по географии (коорд. shape: x=lon, y=lat):
-    //   север — зелёная степь, юг — тан/песок (пустыни), восток/юго-восток — бурые горы.
+    // Цвета карты — зелёные (степь/леса), с лёгкой географической вариацией оттенка:
+    //   север — насыщенная зелёная степь, юг — светлее зелёный, восток — тёмный лесной зелёный.
     extrude.computeBoundingBox();
     {
       const bb = extrude.boundingBox, pos = extrude.attributes.position;
-      const cN = new THREE.Color(0x4f8a30), cS = new THREE.Color(0x7e9442), cM = new THREE.Color(0x6f6238), tmp = new THREE.Color();
+      const cN = new THREE.Color(0x3e8f2c), cS = new THREE.Color(0x57973a), cM = new THREE.Color(0x3f6f2a), tmp = new THREE.Color();
       const cols = new Float32Array(pos.count * 3);
       const dy = (bb.max.y - bb.min.y) || 1, dx = (bb.max.x - bb.min.x) || 1;
       for (let i = 0; i < pos.count; i++) {
         const latN = (pos.getY(i) - bb.min.y) / dy;   // 0 юг .. 1 север
         const eastN = (pos.getX(i) - bb.min.x) / dx;   // 0 запад .. 1 восток
-        tmp.copy(cS).lerp(cN, latN);                   // юг (тан/пустыня) -> север (зелёная степь)
+        tmp.copy(cS).lerp(cN, latN);                   // юг (светлее зелёный) -> север (насыщенная зелень)
         const mtn = Math.min(0.62, Math.max(0, eastN - 0.62) / 0.38 * (0.45 + 0.55 * (1 - latN)));
-        tmp.lerp(cM, mtn);                             // восток/юго-восток -> бурые горы
+        tmp.lerp(cM, mtn);                             // восток/юго-восток -> тёмный лесной зелёный
         cols[i * 3] = tmp.r; cols[i * 3 + 1] = tmp.g; cols[i * 3 + 2] = tmp.b;
       }
       extrude.setAttribute('color', new THREE.BufferAttribute(cols, 3));

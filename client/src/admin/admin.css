@@ -197,7 +197,6 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
   overflow: hidden; overflow-wrap: anywhere;
 }
 .status-select { padding: 6px 24px 6px 9px; font-size: 12px; }
-.score-badge { min-width: 32px; padding: 3px 7px; font-size: 12.5px; }
 
 /* ── Колокольчик уведомлений ──────────────────────────────────────────────── */
 .notif { position: relative; display: inline-flex; margin-right: 12px; }
@@ -213,24 +212,6 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .notif-title { font-weight: 600; font-size: 13.5px; color: var(--ink); }
 .notif-body { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
 .notif-time { font-size: 11px; color: var(--ink-faint); margin-top: 3px; }
-
-/* ── Бейдж AI-скора ───────────────────────────────────────────────────────── */
-.score-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; padding: 4px 9px; border-radius: 980px; font-weight: 800; font-size: 13px; cursor: pointer; border: 1px solid transparent; }
-.score-badge.s-hi  { background: rgba(10,138,90,0.14);  color: #0a8a5a; }
-.score-badge.s-mid { background: rgba(196,122,8,0.16);  color: #c47a08; }
-.score-badge.s-lo  { background: rgba(226,59,59,0.14);  color: #d23b3b; }
-.score-badge.s-none{ background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink-faint); font-weight: 600; font-size: 12px; cursor: default; }
-.score-detail { background: color-mix(in srgb, var(--ink) 3%, transparent); }
-.score-detail td { padding: 14px 16px !important; }
-.axis-row { display: grid; grid-template-columns: 150px 1fr 38px; gap: 10px; align-items: center; margin: 6px 0; }
-.axis-name { font-size: 12.5px; color: var(--ink-soft); }
-.axis-name small { display: block; color: var(--ink-faint); font-size: 11px; }
-/* AI-оценка как минималистичный meter (@coss/meter): тонкая дорожка + ровная СИНЯЯ заливка */
-.axis-bar { height: 6px; border-radius: 980px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
-.axis-bar > span { display: block; height: 100%; border-radius: 980px; background: var(--blue); transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
-.axis-bar.risk > span { background: #d98a3a; }   /* риск — приглушённый янтарный (анти-скор) */
-.axis-val { font-size: 12.5px; font-weight: 700; text-align: right; color: var(--ink); }
-.axis-reason { grid-column: 1 / -1; font-size: 11.5px; color: var(--ink-faint); margin: -2px 0 4px; }
 
 /* ── Кнопка/модалка оценочного листа ──────────────────────────────────────── */
 .eval-btn { background: none; border: 1px solid var(--line-2); color: var(--ink-soft); border-radius: 8px; font-family: inherit; font-size: 12px; padding: 5px 10px; cursor: pointer; margin-top: 6px; }
@@ -422,6 +403,16 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .ai-probs li, .ai-recs li { font-size: 13.5px; line-height: 1.5; color: var(--ink); padding-left: 16px; position: relative; }
 .ai-probs li::before, .ai-recs li::before { content: ''; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
 .ai-recs li::before { background: var(--gold); }
+
+/* Сегменты заявителей */
+.ai-segments { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.ai-segments li { padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--blue) 50%, transparent); }
+
+/* Частые темы запросов */
+.ai-topics { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.ai-topics li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13.5px; color: var(--ink); padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.ai-topics li:last-child { border-bottom: none; padding-bottom: 0; }
+.ai-topics b.ai-id { font-weight: 700; color: var(--ink-soft); }
 
 /* Подсветка клиента при переходе из ИИ-аналитики */
 .lead-flash.flash-on > td, tr.flash-on > td { animation: leadFlash 1.8s var(--ease); }
@@ -669,3 +660,14 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
 .nm-crop-zoom input[type=range] { flex: 1; accent-color: var(--blue); }
 .nm-crop-actions { display: flex; gap: 10px; justify-content: flex-end; }
 @media (prefers-reduced-motion: reduce) { .nm-crop-ov, .nm-crop { animation: none; } }
+
+/* ── Выбор иконки услуги (ServicesManager) ──────────────────────────────────── */
+.svc-icon-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.svc-icon-opt {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+  color: var(--ink-soft); cursor: pointer; transition: border-color 0.15s, color 0.15s, transform 0.15s;
+}
+.svc-icon-opt:hover { transform: translateY(-2px); color: var(--ink); }
+.svc-icon-opt.active { border-width: 2px; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 18%, transparent); }
+.svc-mini-ico { display: inline-flex; }

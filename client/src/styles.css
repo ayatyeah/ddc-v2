@@ -508,6 +508,17 @@ button { font-family: inherit; cursor: pointer; }
 .svc h3 { font-size: 1.18rem; font-weight: 600; letter-spacing: -0.01em; }
 .svc p { margin-top: 10px; color: var(--ink-soft); font-size: 0.98rem; line-height: 1.55; }
 .svc .num { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); float: right; }
+/* Услуга как кнопка: сбрасываем стиль <button>, оставляя вид карточки. Клик → форма заявки. */
+.svc-btn { width: 100%; display: block; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.svc-cta { display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; font-size: 14px; font-weight: 600; color: var(--blue); transition: gap 0.2s var(--ease); }
+.svc:hover .svc-cta { gap: 10px; }
+/* Модальная форма заявки на услугу */
+.apply-modal .inner { padding-top: 26px; }
+.apply-modal .eyebrow { margin-bottom: 6px; }
+.apply-modal h2 { margin-top: 2px; }
+.apply-field { display: grid; gap: 6px; }
+.apply-lab { font-size: 12px; color: var(--ink-soft); }
+.apply-field select.inp { cursor: pointer; }
 @media (max-width: 920px) { .svc-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 600px) { .svc-grid { grid-template-columns: 1fr; } }
 
@@ -1052,3 +1063,108 @@ a:focus-visible, button:focus-visible, input:focus-visible,
 textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid var(--blue, #6ea0ff); outline-offset: 2px; border-radius: 6px;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Неоновые FinTech-акценты + раздел «Проекты и инновации»
+   ════════════════════════════════════════════════════════════════════════════ */
+:root { --neon-cyan: #22d3ee; --neon-green: #34e3b0; --neon-teal: #2dd4bf; }
+
+/* ── Проекты и инновации ── */
+.proj-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.proj-card {
+  position: relative; padding: 30px 30px 26px; border-radius: var(--radius-sm);
+  background: linear-gradient(150deg, rgba(10, 16, 30, 0.74), rgba(4, 8, 18, 0.78));
+  border: 1px solid var(--line); overflow: hidden;
+  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease), border-color 0.3s;
+}
+.proj-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent, var(--neon-cyan)), transparent 75%);
+}
+.proj-card:hover {
+  transform: translateY(-6px);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 18px 50px rgba(2, 6, 16, 0.5), 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.proj-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.proj-ico {
+  width: 50px; height: 50px; border-radius: 14px; display: grid; place-items: center;
+  color: var(--accent, var(--neon-cyan));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.proj-sub { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent, var(--neon-cyan)); opacity: 0.9; text-align: right; }
+.proj-title { margin-top: 18px; font-size: 1.32rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.proj-tagline { margin-top: 8px; font-size: 1rem; color: var(--ink); opacity: 0.92; line-height: 1.5; }
+.proj-desc { margin-top: 12px; font-size: 0.95rem; color: var(--ink-soft); line-height: 1.6; }
+.proj-tags { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+.proj-tag { font-size: 12px; padding: 5px 11px; border-radius: 980px; color: var(--ink-soft); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+
+/* Кнопка-переключатель версии для слабовидящих в навигации */
+.a11y-btn.active { color: var(--neon-cyan); }
+
+@media (max-width: 860px) {
+  .proj-grid { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Версия для слабовидящих: крупный шрифт, чёрно-белый высокий контраст, жёлтые
+   акценты, без 3D / анимаций. Требование законодательства РК для гос-ИС.
+   ════════════════════════════════════════════════════════════════════════════ */
+html[data-a11y='on'] { font-size: 122%; }
+html[data-a11y='on'] body { background: #000; color: #fff; }
+html[data-a11y='on'] {
+  --canvas: #000; --ink: #fff; --ink-soft: #fff; --ink-faint: #d0d0d0;
+  --line: rgba(255, 255, 255, 0.5); --line-2: rgba(255, 255, 255, 0.75);
+  --blue: #ffe000; --blue-bright: #ffe000; --blue-ink: #ffe000;
+  --gold: #ffe000; --gold-soft: #ffe000;
+  --neon-cyan: #ffe000; --neon-green: #ffe000; --neon-teal: #ffe000;
+  --card: #000; --card-glass: #000; --nav-glass: rgba(0, 0, 0, 0.92);
+}
+/* Прячем декоративные фоновые слои и любые canvas (3D-сцена, частицы, модельки) */
+html[data-a11y='on'] #scroll-bg { background: #000 !important; }
+html[data-a11y='on'] #scroll-aurora,
+html[data-a11y='on'] #bg-planet,
+html[data-a11y='on'] #scroll-depth,
+html[data-a11y='on'] #scroll-grain,
+html[data-a11y='on'] #fog,
+html[data-a11y='on'] canvas { display: none !important; }
+/* Карточки/плашки — сплошной чёрный с белой рамкой, без теней и бликов */
+html[data-a11y='on'] .text-glass,
+html[data-a11y='on'] .proj-card,
+html[data-a11y='on'] .svc {
+  background: #000 !important; border: 2px solid #fff !important; box-shadow: none !important;
+}
+html[data-a11y='on'] .text-glass::before, html[data-a11y='on'] .proj-card::before { display: none !important; }
+/* Текст — чисто белый без ореолов; акценты — жёлтые */
+html[data-a11y='on'] h1, html[data-a11y='on'] h2, html[data-a11y='on'] h3,
+html[data-a11y='on'] p, html[data-a11y='on'] .h2, html[data-a11y='on'] .lede, html[data-a11y='on'] span {
+  text-shadow: none !important;
+}
+html[data-a11y='on'] .eyebrow,
+html[data-a11y='on'] .proj-sub { color: #ffe000 !important; -webkit-text-fill-color: #ffe000 !important; }
+html[data-a11y='on'] .btn-primary { background: #ffe000 !important; color: #000 !important; box-shadow: none !important; }
+/* Никаких анимаций/переходов и появлений по скроллу — контент сразу виден */
+html[data-a11y='on'] *, html[data-a11y='on'] *::before, html[data-a11y='on'] *::after { animation: none !important; transition: none !important; }
+html[data-a11y='on'] .reveal { opacity: 1 !important; transform: none !important; filter: none !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Полировка: единые мягкие углы + плавные переходы (точечно, без transition:all)
+   ════════════════════════════════════════════════════════════════════════════ */
+/* Карточки проектов — крупный радиус как у остальных плиток (одинаково мягкие углы) */
+.proj-card { border-radius: var(--radius); }
+.proj-ico { transition: transform 0.3s var(--ease); }
+.proj-card:hover .proj-ico { transform: translateY(-3px); }
+.proj-tag { transition: border-color 0.25s var(--ease), background 0.25s var(--ease); }
+.proj-card:hover .proj-tag { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+
+/* Иконка услуги мягко «оживает» при наведении на карточку */
+.svc-ico { transition: transform 0.35s var(--ease), background 0.35s var(--ease); }
+.svc:hover .svc-ico { transform: translateY(-2px) scale(1.04); }
+
+/* Чуть мягче углы у полей формы (заявка/контакты) */
+.inp { border-radius: 14px; }
+
+/* Плавная смена цвета у ссылок и иконочных кнопок */
+a { transition: color 0.2s var(--ease); }
+.icon-btn { transition: background 0.2s var(--ease), color 0.2s var(--ease); }

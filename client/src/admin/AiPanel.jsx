@@ -28,29 +28,16 @@ export default function AiPanel({ onAuthLost, onOpenLead }) {
     } finally { setBusy(false); }
   };
 
-  const score = async (force) => {
-    setBusy(true); setErr(''); setNote('');
-    try {
-      const d = await sendJSON('/api/admin/ai/score', 'POST', { force });
-      setNote(d.scored ? `Оценено лидов: ${d.scored}. Скоры видны на вкладке «Заявки» (бейдж, разбор по 7 осям).` : (d.message || 'Все лиды уже оценены.'));
-    } catch (e) {
-      if (e.status === 401) return onAuthLost?.();
-      setErr(e.data?.error || 'Не удалось выполнить скоринг');
-    } finally { setBusy(false); }
-  };
-
   return (
     <div className="ai-wrap">
       <div className="ai-head">
         <div>
-          <h2 className="ai-title">ИИ-аналитика клиентов</h2>
-          <p className="ai-sub">Анализ — по активным заявкам (кроме «Обслужен» и «Отказ»): важность клиентов и ключевые проблемы воронки. Скоринг по 7 осям — по «Обслужен» с заполненным оценочным листом и по «Отказ» с указанной причиной. Результаты кэшируются.</p>
+          <h2 className="ai-title">ИИ-анализ обращений</h2>
+          <p className="ai-sub">ИИ анализирует людей, заполнивших форму на сайте: сегменты заявителей, частые темы запросов и отдельные важные обращения. Результаты кэшируются.</p>
         </div>
         <div className="ai-actions">
           <button className="adm-btn" onClick={() => run(false)} disabled={busy}>{busy ? 'Работаю…' : (a ? 'Проверить' : 'Запустить анализ')}</button>
           <button className="adm-ghost" onClick={() => run(true)} disabled={busy} title="Игнорировать кэш">Обновить заново</button>
-          <button className="adm-ghost" onClick={() => score(false)} disabled={busy} title="Скоринг по 7 осям: «Обслужен» с оценочным листом и «Отказ» с причиной (новые/изменённые)">Скоринг лидов</button>
-          <button className="adm-ghost" onClick={() => score(true)} disabled={busy} title="Пересчитать скор всех подходящих лидов">Скоринг: все</button>
         </div>
       </div>
 
@@ -58,7 +45,7 @@ export default function AiPanel({ onAuthLost, onOpenLead }) {
       {note && <div className="ai-note">{note}</div>}
       {cachedAt && <div className="ai-meta">Последний анализ: {new Date(cachedAt).toLocaleString('ru-RU')}</div>}
 
-      {!a && !busy && <div className="ai-empty">Нажмите «Запустить анализ», чтобы ИИ оценил клиентов и их запросы.</div>}
+      {!a && !busy && <div className="ai-empty">Нажмите «Запустить анализ», чтобы ИИ разобрал, кто и зачем заполняет форму.</div>}
 
       {a && (
         <div className="ai-grid">
@@ -69,9 +56,37 @@ export default function AiPanel({ onAuthLost, onOpenLead }) {
             </section>
           )}
 
+          {Array.isArray(a.segments) && a.segments.length > 0 && (
+            <section className="ai-card">
+              <div className="ai-card-h">Сегменты заявителей</div>
+              <ul className="ai-segments">
+                {a.segments.map((s, i) => (
+                  <li key={i}>
+                    <div className="ai-cname">
+                      {s.name}{s.count != null ? <span className="ai-id"> · {s.count}</span> : null}
+                    </div>
+                    {s.description && <div className="ai-reason">{s.description}</div>}
+                    {s.action && <div className="ai-action">→ {s.action}</div>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {Array.isArray(a.topics) && a.topics.length > 0 && (
+            <section className="ai-card">
+              <div className="ai-card-h">Частые темы запросов</div>
+              <ul className="ai-topics">
+                {a.topics.map((t, i) => (
+                  <li key={i}><span>{t.topic}</span>{t.count != null ? <b className="ai-id">{t.count}</b> : null}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {Array.isArray(a.important_clients) && a.important_clients.length > 0 && (
             <section className="ai-card">
-              <div className="ai-card-h">Важные клиенты</div>
+              <div className="ai-card-h">Важные обращения</div>
               <ul className="ai-clients">
                 {a.important_clients.map((c, i) => (
                   <li key={i}>
@@ -84,17 +99,6 @@ export default function AiPanel({ onAuthLost, onOpenLead }) {
                       {c.action && <div className="ai-action">→ {c.action}</div>}
                     </div>
                   </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {Array.isArray(a.main_problems) && a.main_problems.length > 0 && (
-            <section className="ai-card">
-              <div className="ai-card-h">Главные проблемы</div>
-              <ul className="ai-probs">
-                {a.main_problems.map((p, i) => (
-                  <li key={i}><b>{p.problem}</b>{(p.action || p.detail) ? <div className="ai-action">→ {p.action || p.detail}</div> : null}</li>
                 ))}
               </ul>
             </section>

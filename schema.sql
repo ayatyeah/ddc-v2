@@ -116,6 +116,34 @@ SELECT
 WHERE (SELECT COUNT(*) FROM news) < 3;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- services — услуги центра (создаются/редактируются из админ-панели, видны на сайте).
+-- Название/описание на 3 языках (ru/kk/en). icon — ключ иконки из фиксированного
+-- набора, color — акцентный цвет, sort_order — порядок вывода, published — видимость.
+-- Стартовые записи засеваются на старте сервера (seedServices), если таблица пуста.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS services (
+  id           SERIAL PRIMARY KEY,
+  name_ru      TEXT        NOT NULL DEFAULT '',
+  name_kk      TEXT        NOT NULL DEFAULT '',
+  name_en      TEXT        NOT NULL DEFAULT '',
+  desc_ru      TEXT        NOT NULL DEFAULT '',
+  desc_kk      TEXT        NOT NULL DEFAULT '',
+  desc_en      TEXT        NOT NULL DEFAULT '',
+  icon         TEXT        NOT NULL DEFAULT 'code',
+  color        TEXT        NOT NULL DEFAULT '#2f6fe0',
+  sort_order   INTEGER     NOT NULL DEFAULT 0,
+  published    BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_services_order ON services (sort_order, id);
+
+DROP TRIGGER IF EXISTS trg_services_updated_at ON services;
+CREATE TRIGGER trg_services_updated_at
+  BEFORE UPDATE ON services
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- users — учётные записи админ-панели с ролями.
 --   admin  — полный доступ + управление пользователями
 --   editor — заявки и новости (без управления пользователями)
