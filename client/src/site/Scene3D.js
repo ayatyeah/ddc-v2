@@ -125,16 +125,34 @@ export function initScene(canvas) {
     const MAP_S = 60;                 // карта пошире, чтобы не выглядела узкой полоской под башнями
     const hub2 = { x: KZ_HUB[0] * MAP_S, z: -KZ_HUB[1] * MAP_S };   // куда поставить хаб
 
-    // контур -> Shape (lon->x, lat->-z так, чтобы север был «вперёд/вглубь»)
-    const shape = new THREE.Shape();
-    KZ_OUTLINE.forEach(([lo, la], i) => {
-      const X = lo * MAP_S - hub2.x, Y = la * MAP_S;     // в плоскости shape: x, y(=lat)
-      i === 0 ? shape.moveTo(X, Y) : shape.lineTo(X, Y);
-    });
+    // Контур в плоскости shape (lon->x, lat->y). Последняя точка дублирует первую — убираем.
+    const raw = KZ_OUTLINE.map(([lo, la]) => new THREE.Vector2(lo * MAP_S - hub2.x, la * MAP_S));
+    if (raw.length > 1 && raw[0].distanceTo(raw[raw.length - 1]) < 1e-4) raw.pop();
 
-    // ExtrudeGeometry даёт настоящую толщину -> 3D-плита страны.
-    // bevelSegments 1 (вместо 2) — вдвое меньше треугольников на фаске, на глаз не заметно.
-    const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 1, steps: 1, curveSegments: 4 });
+    // Скругление углов (филет малым радиусом): острые вершины заменяем короткими дугами —
+    // граница выглядит реалистичнее (не гранёный полигон), форма страны сохраняется.
+    // Радиус ограничен долей соседних отрезков, чтобы не «съедать» мелкие детали.
+    const FILLET = 1.0, ARC = 2, Nr = raw.length;
+    const outlinePts = [];
+    for (let i = 0; i < Nr; i++) {
+      const cur = raw[i], prev = raw[(i - 1 + Nr) % Nr], next = raw[(i + 1) % Nr];
+      const v1 = new THREE.Vector2().subVectors(prev, cur), v2 = new THREE.Vector2().subVectors(next, cur);
+      const rr = Math.min(FILLET, v1.length() * 0.35, v2.length() * 0.35);
+      const a = cur.clone().addScaledVector(v1.normalize(), rr), b = cur.clone().addScaledVector(v2.normalize(), rr);
+      outlinePts.push(a);
+      for (let s = 1; s <= ARC; s++) {   // промежуточные точки квадратичной дуги a->cur->b
+        const tt = s / (ARC + 1), mt = 1 - tt;
+        outlinePts.push(new THREE.Vector2(mt * mt * a.x + 2 * mt * tt * cur.x + tt * tt * b.x,
+                                          mt * mt * a.y + 2 * mt * tt * cur.y + tt * tt * b.y));
+      }
+      outlinePts.push(b);
+    }
+    const shape = new THREE.Shape();
+    outlinePts.forEach((p, i) => (i === 0 ? shape.moveTo(p.x, p.y) : shape.lineTo(p.x, p.y)));
+    shape.closePath();
+
+    // ExtrudeGeometry — плита страны. bevelSegments 2 -> мягкая реалистичная кромка (не гранёная).
+    const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 2, steps: 1 });
     extrude.rotateX(-Math.PI / 2);    // положить плашмя: shape.y(lat) -> -z
     extrude.translate(0, 0, hub2.z);  // сдвиг чтобы хаб попал под башни (z)
 
@@ -167,7 +185,7 @@ export function initScene(canvas) {
     // мягкое свечение под ним (аддитивно). Толщина в пикселях экрана -> чёткий неон на
     // любом отдалении. Контур приподнят над плитой, чтобы не «тонул» в бевеле.
     const edgeFlat = [];
-    for (const [lo, la] of KZ_OUTLINE) edgeFlat.push(lo * MAP_S - hub2.x, 0.18, -la * MAP_S + hub2.z);
+    for (const p of outlinePts) edgeFlat.push(p.x, 0.18, -p.y + hub2.z);
     edgeFlat.push(edgeFlat[0], edgeFlat[1], edgeFlat[2]);   // замкнуть контур
     const edgeGeo = new LineGeometry(); edgeGeo.setPositions(edgeFlat);
     const W0 = window.innerWidth, H0 = window.innerHeight;
@@ -183,7 +201,7 @@ export function initScene(canvas) {
     extrude.computeBoundingBox();
     const slabBottom = extrude.boundingBox.min.y + mapMesh.position.y + 0.04;
     const bottomFlat = [];
-    for (const [lo, la] of KZ_OUTLINE) bottomFlat.push(lo * MAP_S - hub2.x, slabBottom, -la * MAP_S + hub2.z);
+    for (const p of outlinePts) bottomFlat.push(p.x, slabBottom, -p.y + hub2.z);
     bottomFlat.push(bottomFlat[0], bottomFlat[1], bottomFlat[2]);
     const bottomGeo = new LineGeometry(); bottomGeo.setPositions(bottomFlat);
     const bEdge = new Line2(bottomGeo, edgeGlowMat); bEdge.renderOrder = 3; gMap.add(bEdge);
