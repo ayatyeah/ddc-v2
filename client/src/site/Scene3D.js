@@ -100,6 +100,22 @@ export function initScene(canvas) {
     beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0xe6c789, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
     gTowers.traverse((o) => { if (o.material) { o.material.transparent = true; towerMats.push(o.material); } });
   })();
+
+  // Контактная тень под зданием — «сажает» башни на карту (иначе они кажутся обособленными).
+  // Это отдельный тёмный диск НА поверхности карты, само здание он не красит.
+  let groundShadowMat = null;
+  (() => {
+    const sc = document.createElement('canvas'); sc.width = sc.height = 128;
+    const sx = sc.getContext('2d');
+    const g = sx.createRadialGradient(64, 64, 6, 64, 64, 64);
+    g.addColorStop(0, 'rgba(0,0,0,0.62)'); g.addColorStop(0.55, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    sx.fillStyle = g; sx.fillRect(0, 0, 128, 128);
+    groundShadowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false, opacity: 0.6 });
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(38, 23), groundShadowMat);
+    sh.rotation.x = -Math.PI / 2; sh.position.set(-0.3, 0.12, 0); sh.renderOrder = 2;
+    gTowers.add(sh);
+  })();
+
   const HERO_YAW = -1.2;      // угол, под которым конструкция «встречает» на главной (3/4-вид)
   gBuild.rotation.y = HERO_YAW;
 
@@ -182,24 +198,32 @@ export function initScene(canvas) {
 
     // Процедурный «рельеф» суши (шум + лёгкий градиент) как roughness/bump-map: под светом
     // поверхность играет светотенью — карта не плоская и «живая». Дёшево (одна 256² канва).
-    const mcv = document.createElement('canvas'); mcv.width = mcv.height = 256;
+    const TS = 512;
+    const mcv = document.createElement('canvas'); mcv.width = mcv.height = TS;
     const mc = mcv.getContext('2d');
-    const bgGrad = mc.createLinearGradient(0, 0, 256, 256);
-    bgGrad.addColorStop(0, '#909090'); bgGrad.addColorStop(1, '#6c6c6c');   // крупная тональная вариация
-    mc.fillStyle = bgGrad; mc.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 175; i++) {
-      const x = (i * 71) % 256, y = (i * 153 + 30) % 256, r = 8 + (i % 8) * 9;
+    const bgGrad = mc.createLinearGradient(0, 0, TS, TS);
+    bgGrad.addColorStop(0, '#8e8e8e'); bgGrad.addColorStop(1, '#6a6a6a');   // крупная тональная вариация
+    mc.fillStyle = bgGrad; mc.fillRect(0, 0, TS, TS);
+    // крупный «рельеф» — пятна разного размера (холмы/низины)
+    for (let i = 0; i < 340; i++) {
+      const x = (i * 137) % TS, y = (i * 211 + 40) % TS, r = 10 + (i % 11) * 11;
       const c = i % 2 ? 255 : 0;
-      mc.fillStyle = `rgba(${c},${c},${c},${0.05 + (i % 5) / 70})`;
-      mc.beginPath(); mc.ellipse(x, y, r, r * 0.75, i, 0, 6.283); mc.fill();
+      mc.fillStyle = `rgba(${c},${c},${c},${0.05 + (i % 6) / 80})`;
+      mc.beginPath(); mc.ellipse(x, y, r, r * (0.55 + (i % 3) * 0.2), i, 0, 6.283); mc.fill();
+    }
+    // мелкая зернистость — фактура поверхности (трещины/неровности)
+    for (let i = 0; i < 1500; i++) {
+      const x = (i * 53) % TS, y = (i * 97 + 17) % TS, c = i % 2 ? 245 : 18;
+      mc.fillStyle = `rgba(${c},${c},${c},${0.06 + (i % 4) / 60})`;
+      mc.fillRect(x, y, 2, 2);
     }
     const mapTex = new THREE.CanvasTexture(mcv);
-    mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.07, 0.07);
+    mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.09, 0.09); mapTex.anisotropy = 4;
 
     // Цвет берём из вершинных цветов (физическая карта по географии). Матовая суша + рельеф
     // под светом; синяя неон-граница обрамляет «землю», как на рельефной карте.
     const mapMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.95,
+      color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 1.25,
       metalness: 0.06, roughness: 0.92, emissive: 0x0e1a08, emissiveIntensity: 0.24,
       transparent: true, opacity: 0.96,
     });
@@ -481,7 +505,10 @@ export function initScene(canvas) {
     // Здания растворяются, когда камера уже над картой.
     const buildFade = smooth(p, 0.30, 0.46);
     gTowers.visible = buildFade < 0.999;
-    if (gTowers.visible) for (const mt of towerMats) mt.opacity = 1 - buildFade;
+    if (gTowers.visible) {
+      for (const mt of towerMats) mt.opacity = 1 - buildFade;
+      if (groundShadowMat) groundShadowMat.opacity = 0.6 * (1 - buildFade);   // тень тает вместе со зданием
+    }
 
     // К середине скролла линии/потоки данных усиливаются: один центр (DDC) координирует
     // цифровую экосистему страны. Карта держит базовую непрозрачность.
