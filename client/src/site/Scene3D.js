@@ -163,7 +163,7 @@ export function initScene(canvas) {
     extrude.computeBoundingBox();
     {
       const bb = extrude.boundingBox, pos = extrude.attributes.position;
-      const cN = new THREE.Color(0x6e7c46), cS = new THREE.Color(0xb0a06a), cM = new THREE.Color(0x7a5f42), tmp = new THREE.Color();
+      const cN = new THREE.Color(0x4f8a30), cS = new THREE.Color(0x7e9442), cM = new THREE.Color(0x6f6238), tmp = new THREE.Color();
       const cols = new Float32Array(pos.count * 3);
       const dy = (bb.max.y - bb.min.y) || 1, dx = (bb.max.x - bb.min.x) || 1;
       for (let i = 0; i < pos.count; i++) {
@@ -200,7 +200,7 @@ export function initScene(canvas) {
     // под светом; синяя неон-граница обрамляет «землю», как на рельефной карте.
     const mapMat = new THREE.MeshStandardMaterial({
       color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.95,
-      metalness: 0.06, roughness: 0.92, emissive: 0x141206, emissiveIntensity: 0.22,
+      metalness: 0.06, roughness: 0.92, emissive: 0x0e1a08, emissiveIntensity: 0.24,
       transparent: true, opacity: 0.96,
     });
     mapMat.userData = { baseOp: 0.96 };
