@@ -179,8 +179,8 @@ export function initScene(canvas) {
     // Реалистичный цвет суши — степной/полупустынный хаки-тан (земля Казахстана), а не синяя
     // заливка. Матовая поверхность + рельеф под светом; синяя неон-граница её обрамляет.
     const mapMat = new THREE.MeshStandardMaterial({
-      color: 0x7e7552, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.95,
-      metalness: 0.08, roughness: 0.9, emissive: 0x2a2614, emissiveIntensity: 0.32,
+      color: 0x6a7a48, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.95,
+      metalness: 0.08, roughness: 0.9, emissive: 0x202a12, emissiveIntensity: 0.32,
       transparent: true, opacity: 0.96,
     });
     mapMat.userData = { baseOp: 0.96 };
