@@ -132,13 +132,17 @@ export function initScene(canvas) {
     // Скругление углов (филет малым радиусом): острые вершины заменяем короткими дугами —
     // граница выглядит реалистичнее (не гранёный полигон), форма страны сохраняется.
     // Радиус ограничен долей соседних отрезков, чтобы не «съедать» мелкие детали.
-    const FILLET = 1.0, ARC = 2, Nr = raw.length;
+    const FILLET = 0.8, ARC = 2, Nr = raw.length;
     const outlinePts = [];
     for (let i = 0; i < Nr; i++) {
       const cur = raw[i], prev = raw[(i - 1 + Nr) % Nr], next = raw[(i + 1) % Nr];
       const v1 = new THREE.Vector2().subVectors(prev, cur), v2 = new THREE.Vector2().subVectors(next, cur);
-      const rr = Math.min(FILLET, v1.length() * 0.35, v2.length() * 0.35);
-      const a = cur.clone().addScaledVector(v1.normalize(), rr), b = cur.clone().addScaledVector(v2.normalize(), rr);
+      const l1 = v1.length(), l2 = v2.length();
+      const cosA = (v1.x * v2.x + v1.y * v2.y) / (l1 * l2 || 1);
+      // почти-прямой участок (угол > ~145°) НЕ скругляем — иначе берег «волнится»/кажется кривым
+      if (cosA < -0.82) { outlinePts.push(cur.clone()); continue; }
+      const rr = Math.min(FILLET, l1 * 0.35, l2 * 0.35);
+      const a = cur.clone().addScaledVector(v1.divideScalar(l1), rr), b = cur.clone().addScaledVector(v2.divideScalar(l2), rr);
       outlinePts.push(a);
       for (let s = 1; s <= ARC; s++) {   // промежуточные точки квадратичной дуги a->cur->b
         const tt = s / (ARC + 1), mt = 1 - tt;
@@ -156,26 +160,26 @@ export function initScene(canvas) {
     extrude.rotateX(-Math.PI / 2);    // положить плашмя: shape.y(lat) -> -z
     extrude.translate(0, 0, hub2.z);  // сдвиг чтобы хаб попал под башни (z)
 
-    // Процедурный «рельеф» поверхности (шум) как roughness/bump-map — карта выглядит как
-    // реальная поверхность под светом. Только для «полной» сцены: в LIGHT-режиме лишний.
-    let mapTex = null;
-    if (!LIGHT) {
-      const mcv = document.createElement('canvas'); mcv.width = mcv.height = 256;
-      const mc = mcv.getContext('2d');
-      mc.fillStyle = '#7a7a7a'; mc.fillRect(0, 0, 256, 256);
-      for (let i = 0; i < 150; i++) {
-        const x = (i * 71) % 256, y = (i * 153 + 30) % 256, r = 9 + (i % 8) * 9;
-        const c = i % 2 ? 255 : 0;
-        mc.fillStyle = `rgba(${c},${c},${c},${0.04 + (i % 5) / 80})`;
-        mc.beginPath(); mc.ellipse(x, y, r, r * 0.75, i, 0, 6.283); mc.fill();
-      }
-      mapTex = new THREE.CanvasTexture(mcv);
-      mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.06, 0.06);
+    // Процедурный «рельеф» суши (шум + лёгкий градиент) как roughness/bump-map: под светом
+    // поверхность играет светотенью — карта не плоская и «живая». Дёшево (одна 256² канва).
+    const mcv = document.createElement('canvas'); mcv.width = mcv.height = 256;
+    const mc = mcv.getContext('2d');
+    const bgGrad = mc.createLinearGradient(0, 0, 256, 256);
+    bgGrad.addColorStop(0, '#909090'); bgGrad.addColorStop(1, '#6c6c6c');   // крупная тональная вариация
+    mc.fillStyle = bgGrad; mc.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 175; i++) {
+      const x = (i * 71) % 256, y = (i * 153 + 30) % 256, r = 8 + (i % 8) * 9;
+      const c = i % 2 ? 255 : 0;
+      mc.fillStyle = `rgba(${c},${c},${c},${0.05 + (i % 5) / 70})`;
+      mc.beginPath(); mc.ellipse(x, y, r, r * 0.75, i, 0, 6.283); mc.fill();
     }
-    // Меньше эмиссии и металличности, выше шероховатость -> реалистичная суша.
+    const mapTex = new THREE.CanvasTexture(mcv);
+    mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.07, 0.07);
+
+    // Насыщеннее синий + заметнее рельеф и свечение -> суша «дышит», не мёртвый плоский цвет.
     const mapMat = new THREE.MeshStandardMaterial({
-      color: 0x1b3f6e, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.6,
-      metalness: 0.2, roughness: 0.82, emissive: 0x0a1f3c, emissiveIntensity: 0.16,
+      color: 0x214d86, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.9,
+      metalness: 0.25, roughness: 0.78, emissive: 0x0c2a52, emissiveIntensity: 0.26,
       transparent: true, opacity: 0.96,
     });
     mapMat.userData = { baseOp: 0.96 };
