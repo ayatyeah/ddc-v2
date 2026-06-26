@@ -176,10 +176,11 @@ export function initScene(canvas) {
     const mapTex = new THREE.CanvasTexture(mcv);
     mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.07, 0.07);
 
-    // Насыщеннее синий + заметнее рельеф и свечение -> суша «дышит», не мёртвый плоский цвет.
+    // Реалистичный цвет суши — степной/полупустынный хаки-тан (земля Казахстана), а не синяя
+    // заливка. Матовая поверхность + рельеф под светом; синяя неон-граница её обрамляет.
     const mapMat = new THREE.MeshStandardMaterial({
-      color: 0x214d86, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.9,
-      metalness: 0.25, roughness: 0.78, emissive: 0x0c2a52, emissiveIntensity: 0.26,
+      color: 0x7e7552, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.95,
+      metalness: 0.08, roughness: 0.9, emissive: 0x2a2614, emissiveIntensity: 0.32,
       transparent: true, opacity: 0.96,
     });
     mapMat.userData = { baseOp: 0.96 };
