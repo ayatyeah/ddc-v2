@@ -157,6 +157,26 @@ export function initScene(canvas) {
 
     // ExtrudeGeometry — плита страны. bevelSegments 2 -> мягкая реалистичная кромка (не гранёная).
     const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 2, steps: 1 });
+
+    // Цвета как на физической карте, распределены по географии (коорд. shape: x=lon, y=lat):
+    //   север — зелёная степь, юг — тан/песок (пустыни), восток/юго-восток — бурые горы.
+    extrude.computeBoundingBox();
+    {
+      const bb = extrude.boundingBox, pos = extrude.attributes.position;
+      const cN = new THREE.Color(0x6e7c46), cS = new THREE.Color(0xb0a06a), cM = new THREE.Color(0x7a5f42), tmp = new THREE.Color();
+      const cols = new Float32Array(pos.count * 3);
+      const dy = (bb.max.y - bb.min.y) || 1, dx = (bb.max.x - bb.min.x) || 1;
+      for (let i = 0; i < pos.count; i++) {
+        const latN = (pos.getY(i) - bb.min.y) / dy;   // 0 юг .. 1 север
+        const eastN = (pos.getX(i) - bb.min.x) / dx;   // 0 запад .. 1 восток
+        tmp.copy(cS).lerp(cN, latN);                   // юг (тан/пустыня) -> север (зелёная степь)
+        const mtn = Math.min(0.62, Math.max(0, eastN - 0.62) / 0.38 * (0.45 + 0.55 * (1 - latN)));
+        tmp.lerp(cM, mtn);                             // восток/юго-восток -> бурые горы
+        cols[i * 3] = tmp.r; cols[i * 3 + 1] = tmp.g; cols[i * 3 + 2] = tmp.b;
+      }
+      extrude.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    }
+
     extrude.rotateX(-Math.PI / 2);    // положить плашмя: shape.y(lat) -> -z
     extrude.translate(0, 0, hub2.z);  // сдвиг чтобы хаб попал под башни (z)
 
@@ -176,11 +196,11 @@ export function initScene(canvas) {
     const mapTex = new THREE.CanvasTexture(mcv);
     mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.07, 0.07);
 
-    // Реалистичный цвет суши — степной/полупустынный хаки-тан (земля Казахстана), а не синяя
-    // заливка. Матовая поверхность + рельеф под светом; синяя неон-граница её обрамляет.
+    // Цвет берём из вершинных цветов (физическая карта по географии). Матовая суша + рельеф
+    // под светом; синяя неон-граница обрамляет «землю», как на рельефной карте.
     const mapMat = new THREE.MeshStandardMaterial({
-      color: 0x6a7a48, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.95,
-      metalness: 0.08, roughness: 0.9, emissive: 0x202a12, emissiveIntensity: 0.32,
+      color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.95,
+      metalness: 0.06, roughness: 0.92, emissive: 0x141206, emissiveIntensity: 0.22,
       transparent: true, opacity: 0.96,
     });
     mapMat.userData = { baseOp: 0.96 };
