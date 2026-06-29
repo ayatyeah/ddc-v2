@@ -1168,3 +1168,115 @@ html[data-a11y='on'] .reveal { opacity: 1 !important; transform: none !important
 /* Плавная смена цвета у ссылок и иконочных кнопок */
 a { transition: color 0.2s var(--ease); }
 .icon-btn { transition: background 0.2s var(--ease), color 0.2s var(--ease); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ФУТУРИСТИЧНЫЙ СКИН (тёмная тема): лёгкое стекло, светящиеся хайрлайны, неон-циан.
+   Накладывается поверх базовых стилей. БЕЗ backdrop-blur на плашках — ради
+   плавности над движущейся 3D-сценой (стекло делаем прозрачными градиентами).
+   ════════════════════════════════════════════════════════════════════════════ */
+[data-theme='dark'] {
+  --accent: #3fe7ff;          /* неоновый циан — фирменный футуристичный акцент */
+  --accent-2: #79a6ff;
+}
+
+/* Метки/подзаголовки — неон-циан с мягким свечением */
+[data-theme='dark'] .eyebrow,
+[data-theme='dark'] .proj-sub { color: var(--accent); text-shadow: 0 0 18px rgba(63, 231, 255, 0.30); }
+
+/* Стеклянные плашки: прозрачнее, голубоватая светящаяся кромка */
+[data-theme='dark'] .text-glass { border-color: rgba(125, 195, 255, 0.20); }
+[data-theme='dark'] .svc,
+[data-theme='dark'] .proj-card,
+[data-theme='dark'] .af-card {
+  background: linear-gradient(155deg, rgba(24, 38, 68, 0.52), rgba(9, 14, 30, 0.62));
+  border-color: rgba(125, 195, 255, 0.16);
+}
+[data-theme='dark'] .nc-card,
+[data-theme='dark'] .ncard { border-color: rgba(125, 195, 255, 0.16); }
+
+/* Тонкая светящаяся кромка сверху у плиток услуг */
+[data-theme='dark'] .svc { position: relative; }
+[data-theme='dark'] .svc::after {
+  content: ''; position: absolute; left: 16%; right: 16%; top: 0; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.5;
+}
+
+/* Наведение — мягкое неоновое свечение по контуру */
+[data-theme='dark'] .svc:hover,
+[data-theme='dark'] .proj-card:hover,
+[data-theme='dark'] .nc-card:hover,
+[data-theme='dark'] .ncard:hover,
+[data-theme='dark'] .af-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent), 0 22px 60px rgba(2, 10, 30, 0.55);
+}
+
+/* Первичная кнопка — неоновый градиент со свечением */
+[data-theme='dark'] .btn-primary {
+  background: linear-gradient(120deg, var(--accent-2), var(--accent));
+  color: #04121f;
+  box-shadow: 0 0 0 1px rgba(63, 231, 255, 0.30), 0 8px 26px rgba(40, 150, 210, 0.30);
+}
+[data-theme='dark'] .btn-primary:hover { filter: brightness(1.07); box-shadow: 0 0 0 1px rgba(63, 231, 255, 0.55), 0 12px 34px rgba(40, 150, 210, 0.46); }
+
+/* Призрачная кнопка — стекло с неоновой рамкой */
+[data-theme='dark'] .btn-ghost {
+  background: rgba(22, 34, 62, 0.42); color: var(--ink);
+  border: 1px solid rgba(125, 195, 255, 0.30);
+}
+[data-theme='dark'] .btn-ghost:hover { border-color: var(--accent); color: var(--ink); box-shadow: 0 0 18px rgba(63, 231, 255, 0.22); }
+
+/* Поля ввода — неоновый фокус */
+[data-theme='dark'] .inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(63, 231, 255, 0.14); }
+
+/* Бейджи/чипы/CTA — голубоватая кромка и акцент */
+[data-theme='dark'] .proj-tag,
+[data-theme='dark'] .vchip { border-color: rgba(125, 195, 255, 0.22); }
+[data-theme='dark'] .svc-cta { color: var(--accent); }
+
+/* Навигация: активный пункт и язык — неон-акцент */
+[data-theme='dark'] .nav-links a.active,
+[data-theme='dark'] .lang button.active { color: var(--accent); }
+
+/* Модалки — голубоватая светящаяся рамка */
+[data-theme='dark'] .modal { border: 1px solid rgba(125, 195, 255, 0.18); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Дооптимизация под мобильные: ≥16px поля (без iOS-зума), компактные новые блоки,
+   более лёгкие размытые фоновые слои.
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* Поля ввода ≥16px — iOS Safari не зумит экран при фокусе на поле */
+  .inp, select.inp, textarea.inp { font-size: 16px; }
+
+  /* Карточки проектов — компактнее и читабельнее на телефоне */
+  .proj-card { padding: 24px 20px 22px; border-radius: var(--radius-sm); }
+  .proj-title { font-size: 1.18rem; }
+  .proj-tagline { font-size: 0.96rem; }
+  .proj-desc { font-size: 0.9rem; }
+  .proj-ico { width: 44px; height: 44px; }
+  .proj-tags { margin-top: 14px; }
+
+  /* Плитки услуг — компактный паддинг */
+  .svc { padding: 24px 20px 26px; }
+  .svc-cta { margin-top: 14px; }
+
+  /* Модальная заявка на услугу — комфортные отступы */
+  .apply-modal .inner { padding-top: 20px; }
+
+  /* Плотнее вертикальные отступы секций — меньше «пустого» скролла на телефоне */
+  .section { padding-top: clamp(60px, 13vw, 100px); padding-bottom: clamp(60px, 13vw, 100px); }
+}
+
+/* Тяжёлые размытые фоновые слои на телефоне — легче для GPU (меньше лагов/нагрева) */
+@media (max-width: 760px) {
+  [data-theme='dark'] #scroll-aurora { filter: blur(20px); opacity: 0.6; }
+  /* Неоновое свечение при наведении залипает после тапа — на телефоне делаем тень легче */
+  [data-theme='dark'] .svc:hover,
+  [data-theme='dark'] .proj-card:hover,
+  [data-theme='dark'] .nc-card:hover,
+  [data-theme='dark'] .ncard:hover,
+  [data-theme='dark'] .af-card:hover {
+    box-shadow: 0 12px 32px rgba(2, 10, 30, 0.45);
+  }
+}
