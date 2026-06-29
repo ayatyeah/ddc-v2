@@ -4,6 +4,7 @@ import Lenis from 'lenis';
 import App from './App.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 import './site/perfProfile.js';   // ставит <html data-engine> до первого кадра (per-engine CSS)
+import './perfMonitor.js';        // монитор фризов фона (смотрим в админке → «Перф»)
 import './styles.css';
 
 // Плавный «инерционный» скролл, как у топ-агентств. На тач-устройствах — нативный

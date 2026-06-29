@@ -25,6 +25,19 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        // Рантайм-кэш ТОЛЬКО для своих (same-origin) картинок — фото команды, building.png и т.п.
+        // Кросс-домен (шрифты gstatic) НЕ трогаем: SW-фетч упёрся бы в CSP connect-src 'self'.
+        runtimeCaching: [
+          {
+            urlPattern: ({ request, sameOrigin }) => sameOrigin && request.destination === 'image',
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'ddc-images',
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
     // Предсжатие ассетов: сервер отдаёт .br/.gz (express-static-gzip) — меньше трафик.

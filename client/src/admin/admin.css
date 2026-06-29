@@ -346,30 +346,40 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
     z-index: 60;
   }
   .rail-brand { display: none; }
-  /* Все пункты равными долями во всю ширину — без горизонтального скролла и обрезки.
-     Текущий раздел и так подписан в шапке, поэтому на мобиле — только иконки. */
+  /* Нижняя навигация: ПОДПИСАННЫЕ пункты + горизонтальный скролл со снапом — все разделы
+     понятны и доступны, тап-таргеты крупные. Справа «краешек» затухает (mask) → видно, что
+     панель листается. Активный раздел — синяя пилюля. */
   .rail-nav {
     flex-direction: row; gap: 2px; width: auto; flex: 1 1 auto;
-    justify-content: space-around; overflow: visible;
+    justify-content: flex-start; overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; -ms-overflow-style: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent);
+            mask-image: linear-gradient(90deg, #000 90%, transparent);
   }
-  .rail-btn { flex: 1 1 0; min-width: 0; padding: 8px 2px; border-radius: 12px; gap: 0; }
-  .rail-btn span { display: none; }
+  .rail-nav::-webkit-scrollbar { display: none; }
+  .rail-btn {
+    flex: 0 0 auto; min-width: 62px; min-height: 52px; padding: 8px 10px 6px; border-radius: 14px; gap: 4px;
+    scroll-snap-align: start; justify-content: center;
+  }
+  .rail-btn span { display: block; font-size: 9.5px; white-space: nowrap; }
+  .rail-btn svg { width: 22px; height: 22px; }
   /* Foot-иконки закреплены справа, не уезжают со скроллом */
   .rail-foot {
     margin-top: 0; flex-direction: row; gap: 4px; align-items: center;
     flex: 0 0 auto; padding-left: 8px; border-left: 1px solid rgba(255,255,255,0.08);
   }
-  .rail-icon { width: 36px; height: 36px; }
-  /* Контент не должен прятаться под нижней панелью */
-  .adm-body { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+  .rail-icon { width: 40px; height: 40px; }
+  /* Контент не должен прятаться под нижней панелью (она выше — с подписями) */
+  .adm-body { padding-bottom: calc(98px + env(safe-area-inset-bottom)); }
   .adm-bar { padding: 16px 18px; }
   .adm-bar-title { font-size: 1.25rem; }
   .adm-main { padding: 20px 16px 40px; }
 }
 
 @media (max-width: 520px) {
-  .rail-btn { padding: 7px 2px; }
-  .rail-btn svg { width: 20px; height: 20px; }
+  .rail-btn { padding: 7px 9px 6px; min-width: 58px; }
+  .rail-btn svg { width: 21px; height: 21px; }
   .rail-foot { gap: 2px; }
   .rail-icon { width: 34px; height: 34px; }
   .adm-bar .who { font-size: 12px; }
@@ -671,3 +681,39 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
 .svc-icon-opt:hover { transform: translateY(-2px); color: var(--ink); }
 .svc-icon-opt.active { border-width: 2px; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 18%, transparent); }
 .svc-mini-ico { display: inline-flex; }
+
+/* ── Тестер фризов фона (PerfTester) ──────────────────────────────────────────── */
+.pf-wrap { display: flex; flex-direction: column; gap: 16px; }
+.pf-head { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.pf-head h2 { font-size: 1.2rem; }
+.pf-sub { margin-top: 6px; font-size: 13px; color: var(--ink-soft); max-width: 70ch; line-height: 1.5; }
+.pf-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.adm-btn.pf-off { background: var(--ink-faint); }
+.pf-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+.pf-stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; }
+.pf-stat .k { font-size: 11.5px; color: var(--ink-soft); }
+.pf-stat .v { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+.pf-stat .v.ok { color: #1f9d57; }
+.pf-stat .v.bad { color: #d23b3b; }
+.pf-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+.pf-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 16px; }
+.pf-card-h { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 12px; }
+.pf-card-h small { font-weight: 400; color: var(--ink-faint); }
+.pf-bars { display: flex; align-items: flex-end; gap: 6px; height: 150px; }
+.pf-bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; position: relative; }
+.pf-bar-fill { width: 100%; min-height: 2px; background: linear-gradient(180deg, #d23b3b, #c8901f); border-radius: 4px 4px 0 0; transition: height 0.3s var(--ease); }
+.pf-bar-c { font-size: 11px; font-weight: 700; color: var(--ink); height: 14px; }
+.pf-bar-x { font-size: 10px; color: var(--ink-faint); font-family: var(--mono); margin-top: 4px; }
+.pf-paths { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.pf-paths li { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.pf-paths li:last-child { border-bottom: none; }
+.pf-paths b { font-variant-numeric: tabular-nums; }
+.pf-table-wrap { overflow-x: auto; }
+.pf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pf-table th { text-align: left; padding: 8px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); border-bottom: 1px solid var(--line); white-space: nowrap; }
+.pf-table td { padding: 8px 10px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pf-dt { font-weight: 700; padding: 2px 8px; border-radius: 980px; }
+.pf-sev-lo { background: rgba(196,144,12,0.14); color: #c8901f; }
+.pf-sev-mid { background: rgba(210,90,40,0.16); color: #d2691e; }
+.pf-sev-hi { background: rgba(210,59,59,0.16); color: #d23b3b; }
+@media (max-width: 760px) { .pf-grid { grid-template-columns: 1fr; } }
