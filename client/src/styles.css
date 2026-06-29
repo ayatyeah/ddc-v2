@@ -1332,3 +1332,24 @@ a { transition: color 0.2s var(--ease); }
   background: linear-gradient(180deg, #ffffff, #93d6ff);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Мобильный навбар + фон: убираем наезд логотипа на меню и облегчаем фон.
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* На телефоне бренд — только логотип: 3-строчная надпись наезжала на навбар. */
+  .brandlock .bl-word { display: none; }
+  .brandlock .bl-logo { width: 38px; height: 38px; }
+  /* Островок навигации компактнее — гарантированно не пересекается с логотипом. */
+  .nav-island { gap: 4px; padding: 5px; }
+  .lang button { padding: 8px 9px; font-size: 12px; }
+  .icon-btn { width: 38px; height: 38px; }
+}
+
+@media (max-width: 760px) {
+  /* Фон легче для GPU: убираем самый тяжёлый полноэкранный blur и упрощаем планету. */
+  #scroll-aurora { display: none; }                          /* полноэкранный blur — дорого */
+  #scroll-depth { animation: none; }                         /* звёзды статичны — дешевле */
+  #bg-planet { box-shadow: 0 0 50px rgba(70, 130, 230, 0.20); }  /* меньше радиус размытия */
+  #bg-planet::before, #bg-planet::after { display: none; }   /* без орбитальных колец на телефоне */
+}
