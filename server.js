@@ -124,7 +124,11 @@ app.use(expressStaticGzip(STATIC_DIR, {
   serveStatic: {
     maxAge: PROD ? '1y' : 0,
     setHeaders: (res, filePath) => {
-      if (/\.(html)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+      // HTML и сервис-воркер (sw.js/registerSW.js) НЕ кешируем надолго — иначе PWA
+      // не получит обновление после деплоя. Остальные ассеты хешированы → можно 1 год.
+      if (/\.html$/.test(filePath) || /[\\/](sw|registerSW)\.js$/.test(filePath)) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
     },
   },
 }));

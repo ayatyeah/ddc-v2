@@ -6,6 +6,9 @@ public/assets/
 public/index.html
 public/*.br
 public/*.gz
+public/sw.js
+public/registerSW.js
+public/workbox-*.js
 *.log
 .DS_Store
 .vscode/

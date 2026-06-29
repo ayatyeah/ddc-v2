@@ -56,7 +56,9 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 /* Базовый кегль чуть крупнее (16 → 17px) — всё на rem-единицах масштабируется по сайту. */
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; font-size: 106.25%; }
+/* Текучая (fluid) типографика: корневой кегль плавно растёт с шириной экрана
+   (16px на телефоне → 18px на десктопе). Всё на rem масштабируется заодно. */
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; font-size: clamp(16px, 14.7px + 0.35vw, 18px); }
 body {
   font-family: var(--sans);
   color: var(--ink);
@@ -1317,6 +1319,14 @@ a { transition: color 0.2s var(--ease); }
   background: linear-gradient(180deg, #ffffff, #93d6ff);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
+
+/* Плавный инерционный скролл (Lenis). Управление скроллом — у Lenis, поэтому при
+   активном smooth выключаем нативный scroll-behavior, чтобы не было двойного сглаживания.
+   Iframe карты НЕ глушим (оставляем интерактивным). */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
 
 /* ════════════════════════════════════════════════════════════════════════════
    Мобильный навбар + фон: убираем наезд логотипа на меню и облегчаем фон.
