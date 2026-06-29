@@ -126,45 +126,30 @@ button { font-family: inherit; cursor: pointer; }
 
 /* 2D-планета на заднем фоне (вместо прежней 3D-планеты). Сидит позади 3D-сцены,
    медленно «дышит» и слегка дрейфует — тихий глобус в небе над страной. */
+/* Вместо планеты — тихое «цифровое сияние» в верхне-правом углу: мягкий голубой
+   глоу + одна изящная дуга-орбита. Не объект, не отвлекает — просто дышащий свет. */
 #bg-planet {
   position: fixed; z-index: -4; pointer-events: none;
-  /* Планета «выглядывает» из верхне-правого угла: центр за пределами экрана,
-     в кадре только её нижне-левый край (как на референсе). Лит — нижне-левый лимб. */
-  top: -24vh; right: -12vw; width: 64vh; height: 64vh; border-radius: 50%;
-  /* едва заметная светящаяся линия по контуру планеты (атмосферный ободок) */
-  border: 1px solid rgba(150, 200, 255, 0.22);
+  top: -16vh; right: -12vw; width: 50vh; height: 50vh; border-radius: 50%;
+  border: none;
   background:
-    radial-gradient(circle at 30% 70%, rgba(140,190,255,0.18), rgba(140,190,255,0) 50%),
-    radial-gradient(circle at 32% 68%, #6189c6, #2b5089 42%, #14305a 70%, #0a1c3a 100%);
-  box-shadow:
-    0 0 130px rgba(70, 130, 230, 0.26),
-    0 0 10px 1px rgba(150, 200, 255, 0.16),   /* мягкое свечение вдоль контура */
-    inset 0 0 80px rgba(5, 12, 28, 0.55),
-    inset 46px 50px 110px rgba(150, 195, 255, 0.14);   /* мягкий свет с нижне-левой стороны */
-  opacity: 0.7;
-  animation: planetFloat 26s ease-in-out infinite;
+    radial-gradient(circle at 38% 64%, rgba(70, 200, 255, 0.12) 0%, rgba(45, 120, 220, 0.05) 38%, transparent 60%);
+  opacity: 0.85;
+  animation: planetFloat 30s ease-in-out infinite;
 }
-[data-theme='dark'] #bg-planet { opacity: 0.82; }
-/* Изящные орбитальные линии: два тонких эллипса-орбиты под разными углами + ободок.
-   Лежат на той же плавающей планете (двигаются вместе с ней). */
-#bg-planet::before, #bg-planet::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+[data-theme='dark'] #bg-planet { opacity: 0.95; }
+/* одна тонкая «орбита данных» — лёгкий штрих, без эффекта планеты */
 #bg-planet::before {
-  inset: -17%;
-  border: 1px solid rgba(150, 200, 255, 0.16);
-  transform: rotate(-24deg) scaleY(0.30);
-  box-shadow: 0 0 16px rgba(90, 160, 255, 0.16);
-}
-#bg-planet::after {
-  inset: -5%;
-  border: 1px solid rgba(150, 200, 255, 0.10);
-  transform: rotate(13deg) scaleY(0.52);
+  content: ''; position: absolute; inset: -6%; border-radius: 50%; pointer-events: none;
+  border: 1px solid rgba(110, 200, 255, 0.10);
+  transform: rotate(-22deg) scaleY(0.32);
 }
 @keyframes planetFloat {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50%      { transform: translateY(16px) scale(1.012); }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(0, 14px, 0) scale(1.02); }
 }
 @media (prefers-reduced-motion: reduce) { #bg-planet { animation: none; } }
-@media (max-width: 760px) { #bg-planet { width: 46vh; height: 46vh; top: -10vh; right: -16vw; opacity: 0.5; } }
+@media (max-width: 760px) { #bg-planet { width: 40vh; height: 40vh; top: -8vh; right: -14vw; opacity: 0.6; } }
 
 /* Полноэкранный 3D-фон (Scene3D) — башни DDC, параллакс-проезд по скроллу.
    translateZ(0) + will-change — выносим фон в отдельный GPU-слой композитора, чтобы он

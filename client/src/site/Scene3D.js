@@ -80,7 +80,7 @@ export function initScene(canvas) {
     // Лёгкий холодный тон + чуть глаже стекло -> насыщеннее синева и чётче блики.
     const towerMat = (tex) => new THREE.MeshStandardMaterial({
       map: tex, color: 0x5c6a86, roughness: 0.22, metalness: 0.42, envMapIntensity: 1.1,   // тёмное стекло, но с подсветкой
-      emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.48,                        // окна светятся ярче
+      emissive: 0xbfe6ff, emissiveMap: tex, emissiveIntensity: 0.72,                        // окна светятся ярче (тёплая синева)
     });
     const tower = (w, d, h, x, tex) => {
       const tg = new THREE.Group();
@@ -95,9 +95,34 @@ export function initScene(canvas) {
     gTowers.add(tower(10.5, 10.5, 29, 6.5, facadeB));
     // Синий подиум, посаженный прямо на карту (тонкая плита у поверхности)
     const podium = box(26, 1.6, 14, matte(0x1c4f8e), 0.2); podium.position.y = 0.8; gTowers.add(podium);
-    const podiumTop = box(22, 0.4, 11, emis(0x3a7fd6, 0.35), 0.2); podiumTop.position.y = 1.7; gTowers.add(podiumTop);
+    const podiumTop = box(22, 0.4, 11, emis(0x3a7fd6, 0.62), 0.2); podiumTop.position.y = 1.7; gTowers.add(podiumTop);
     const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 3, 10), metal()); mast.position.set(6.5, 30.6, 0); gTowers.add(mast);
-    beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0xe6c789, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
+    beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0x7ad6ff, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
+
+    // Мягкое голубое свечение у основания — «штаб-квартира светится на карте».
+    // На мобиле пропускаем (большой additive-план = тяжёлый overdraw → фризы).
+    if (!mobile) {
+      const glowCv = document.createElement('canvas'); glowCv.width = glowCv.height = 128;
+      const gx = glowCv.getContext('2d');
+      const gr = gx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gr.addColorStop(0, 'rgba(120,210,255,0.9)'); gr.addColorStop(0.45, 'rgba(70,160,255,0.32)'); gr.addColorStop(1, 'rgba(70,160,255,0)');
+      gx.fillStyle = gr; gx.fillRect(0, 0, 128, 128);
+      const glowTex = new THREE.CanvasTexture(glowCv);
+      const baseGlow = new THREE.Mesh(new THREE.PlaneGeometry(46, 32),
+        new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55 }));
+      baseGlow.rotation.x = -Math.PI / 2; baseGlow.position.set(-0.3, 0.15, 0); baseGlow.renderOrder = 3; gTowers.add(baseGlow);
+    }
+
+    // Светящаяся надпись «DDC» на крыше высокой башни — спрайт всегда лицом к камере.
+    const signCv = document.createElement('canvas'); signCv.width = 256; signCv.height = 96;
+    const sg = signCv.getContext('2d');
+    sg.font = '800 62px Inter, Arial, sans-serif'; sg.textAlign = 'center'; sg.textBaseline = 'middle';
+    sg.shadowColor = 'rgba(120,210,255,0.95)'; sg.shadowBlur = 26; sg.fillStyle = '#dff3ff';
+    sg.fillText('DDC', 128, 52);
+    const signTex = new THREE.CanvasTexture(signCv);
+    const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sign.position.set(6.5, 32.0, 0); sign.scale.set(9, 3.4, 1); gTowers.add(sign);
+
     gTowers.traverse((o) => { if (o.material) { o.material.transparent = true; towerMats.push(o.material); } });
   })();
 
@@ -225,8 +250,8 @@ export function initScene(canvas) {
     // под светом; синяя неон-граница обрамляет «землю», как на рельефной карте.
     const mapMat = new THREE.MeshStandardMaterial({
       color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.55,
-      metalness: 0.14, roughness: 0.9, emissive: 0x0a1838, emissiveIntensity: 0.18,
-      transparent: true, opacity: 0.97,
+      metalness: 0.14, roughness: 0.88, emissive: 0x10254e, emissiveIntensity: 0.3,
+      transparent: true, opacity: 1,
     });
     mapMat.userData = { baseOp: 0.96 };
     const mapMesh = new THREE.Mesh(extrude, mapMat); mapMesh.position.y = -1.4; gMap.add(mapMesh); mapMats.push(mapMat);
@@ -284,16 +309,21 @@ export function initScene(canvas) {
       // размер узла варьируем: часть городов — крупные «хабы», часть — мелкие точки
       const big = (Math.abs(Math.round(lo * 53 + la * 29)) % 4) === 0;
       const nodeS = big ? 4.4 : 2.9;
-      // мягкий ореол под точкой (bloom-стиль свечение) — крупный тусклый спрайт
-      const halo = new THREE.Sprite(nodeMat.clone());
-      halo.position.set(nx, 0.36, nz); halo.scale.set(nodeS * 2.7, nodeS * 2.7, 1); gMap.add(halo);
-      halo.material.opacity = 0.34; halo.material.userData = { baseOp: 0.34 };
-      mapMats.push(halo.material);
+      // мягкий ореол под точкой (bloom-стиль свечение) — на мобиле пропускаем (overdraw)
+      let haloMat = null;
+      if (!mobile) {
+        const halo = new THREE.Sprite(nodeMat.clone());
+        halo.position.set(nx, 0.36, nz); halo.scale.set(nodeS * 2.7, nodeS * 2.7, 1); gMap.add(halo);
+        halo.material.opacity = 0.34; halo.material.userData = { baseOp: 0.34 };
+        mapMats.push(halo.material); haloMat = halo.material;
+      }
       // яркое ядро узла
       const sp = new THREE.Sprite(nodeMat.clone());
       sp.position.set(nx, 0.4, nz); sp.scale.set(nodeS, nodeS, 1); gMap.add(sp);
       sp.material.userData = { baseOp: 0.95 };
       mapMats.push(sp.material);
+      // для «мерцания городов»: запоминаем материалы узла + индивидуальную фазу
+      (gMap.userData.nodes = gMap.userData.nodes || []).push({ c: sp.material, h: haloMat, ph: (Math.abs(Math.round(lo * 71 + la * 43)) % 360) * 0.01745 });
 
       // сияющая изогнутая линия от основания башен к узлу (QuadraticBezier, приподнят).
       // end.y приподнят над поверхностью (карта сверху на y≈0), чтобы дуга не «ложилась» в текстуру.
@@ -326,8 +356,9 @@ export function initScene(canvas) {
     }
 
     // ── Светящийся «пунктирный» контур страны: береговая линия из мелких огоньков
-    //    (ключевая деталь референса). Один THREE.Points → один drawcall, дёшево. ──
-    {
+    //    (ключевая деталь референса). Один THREE.Points → один drawcall.
+    //    На мобиле пропускаем весь блок (точки + пыль = тяжёлый additive overdraw). ──
+    if (!mobile) {
       const STEP = 0.85;                 // шаг между огоньками вдоль контура (ед. сцены)
       const dots = [];
       const n = outlinePts.length;
@@ -555,8 +586,10 @@ export function initScene(canvas) {
     const asp = camera.aspect || 1;
     const fit = asp < 1.2 ? 1 + (1.2 - asp) * 0.8 : 1;
     const par = 1 - lift;                        // параллакс гаснет в виде сверху
-    camera.position.set(px * 2.0 * par, eyeY * fit - py * 1.2 * par + Math.sin(t * 0.3) * 0.08, camZ * fit);
-    camera.lookAt(px * 0.4 * par, lookY, lookZ);
+    // Очень медленный «живой» дрейф камеры (2-3%) — кадр не статичен, но и не «плавает».
+    const drift = Math.sin(t * 0.13) * par;
+    camera.position.set(px * 2.0 * par + drift * 0.8, eyeY * fit - py * 1.2 * par + Math.sin(t * 0.26) * 0.2, camZ * fit);
+    camera.lookAt(px * 0.4 * par + drift * 0.3, lookY, lookZ);
 
     // Здания стоят в полный рост, пока камера поднимается; затем ПРОПАДАЮТ, освобождая
     // основание под плоскую надпись DDC. Карта и линии остаются — главный объект.
@@ -593,6 +626,12 @@ export function initScene(canvas) {
       const u = pkt.userData; u.t += u.sp * 0.016; if (u.t > 1) u.t -= 1;
       u.curve.getPoint(u.t, pkt.position);
       pkt.material.opacity = Math.min(1, (0.5 + 0.5 * Math.sin(t * 4 + u.t * 6)) * boost);
+    }
+    // Лёгкое мерцание городов — у каждого узла своя фаза (живой, но спокойный кадр).
+    for (const nd of (gMap.userData.nodes || [])) {
+      const tw = 0.82 + 0.18 * Math.sin(t * 1.4 + nd.ph);
+      nd.c.opacity = Math.min(1, 0.95 * tw * boost);
+      if (nd.h) nd.h.opacity = Math.min(1, 0.34 * (0.6 + 0.55 * tw) * boost);
     }
 
     // (звёзды/спутники/облака/планета удалены — в LIGHT-режиме они не рисовались)
