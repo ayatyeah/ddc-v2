@@ -26,10 +26,7 @@ export default function FpsHud() {
     if (cv) { cv.width = W * dpr; cv.height = H * dpr; if (ctx) ctx.scale(dpr, dpr); }
     const hist = new Array(W).fill(60);
     const col = (f) => (f >= 55 ? '#3fe7a0' : f >= 30 ? '#f3c44a' : '#ff5c5c');
-    // На мобиле канвас перерисовываем реже (раз в 4 кадра) — чтобы сам HUD не подъедал rAF.
-    const mobile = window.matchMedia('(max-width: 760px)').matches;
-    const drawEvery = mobile ? 4 : 1;
-    let last = performance.now(), raf = 0, fc = 0;
+    let last = performance.now(), raf = 0;
     const live = liveRef.current;
 
     const draw = (now) => {
@@ -40,7 +37,7 @@ export default function FpsHud() {
         if (live.ema < live.min) live.min = live.ema;
         hist.push(live.ema); hist.shift();
       }
-      if (ctx && (++fc % drawEvery === 0)) {
+      if (ctx) {
         ctx.clearRect(0, 0, W, H);
         ctx.lineWidth = 1; ctx.globalAlpha = 0.9;
         for (let i = 0; i < W; i++) {

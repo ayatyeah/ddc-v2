@@ -60,7 +60,7 @@ export default function ServiceApplyModal({ services, initialId, lang, onClose }
   // (will-change: transform) и окно «прилипает» к верху страницы, а не к экрану.
   return createPortal((
     <div className="modal-ov" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
-      <div className="modal apply-modal" role="dialog" aria-modal="true" aria-label={t(lang, 'services.apply')} data-lenis-prevent>
+      <div className="modal apply-modal" role="dialog" aria-modal="true" aria-label={t(lang, 'services.apply')}>
         <div className="bar" style={{ background: selected?.color || 'var(--blue)' }} />
         <div className="inner">
           <button className="x" onClick={onClose} aria-label={t(lang, 'news.close')}>×</button>

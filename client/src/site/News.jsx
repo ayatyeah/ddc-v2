@@ -166,7 +166,7 @@ export default function News() {
 
       {aiActive && createPortal(
         <div className="modal-ov" onClick={() => setAiActive(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} data-lenis-prevent>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="bar" style={aiActive.image
               ? { height: 200, padding: 0, background: '#0a1a3e' }
               : { background: 'linear-gradient(120deg,#13245a,#0a1a3e)' }}>
@@ -187,7 +187,7 @@ export default function News() {
 
       {active && createPortal(
         <div className="modal-ov" onClick={() => setActive(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} data-lenis-prevent>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             {active.image
               ? <div className="bar" style={{ height: 200, padding: 0, background: active.color || '#1a4aaa' }}><img src={active.image} alt="" style={{ width: '100%', height: '100%', objectFit: active.image_fit || 'cover', objectPosition: active.image_pos || '50% 50%' }} /></div>
               : <div className="bar" style={{ background: active.color || '#1a4aaa' }} />}
