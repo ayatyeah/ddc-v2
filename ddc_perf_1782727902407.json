@@ -1,0 +1,204 @@
+{
+  "startedAt": 1835,
+  "bootAt": 1782727709007,
+  "events": [
+    {
+      "t": 15258,
+      "dt": 411,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 15812,
+      "dt": 554,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 20085,
+      "dt": 254,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 20412,
+      "dt": 327,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 32595,
+      "dt": 861,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 35685,
+      "dt": 636,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 35829,
+      "dt": 143,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 61495,
+      "dt": 218,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 61862,
+      "dt": 367,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 64829,
+      "dt": 282,
+      "path": "/admin",
+      "scrollY": 0,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 160299,
+      "dt": 364,
+      "path": "/admin",
+      "scrollY": 32,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 160516,
+      "dt": 217,
+      "path": "/admin",
+      "scrollY": 32,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 164633,
+      "dt": 217,
+      "path": "/",
+      "scrollY": 922,
+      "prog": null,
+      "dpr": null
+    },
+    {
+      "t": 165249,
+      "dt": 617,
+      "path": "/",
+      "scrollY": 235,
+      "prog": 0,
+      "dpr": 1
+    },
+    {
+      "t": 165333,
+      "dt": 50,
+      "path": "/",
+      "scrollY": 3,
+      "prog": 0.04,
+      "dpr": 1
+    },
+    {
+      "t": 166299,
+      "dt": 67,
+      "path": "/",
+      "scrollY": 1553,
+      "prog": 0.4,
+      "dpr": 0.85
+    },
+    {
+      "t": 166666,
+      "dt": 50,
+      "path": "/",
+      "scrollY": 2524,
+      "prog": 0.58,
+      "dpr": 0.85
+    },
+    {
+      "t": 169633,
+      "dt": 333,
+      "path": "/uslugi",
+      "scrollY": 0,
+      "prog": 0.45,
+      "dpr": 0.85
+    },
+    {
+      "t": 169733,
+      "dt": 67,
+      "path": "/uslugi",
+      "scrollY": 0,
+      "prog": 0.51,
+      "dpr": 0.85
+    },
+    {
+      "t": 169816,
+      "dt": 67,
+      "path": "/proekty",
+      "scrollY": 0,
+      "prog": 0.55,
+      "dpr": 0.85
+    },
+    {
+      "t": 170999,
+      "dt": 250,
+      "path": "/o-nas",
+      "scrollY": 0,
+      "prog": 0.62,
+      "dpr": 0.85
+    },
+    {
+      "t": 171066,
+      "dt": 67,
+      "path": "/o-nas",
+      "scrollY": 0,
+      "prog": 0.62,
+      "dpr": 0.85
+    },
+    {
+      "t": 172449,
+      "dt": 50,
+      "path": "/kontakty",
+      "scrollY": 233,
+      "prog": 0.1,
+      "dpr": 0.85
+    },
+    {
+      "t": 172916,
+      "dt": 50,
+      "path": "/kontakty",
+      "scrollY": 240,
+      "prog": 0.1,
+      "dpr": 0.85
+    }
+  ],
+  "frames": 4851,
+  "longFrames": 24,
+  "worst": 860.9799999999959,
+  "fps": 60,
+  "recording": true,
+  "device": "1920×1046 · dpr 1 · gecko"
+}

@@ -6,6 +6,7 @@ import Nav from './Nav.jsx';
 import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
+import FpsHud from './FpsHud.jsx';
 import Fog from './Fog.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
@@ -167,6 +168,7 @@ export default function Site() {
       </main>
       <Footer />
       <Assistant />
+      <FpsHud />
     </>
   );
 }

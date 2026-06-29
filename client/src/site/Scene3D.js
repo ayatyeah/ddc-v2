@@ -653,7 +653,25 @@ export function initScene(canvas) {
     renderer.render(scene, camera);
   }
 
-  function start() { if (!running) { running = true; clock.getDelta(); if (!raf) raf = requestAnimationFrame(loop); } }
+  let warmed = false;
+  function start() {
+    if (!running) {
+      running = true; clock.getDelta();
+      // Прогрев шейдеров: компилируем материалы ДО первого появления (башни, надпись DDC,
+      // сеть). Иначе при первом показе на скролле (прогресс ~0.4–0.6) GPU компилирует шейдер
+      // в кадре → разовый фриз. Делаем один раз, временно показав скрытые группы.
+      if (!warmed) {
+        warmed = true;
+        try {
+          const tv = gTowers.visible, dv = ddcGroup.visible;
+          gTowers.visible = true; ddcGroup.visible = true;
+          renderer.compile(scene, camera);
+          gTowers.visible = tv; ddcGroup.visible = dv;
+        } catch { /* compile необязателен */ }
+      }
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+  }
   function stop() { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
   const onVisibility = () => { document.hidden ? stop() : start(); };
   document.addEventListener('visibilitychange', onVisibility);
