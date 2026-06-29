@@ -85,12 +85,12 @@ button { font-family: inherit; cursor: pointer; }
 }
 [data-theme='dark'] #scroll-bg {
   background:
-    radial-gradient(120% 85% at 50% -12%, var(--bg-top, #16306a) 0%, transparent 58%),
-    radial-gradient(75% 65% at 14% 80%, rgba(48, 92, 178, 0.24) 0%, transparent 60%),
-    radial-gradient(62% 56% at 88% 16%, rgba(68, 122, 205, 0.20) 0%, transparent 62%),
-    radial-gradient(40% 50% at 50% 50%, rgba(30, 60, 120, 0.24) 0%, transparent 70%),
-    radial-gradient(160% 140% at 50% 36%, transparent 46%, rgba(4, 8, 18, 0.5) 80%, rgba(3, 6, 14, 0.9) 100%),
-    linear-gradient(180deg, var(--bg-a, #0a1224) 0%, var(--bg-b, #070d1c) 100%);
+    radial-gradient(120% 85% at 50% -12%, var(--bg-top, #112a52) 0%, transparent 54%),
+    radial-gradient(75% 65% at 14% 80%, rgba(40, 80, 158, 0.13) 0%, transparent 60%),
+    radial-gradient(62% 56% at 88% 16%, rgba(54, 102, 176, 0.11) 0%, transparent 62%),
+    radial-gradient(40% 50% at 50% 50%, rgba(22, 48, 100, 0.14) 0%, transparent 70%),
+    radial-gradient(160% 140% at 50% 34%, transparent 38%, rgba(3, 6, 14, 0.62) 76%, rgba(2, 4, 10, 0.95) 100%),
+    linear-gradient(180deg, var(--bg-a, #060c1a) 0%, var(--bg-b, #03060e) 100%);
 }
 
 /* Слой атмосферной дымки (nebula) — мягкие дрейфующие пятна для глубины */
@@ -128,28 +128,43 @@ button { font-family: inherit; cursor: pointer; }
    медленно «дышит» и слегка дрейфует — тихий глобус в небе над страной. */
 #bg-planet {
   position: fixed; z-index: -4; pointer-events: none;
-  top: 6vh; right: 9vw; width: 340px; height: 340px; border-radius: 50%;
-  /* едва заметная светящаяся линия по контуру планеты */
+  /* Планета «выглядывает» из верхне-правого угла: центр за пределами экрана,
+     в кадре только её нижне-левый край (как на референсе). Лит — нижне-левый лимб. */
+  top: -24vh; right: -12vw; width: 64vh; height: 64vh; border-radius: 50%;
+  /* едва заметная светящаяся линия по контуру планеты (атмосферный ободок) */
   border: 1px solid rgba(150, 200, 255, 0.22);
   background:
-    radial-gradient(circle at 50% 50%, rgba(120,170,255,0.18), rgba(120,170,255,0) 72%),
-    radial-gradient(circle at 36% 30%, #5a86c4, #244c84 50%, #102a4e 78%, #0a1c38 100%);
+    radial-gradient(circle at 30% 70%, rgba(140,190,255,0.18), rgba(140,190,255,0) 50%),
+    radial-gradient(circle at 32% 68%, #6189c6, #2b5089 42%, #14305a 70%, #0a1c3a 100%);
   box-shadow:
-    0 0 90px rgba(70, 130, 230, 0.30),
-    0 0 8px 1px rgba(150, 200, 255, 0.18),   /* мягкое свечение вдоль контура */
-    inset 0 0 12px rgba(150, 200, 255, 0.18),
-    inset -22px -26px 64px rgba(0, 6, 18, 0.6),
-    inset 20px 18px 54px rgba(160, 200, 255, 0.22);
-  opacity: 0.6;
-  animation: planetFloat 22s ease-in-out infinite;
+    0 0 130px rgba(70, 130, 230, 0.26),
+    0 0 10px 1px rgba(150, 200, 255, 0.16),   /* мягкое свечение вдоль контура */
+    inset 0 0 80px rgba(5, 12, 28, 0.55),
+    inset 46px 50px 110px rgba(150, 195, 255, 0.14);   /* мягкий свет с нижне-левой стороны */
+  opacity: 0.7;
+  animation: planetFloat 26s ease-in-out infinite;
 }
-[data-theme='dark'] #bg-planet { opacity: 0.72; }
+[data-theme='dark'] #bg-planet { opacity: 0.82; }
+/* Изящные орбитальные линии: два тонких эллипса-орбиты под разными углами + ободок.
+   Лежат на той же плавающей планете (двигаются вместе с ней). */
+#bg-planet::before, #bg-planet::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+#bg-planet::before {
+  inset: -17%;
+  border: 1px solid rgba(150, 200, 255, 0.16);
+  transform: rotate(-24deg) scaleY(0.30);
+  box-shadow: 0 0 16px rgba(90, 160, 255, 0.16);
+}
+#bg-planet::after {
+  inset: -5%;
+  border: 1px solid rgba(150, 200, 255, 0.10);
+  transform: rotate(13deg) scaleY(0.52);
+}
 @keyframes planetFloat {
   0%, 100% { transform: translateY(0) scale(1); }
-  50%      { transform: translateY(14px) scale(1.015); }
+  50%      { transform: translateY(16px) scale(1.012); }
 }
 @media (prefers-reduced-motion: reduce) { #bg-planet { animation: none; } }
-@media (max-width: 760px) { #bg-planet { width: 200px; height: 200px; top: 4vh; right: 6vw; opacity: 0.5; } }
+@media (max-width: 760px) { #bg-planet { width: 46vh; height: 46vh; top: -10vh; right: -16vw; opacity: 0.5; } }
 
 /* Полноэкранный 3D-фон (Scene3D) — башни DDC, параллакс-проезд по скроллу.
    translateZ(0) + will-change — выносим фон в отдельный GPU-слой композитора, чтобы он
@@ -451,7 +466,7 @@ button { font-family: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .hero-orbs, .hero-inner { transform: none; } }
 .orb { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.5; }
 .orb.o1 { width: 460px; height: 460px; left: -120px; top: 6%; background: radial-gradient(circle, var(--blue), transparent 70%); }
-.orb.o2 { width: 380px; height: 380px; right: -100px; top: 30%; background: radial-gradient(circle, var(--gold-soft), transparent 70%); opacity: 0.35; }
+.orb.o2 { width: 380px; height: 380px; right: -100px; top: 30%; background: radial-gradient(circle, #2f9fd6, transparent 70%); opacity: 0.3; }
 .orb.o3 { width: 520px; height: 520px; left: 30%; bottom: -180px; background: radial-gradient(circle, var(--blue-bright), transparent 70%); opacity: 0.3; }
 .hero-inner { position: relative; z-index: 1; max-width: 920px; }
 .hero h1 {
@@ -1279,4 +1294,41 @@ a { transition: color 0.2s var(--ease); }
   [data-theme='dark'] .af-card:hover {
     box-shadow: 0 12px 32px rgba(2, 10, 30, 0.45);
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ПРЕМИУМ-ДОВОДКА: «дорогой» геро, блеск кнопок, акцентные числа, мягкий вход.
+   ════════════════════════════════════════════════════════════════════════════ */
+/* Геро-заголовок — бело-циановый градиент (яркий, читаемый) + мягкое свечение */
+[data-theme='dark'] .hero h1 {
+  background: linear-gradient(176deg, #ffffff 0%, #eaf6ff 46%, #a9ddff 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 2px 22px rgba(6, 16, 34, 0.55));
+}
+.hero h1 .grad { background: linear-gradient(120deg, var(--accent, #3fe7ff), #8fd0ff); }
+
+/* Плавный «дорогой» вход элементов геро (стаггер сверху вниз) */
+.hero-inner > * { opacity: 0; animation: heroRise 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.hero-inner > *:nth-child(1) { animation-delay: 0.06s; }
+.hero-inner > *:nth-child(2) { animation-delay: 0.15s; }
+.hero-inner > *:nth-child(3) { animation-delay: 0.24s; }
+.hero-inner > *:nth-child(4) { animation-delay: 0.33s; }
+.hero-inner > *:nth-child(5) { animation-delay: 0.42s; }
+@keyframes heroRise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hero-inner > * { opacity: 1; animation: none; } }
+
+/* Блеск-проблеск по первичной кнопке при наведении */
+.btn-primary { position: relative; overflow: hidden; }
+.btn-primary::after {
+  content: ''; position: absolute; top: 0; left: -75%; width: 45%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-18deg); transition: left 0.6s var(--ease); pointer-events: none;
+}
+.btn-primary:hover::after { left: 130%; }
+
+/* Числа статистики — премиальный бело-циановый градиент */
+[data-theme='dark'] .stat .n {
+  background: linear-gradient(180deg, #ffffff, #93d6ff);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }

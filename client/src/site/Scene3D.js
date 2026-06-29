@@ -174,20 +174,21 @@ export function initScene(canvas) {
     // ExtrudeGeometry — плита страны. bevelSegments 2 -> мягкая реалистичная кромка (не гранёная).
     const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 2, steps: 1 });
 
-    // Цвета карты — зелёные (степь/леса), с лёгкой географической вариацией оттенка:
-    //   север — насыщенная зелёная степь, юг — светлее зелёный, восток — тёмный лесной зелёный.
+    // Тёмно-синяя «силуэтная» суша (как на референсе): почти однотонный navy с едва
+    //   заметной вариацией — север чуть светлее, восток чуть синее. Свет дают граница,
+    //   узлы и дуги, а сама плита остаётся тёмной — чтобы сеть «светилась» поверх неё.
     extrude.computeBoundingBox();
     {
       const bb = extrude.boundingBox, pos = extrude.attributes.position;
-      const cN = new THREE.Color(0x3e8f2c), cS = new THREE.Color(0x57973a), cM = new THREE.Color(0x3f6f2a), tmp = new THREE.Color();
+      const cN = new THREE.Color(0x16294e), cS = new THREE.Color(0x101d3c), cM = new THREE.Color(0x1a2e56), tmp = new THREE.Color();
       const cols = new Float32Array(pos.count * 3);
       const dy = (bb.max.y - bb.min.y) || 1, dx = (bb.max.x - bb.min.x) || 1;
       for (let i = 0; i < pos.count; i++) {
         const latN = (pos.getY(i) - bb.min.y) / dy;   // 0 юг .. 1 север
         const eastN = (pos.getX(i) - bb.min.x) / dx;   // 0 запад .. 1 восток
-        tmp.copy(cS).lerp(cN, latN);                   // юг (светлее зелёный) -> север (насыщенная зелень)
+        tmp.copy(cS).lerp(cN, latN);                   // юг (темнее navy) -> север (чуть светлее)
         const mtn = Math.min(0.62, Math.max(0, eastN - 0.62) / 0.38 * (0.45 + 0.55 * (1 - latN)));
-        tmp.lerp(cM, mtn);                             // восток/юго-восток -> тёмный лесной зелёный
+        tmp.lerp(cM, mtn);                             // восток/юго-восток -> чуть более синий navy
         cols[i * 3] = tmp.r; cols[i * 3 + 1] = tmp.g; cols[i * 3 + 2] = tmp.b;
       }
       extrude.setAttribute('color', new THREE.BufferAttribute(cols, 3));
@@ -223,9 +224,9 @@ export function initScene(canvas) {
     // Цвет берём из вершинных цветов (физическая карта по географии). Матовая суша + рельеф
     // под светом; синяя неон-граница обрамляет «землю», как на рельефной карте.
     const mapMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 1.25,
-      metalness: 0.06, roughness: 0.92, emissive: 0x0e1a08, emissiveIntensity: 0.24,
-      transparent: true, opacity: 0.96,
+      color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.55,
+      metalness: 0.14, roughness: 0.9, emissive: 0x0a1838, emissiveIntensity: 0.18,
+      transparent: true, opacity: 0.97,
     });
     mapMat.userData = { baseOp: 0.96 };
     const mapMesh = new THREE.Mesh(extrude, mapMat); mapMesh.position.y = -1.4; gMap.add(mapMesh); mapMats.push(mapMat);
@@ -238,10 +239,10 @@ export function initScene(canvas) {
     edgeFlat.push(edgeFlat[0], edgeFlat[1], edgeFlat[2]);   // замкнуть контур
     const edgeGeo = new LineGeometry(); edgeGeo.setPositions(edgeFlat);
     const W0 = window.innerWidth, H0 = window.innerHeight;
-    edgeGlowMat = new LineMaterial({ color: 0x3aa0ff, linewidth: 5, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
-    edgeCoreMat = new LineMaterial({ color: 0xcdeeff, linewidth: 1.3, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
+    edgeGlowMat = new LineMaterial({ color: 0x4cc8ff, linewidth: 3.6, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
+    edgeCoreMat = new LineMaterial({ color: 0xdaf3ff, linewidth: 0.9, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
     edgeGlowMat.resolution.set(W0, H0); edgeCoreMat.resolution.set(W0, H0);
-    edgeGlowMat.userData = { baseOp: 0.4 }; edgeCoreMat.userData = { baseOp: 0.95 };
+    edgeGlowMat.userData = { baseOp: 0.42 }; edgeCoreMat.userData = { baseOp: 0.95 };
     const edgeGlow = new Line2(edgeGeo, edgeGlowMat); edgeGlow.renderOrder = 4; gMap.add(edgeGlow);
     const edgeCore = new Line2(edgeGeo, edgeCoreMat); edgeCore.renderOrder = 5; gMap.add(edgeCore);
 
@@ -280,9 +281,17 @@ export function initScene(canvas) {
       const sc = 1 / Math.max(Math.abs(cx) / (AX * 1.06), Math.abs(cz) / (AZ * 1.06));
       const origin = new THREE.Vector3(cx * sc, HUBY, cz * sc);
 
-      // точка
+      // размер узла варьируем: часть городов — крупные «хабы», часть — мелкие точки
+      const big = (Math.abs(Math.round(lo * 53 + la * 29)) % 4) === 0;
+      const nodeS = big ? 4.4 : 2.9;
+      // мягкий ореол под точкой (bloom-стиль свечение) — крупный тусклый спрайт
+      const halo = new THREE.Sprite(nodeMat.clone());
+      halo.position.set(nx, 0.36, nz); halo.scale.set(nodeS * 2.7, nodeS * 2.7, 1); gMap.add(halo);
+      halo.material.opacity = 0.34; halo.material.userData = { baseOp: 0.34 };
+      mapMats.push(halo.material);
+      // яркое ядро узла
       const sp = new THREE.Sprite(nodeMat.clone());
-      sp.position.set(nx, 0.4, nz); sp.scale.set(3.2, 3.2, 1); gMap.add(sp);
+      sp.position.set(nx, 0.4, nz); sp.scale.set(nodeS, nodeS, 1); gMap.add(sp);
       sp.material.userData = { baseOp: 0.95 };
       mapMats.push(sp.material);
 
@@ -299,10 +308,10 @@ export function initScene(canvas) {
       // сияние: толстая мягкая линия + яркое ядро (две линии).
       // depthTest:false — дуги рисуются ПОВЕРХ карты (как и точки-узлы), иначе наклонённая
       // толстая плита перекрывает их и они «уходят за/внутрь карты».
-      const glowMat = new THREE.LineBasicMaterial({ color: 0x5fc8ea, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
-      const coreMat = new THREE.LineBasicMaterial({ color: 0xd6f6ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
-      glowMat.userData = { glow: true, baseOp: 0.22 };
-      coreMat.userData = { baseOp: 0.85 };
+      const glowMat = new THREE.LineBasicMaterial({ color: 0x5fc8ea, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+      const coreMat = new THREE.LineBasicMaterial({ color: 0xe2f7ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+      glowMat.userData = { glow: true, baseOp: 0.28 };
+      coreMat.userData = { baseOp: 0.9 };
       gMap.add(new THREE.Line(lGeo, glowMat));
       gMap.add(new THREE.Line(lGeo, coreMat));
       lineMats.push(glowMat, coreMat);
@@ -314,6 +323,61 @@ export function initScene(canvas) {
       gMap.add(pkt);
       gMap.userData.packets = gMap.userData.packets || [];
       gMap.userData.packets.push(pkt);
+    }
+
+    // ── Светящийся «пунктирный» контур страны: береговая линия из мелких огоньков
+    //    (ключевая деталь референса). Один THREE.Points → один drawcall, дёшево. ──
+    {
+      const STEP = 0.85;                 // шаг между огоньками вдоль контура (ед. сцены)
+      const dots = [];
+      const n = outlinePts.length;
+      for (let i = 0; i < n; i++) {
+        const a = outlinePts[i], b = outlinePts[(i + 1) % n];
+        const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+        const steps = Math.max(1, Math.round(segLen / STEP));
+        for (let s = 0; s < steps; s++) {
+          const t = s / steps;
+          dots.push(a.x + (b.x - a.x) * t, 0.3, -(a.y + (b.y - a.y) * t) + hub2.z);
+        }
+      }
+      const og = new THREE.BufferGeometry();
+      og.setAttribute('position', new THREE.Float32BufferAttribute(dots, 3));
+      const outlineDotMat = new THREE.PointsMaterial({
+        map: dotTex, color: 0x7ad6ff, size: 1.45, sizeAttenuation: true,
+        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.9,
+      });
+      outlineDotMat.userData = { baseOp: 0.9 };
+      const outlineDots = new THREE.Points(og, outlineDotMat); outlineDots.renderOrder = 6; gMap.add(outlineDots);
+      mapMats.push(outlineDotMat);
+
+      // ── Тонкая внутренняя «звёздная пыль» по площади страны — еле заметная фактура суши ──
+      const inside = (px, py) => {
+        let c = false;
+        for (let i = 0, j = raw.length - 1; i < raw.length; j = i++) {
+          const xi = raw[i].x, yi = raw[i].y, xj = raw[j].x, yj = raw[j].y;
+          if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) c = !c;
+        }
+        return c;
+      };
+      let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+      for (const p of raw) { minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y); }
+      // детерминированный псевдослучай (без Math.random — стабильно между перезагрузками)
+      let seed = 20260626; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+      const dust = []; let tries = 0;
+      while (dust.length < 240 * 3 && tries < 6000) {
+        tries++;
+        const px = minx + rnd() * (maxx - minx), py = miny + rnd() * (maxy - miny);
+        if (inside(px, py)) dust.push(px, 0.24, -py + hub2.z);
+      }
+      const dustGeo = new THREE.BufferGeometry();
+      dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dust, 3));
+      const dustMat = new THREE.PointsMaterial({
+        map: dotTex, color: 0x63c4ec, size: 0.8, sizeAttenuation: true,
+        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.3,
+      });
+      dustMat.userData = { baseOp: 0.3 };
+      const dustPts = new THREE.Points(dustGeo, dustMat); dustPts.renderOrder = 2; gMap.add(dustPts);
+      mapMats.push(dustMat);
     }
 
     gMap.position.y = 0.0;
