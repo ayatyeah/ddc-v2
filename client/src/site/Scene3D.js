@@ -342,9 +342,11 @@ export function initScene(canvas) {
       const coreMat = new THREE.LineBasicMaterial({ color: 0xe2f7ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
       glowMat.userData = { glow: true, baseOp: 0.28 };
       coreMat.userData = { baseOp: 0.9 };
-      gMap.add(new THREE.Line(lGeo, glowMat));
-      gMap.add(new THREE.Line(lGeo, coreMat));
+      const arcGlow = new THREE.Line(lGeo, glowMat); gMap.add(arcGlow);
+      const arcCore = new THREE.Line(lGeo, coreMat); gMap.add(arcCore);
       lineMats.push(glowMat, coreMat);
+      // для boot-интро: дугу «протягиваем» через geometry.drawRange (общая геометрия у glow+core)
+      (gMap.userData.arcs = gMap.userData.arcs || []).push({ geo: lGeo, glow: glowMat, core: coreMat, n: pts.length });
 
       // бегущий пакет по линии
       const pkt = new THREE.Sprite(nodeMat.clone());
@@ -380,6 +382,7 @@ export function initScene(canvas) {
       outlineDotMat.userData = { baseOp: 0.9 };
       const outlineDots = new THREE.Points(og, outlineDotMat); outlineDots.renderOrder = 6; gMap.add(outlineDots);
       mapMats.push(outlineDotMat);
+      gMap.userData.outlineDots = outlineDots; gMap.userData.outlineN = dots.length / 3;   // для boot-интро (прорисовка контура)
 
       // ── Тонкая внутренняя «звёздная пыль» по площади страны — еле заметная фактура суши ──
       const inside = (px, py) => {
@@ -536,6 +539,9 @@ export function initScene(canvas) {
 
   const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, prevT = 0;
   let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps для адаптивного DPR
+  // Вступительная «сборка» карты при загрузке (один раз, по таймеру — не под скролл):
+  // контур прорисовывается → города зажигаются по очереди → дуги протягиваются → башни.
+  let introStart = -1, introDone = false; const INTRO_DUR = 2.6;
   function loop() {
     raf = 0;
     if (running) raf = requestAnimationFrame(loop);
@@ -650,6 +656,47 @@ export function initScene(canvas) {
         m.opacity = Math.min(1, base * pOp * (m.userData?.glow ? (0.7 + 0.6 * pulse) : 1));
       }
     }
+    // ── Boot-интро: одноразовая «сборка» карты при загрузке (поверх обычных opacity).
+    //    Контур (0.03–0.42) → города по очереди (0.30–0.78) → дуги (0.45–0.9) → башни.
+    if (!introDone) {
+      if (introStart < 0) introStart = t;
+      const ik = Math.min(1, (t - introStart) / INTRO_DUR);
+      const ud = gMap.userData;
+      // 1) контур страны прорисовывается
+      const outR = smooth(ik, 0.03, 0.42);
+      if (edgeGlowMat) edgeGlowMat.opacity *= outR;
+      if (edgeCoreMat) edgeCoreMat.opacity *= outR;
+      const od = ud.outlineDots;
+      if (od) { od.material.opacity *= smooth(ik, 0.05, 0.5); od.geometry.setDrawRange(0, Math.floor((ud.outlineN || 0) * outR)); }
+      // 2) города зажигаются по очереди
+      const nodes = ud.nodes || [];
+      for (let i = 0; i < nodes.length; i++) {
+        const s = 0.30 + (i / Math.max(1, nodes.length)) * 0.48;
+        const k = smooth(ik, s, s + 0.12);
+        nodes[i].c.opacity *= k; if (nodes[i].h) nodes[i].h.opacity *= k;
+      }
+      // 3) дуги протягиваются от хаба к узлам
+      const arcs = ud.arcs || [];
+      for (let i = 0; i < arcs.length; i++) {
+        const a = arcs[i];
+        const s = 0.45 + (i / Math.max(1, arcs.length)) * 0.42;
+        const k = smooth(ik, s, s + 0.18);
+        const cnt = Math.max(0, Math.floor(a.n * k));
+        a.geo.setDrawRange(0, cnt);
+        const vis = cnt > 1 ? 1 : 0;
+        a.glow.opacity *= vis; a.core.opacity *= vis;
+      }
+      // 4) пакеты-импульсы и башни проявляются к концу
+      for (const pkt of (ud.packets || [])) pkt.material.opacity *= smooth(ik, 0.72, 0.95);
+      const twk = smooth(ik, 0.12, 0.62);
+      for (const mt of towerMats) mt.opacity *= twk;
+      if (ik >= 1) {
+        introDone = true;                                   // вернуть полные диапазоны отрисовки
+        if (od) od.geometry.setDrawRange(0, Infinity);
+        for (const a of arcs) a.geo.setDrawRange(0, Infinity);
+      }
+    }
+
     renderer.render(scene, camera);
   }
 
