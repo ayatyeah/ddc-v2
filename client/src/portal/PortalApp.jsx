@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
 import { hideSplash } from '../splash.js';
+import ThemeToggle from '../ThemeToggle.jsx';
 import '../admin/admin.css';
 import './portal.css';
 
@@ -77,6 +78,7 @@ export default function PortalApp() {
         </nav>
         <div className="pt-foot">
           <div className="pt-me"><span className="pt-av">{initials(me?.username)}</span><span className="pt-me-n">{me?.username}</span></div>
+          <ThemeToggle className="pt-foot-btn" size={17} />
           <a className="pt-foot-btn" href="/" data-spa title="На сайт">↗</a>
           <button className="pt-foot-btn" onClick={doLogout} title="Выйти">⎋</button>
         </div>

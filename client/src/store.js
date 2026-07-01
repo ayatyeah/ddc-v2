@@ -1,9 +1,10 @@
 /* Минималистичное глобальное состояние без внешних библиотек.
-   Хранит язык (ru/kk/en), синхронизирует с localStorage и <html lang>.
-   Тема всегда тёмная (data-theme="dark" выставляется один раз) — переключения нет. */
+   Хранит язык (ru/kk/en) и тему (dark/light), синхронизирует с localStorage,
+   <html lang> и <html data-theme>. Тема действует на весь сайт, портал и админку. */
 import { useSyncExternalStore } from 'react';
 
 const LANGS = ['ru', 'kk', 'en'];
+const THEMES = ['dark', 'light'];
 
 function read(key, fallback, allowed) {
   try {
@@ -16,6 +17,7 @@ function read(key, fallback, allowed) {
 let state = {
   lang: read('ddc_lang', 'ru', LANGS),
   a11y: read('ddc_a11y', 'off', ['on', 'off']),   // версия для слабовидящих
+  theme: read('ddc_theme', 'dark', THEMES),        // тема оформления (весь сайт/портал/админка)
 };
 
 const listeners = new Set();
@@ -31,6 +33,17 @@ export function setLang(lang) {
   emit();
 }
 
+// Тема оформления: dark/light. Держим в <html data-theme> — токены во всех CSS
+// (styles.css, admin.css, portal.css) переключаются автоматически.
+export function setTheme(theme) {
+  if (!THEMES.includes(theme) || theme === state.theme) return;
+  state = { ...state, theme };
+  try { localStorage.setItem('ddc_theme', theme); } catch {}
+  document.documentElement.setAttribute('data-theme', theme);
+  emit();
+}
+export function toggleTheme() { setTheme(state.theme === 'dark' ? 'light' : 'dark'); }
+
 // Версия для слабовидящих: крупный шрифт, высокий контраст, без 3D/анимаций.
 // Состояние держим в <html data-a11y> — стили подхватываются из CSS.
 export function setA11y(on) {
@@ -42,12 +55,13 @@ export function setA11y(on) {
   emit();
 }
 
-// Применяем сразу при загрузке модуля: язык + фиксированная тёмная тема + режим a11y.
+// Применяем сразу при загрузке модуля: язык + выбранная тема + режим a11y.
 document.documentElement.lang = state.lang;
-document.documentElement.setAttribute('data-theme', 'dark');
+document.documentElement.setAttribute('data-theme', state.theme);
 document.documentElement.setAttribute('data-a11y', state.a11y);
 
 export function useStore() { return useSyncExternalStore(subscribe, snapshot); }
 export function useLang() { return useStore().lang; }
 export function useA11y() { return useStore().a11y === 'on'; }
-export { LANGS };
+export function useTheme() { return useStore().theme; }
+export { LANGS, THEMES };

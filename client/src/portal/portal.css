@@ -28,6 +28,15 @@
 .pt-foot-btn { width: 34px; height: 34px; border-radius: 9px; border: none; background: rgba(255,255,255,0.06); color: #aab3c4; display: grid; place-items: center; cursor: pointer; text-decoration: none; font-size: 15px; }
 .pt-foot-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
+/* Светлая тема: рейл портала осветляется вместе с сайтом */
+[data-theme='light'] .pt-rail { background: #eef1f6; border-right-color: var(--line); }
+[data-theme='light'] .pt-brand { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); }
+[data-theme='light'] .pt-tab { color: #5a5a63; }
+[data-theme='light'] .pt-tab:hover { color: var(--ink); background: rgba(0,0,0,0.05); }
+[data-theme='light'] .pt-me-n { color: var(--ink-soft); }
+[data-theme='light'] .pt-foot-btn { background: rgba(0,0,0,0.05); color: #5a5a63; }
+[data-theme='light'] .pt-foot-btn:hover { background: rgba(0,0,0,0.10); color: var(--ink); }
+
 .pt-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
 .pt-view { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 22px 26px; }
 .pt-view-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }

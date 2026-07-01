@@ -858,12 +858,13 @@ app.get('/api/portal/users', auth, async (req, res) => {
   } catch (e) { console.error('GET /api/portal/users:', e.message); res.status(500).json({ error: 'Ошибка чтения сотрудников' }); }
 });
 
-// Отделы DDC + их участники
+// Отделы DDC + их участники (список отделов — из таблицы departments)
 app.get('/api/portal/departments', auth, async (req, res) => {
   try {
+    const { rows: depts } = await db.query(`SELECT name, descr FROM departments ORDER BY sort_order, id`);
     const { rows: users } = await db.query(`SELECT full_name, username, department, role FROM users WHERE active = TRUE`);
-    const departments = DEPARTMENTS.map((d) => ({
-      ...d,
+    const departments = depts.map((d) => ({
+      name: d.name, desc: d.descr,
       members: users.filter((u) => (u.department || '') === d.name).map((u) => ({ name: u.full_name || u.username, role: u.role })),
     }));
     res.json({ departments, total: users.length });
@@ -1043,6 +1044,77 @@ app.delete('/api/admin/users/:id', auth, requireRole('admin'), async (req, res) 
   } catch (e) {
     console.error('DELETE /api/admin/users:', e.message);
     res.status(500).json({ error: 'Не удалось удалить' });
+  }
+});
+
+// Обновление пользователя: отдел / роль / ФИО (для «раскидать по отделам»)
+app.patch('/api/admin/users/:id(\\d+)', auth, requireRole('admin'), async (req, res) => {
+  const id = Number(req.params.id);
+  const set = [], vals = [];
+  if ('department' in (req.body || {})) { set.push(`department = $${set.length + 1}`); vals.push(clip(req.body.department, 120)); }
+  if ('full_name' in (req.body || {})) { set.push(`full_name = $${set.length + 1}`); vals.push(clip(req.body.full_name, 120)); }
+  if ('role' in (req.body || {})) {
+    const role = ALLOWED_ROLES.includes(req.body.role) ? req.body.role : null;
+    if (!role) return res.status(400).json({ error: 'Недопустимая роль' });
+    set.push(`role = $${set.length + 1}`); vals.push(role);
+  }
+  if (!set.length) return res.status(400).json({ error: 'Нечего обновлять' });
+  vals.push(id);
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET ${set.join(', ')} WHERE id = $${vals.length}
+       RETURNING id, username, full_name, department, role, active, created_at`, vals);
+    if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден' });
+    logAudit(req, 'user', id, 'update', `Обновлён пользователь ${rows[0].username}`);
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('PATCH /api/admin/users:', e.message);
+    res.status(500).json({ error: 'Не удалось обновить' });
+  }
+});
+
+// ── Админ: отделы (создание/список/удаление) ──────────────────────────────────
+app.get('/api/admin/departments', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT d.id, d.name, d.descr, d.sort_order,
+              (SELECT count(*)::int FROM users u WHERE u.department = d.name AND u.active = TRUE) AS members
+         FROM departments d ORDER BY d.sort_order, d.id`);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/admin/departments:', e.message); res.status(500).json({ error: 'Ошибка чтения отделов' }); }
+});
+
+app.post('/api/admin/departments', auth, requireRole('admin'), async (req, res) => {
+  const name = clip(req.body?.name, 120);
+  const descr = clip(req.body?.descr, 400);
+  if (!name) return res.status(400).json({ error: 'Укажите название отдела' });
+  try {
+    const { rows: mx } = await db.query(`SELECT COALESCE(max(sort_order), -1) + 1 AS n FROM departments`);
+    const { rows } = await db.query(
+      `INSERT INTO departments (name, descr, sort_order) VALUES ($1,$2,$3) RETURNING id, name, descr, sort_order`,
+      [name, descr, mx[0].n]);
+    logAudit(req, 'department', rows[0].id, 'create', `Создан отдел «${name}»`);
+    res.status(201).json({ ...rows[0], members: 0 });
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Такой отдел уже есть' });
+    console.error('POST /api/admin/departments:', e.message);
+    res.status(500).json({ error: 'Не удалось создать отдел' });
+  }
+});
+
+app.delete('/api/admin/departments/:id(\\d+)', auth, requireRole('admin'), async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const { rows } = await db.query(`SELECT name FROM departments WHERE id = $1`, [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Отдел не найден' });
+    // Открепляем сотрудников от удаляемого отдела, чтобы не оставалось «висячих» имён.
+    await db.query(`UPDATE users SET department = '' WHERE department = $1`, [rows[0].name]);
+    await db.query(`DELETE FROM departments WHERE id = $1`, [id]);
+    logAudit(req, 'department', id, 'delete', `Удалён отдел «${rows[0].name}»`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /api/admin/departments:', e.message);
+    res.status(500).json({ error: 'Не удалось удалить отдел' });
   }
 });
 
@@ -1474,6 +1546,21 @@ async function seedServices() {
   } catch (e) { console.error('seedServices:', e.message); }
 }
 
+// Стартовые отделы DDC (один раз, если таблица пуста) — из прежнего статичного набора.
+async function seedDepartments() {
+  try {
+    const { rows } = await db.query(`SELECT count(*)::int AS c FROM departments`);
+    if (rows[0].c > 0) return;
+    let i = 0;
+    for (const d of DEPARTMENTS) {
+      await db.query(
+        `INSERT INTO departments (name, descr, sort_order) VALUES ($1,$2,$3) ON CONFLICT (name) DO NOTHING`,
+        [d.name, d.desc, i++]);
+    }
+    console.log(`✓ Отделы: засеяно ${DEPARTMENTS.length} стартовых записей`);
+  } catch (e) { console.error('seedDepartments:', e.message); }
+}
+
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`ЦЦР backend слушает на :${PORT} (${PROD ? 'production' : 'development'})`);
   // Лёгкая идемпотентная авто-миграция — чтобы деплой не требовал ручного `npm run init-db`.
@@ -1511,8 +1598,16 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        status        TEXT NOT NULL DEFAULT 'open',
        created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
        updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE TABLE IF NOT EXISTS departments (
+       id         SERIAL PRIMARY KEY,
+       name       TEXT NOT NULL UNIQUE,
+       descr      TEXT NOT NULL DEFAULT '',
+       sort_order INTEGER NOT NULL DEFAULT 0,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
      );`
-  ).then(() => { console.log('✓ Миграции (services/messages/tasks) на месте'); return seedServices(); })
+  ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments) на месте'); return seedServices(); })
+   .then(() => seedDepartments())
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);

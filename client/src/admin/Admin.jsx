@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
 import NotificationBell from './NotificationBell.jsx';
+import ThemeToggle from '../ThemeToggle.jsx';
 import { hideSplash } from '../splash.js';
 import './admin.css';
 
@@ -136,6 +137,7 @@ export default function Admin() {
           ))}
         </nav>
         <div className="rail-foot">
+          <ThemeToggle className="rail-icon" size={18} />
           <a className="rail-icon" href="/" data-spa aria-label="На сайт">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </a>

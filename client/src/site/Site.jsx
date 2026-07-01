@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useA11y } from '../store.js';
+import { useA11y, useTheme } from '../store.js';
 import { useRoute } from './router.js';
 import { ROUTES, NotFoundPage } from './pages.jsx';
 import Nav from './Nav.jsx';
@@ -49,6 +49,7 @@ export default function Site() {
   const isMobile = useIsMobile();
   const lowPower = useState(isLowPowerDevice)[0];   // считаем один раз на маунте
   const a11y = useA11y();   // версия для слабовидящих — без 3D, частиц и тумана
+  const theme = useTheme(); // dark/light — влияет на палитру неба под страницу
 
   useEffect(() => { hideSplash(); }, []);   // контент сайта смонтирован — убираем загрузочный экран
 
@@ -124,7 +125,7 @@ export default function Site() {
   const curRef = useRef(null);
   useEffect(() => {
     const bg = document.getElementById('scroll-bg'); if (!bg) return;
-    const target = () => route.dark;   // тема всегда тёмная
+    const target = () => (theme === 'light' ? route.light : route.dark);
     if (!curRef.current) { const t = target(); curRef.current = { top: hex(t.top), a: hex(t.a), b: hex(t.b) }; }
     let raf = 0;
     const set = (k, c) => bg.style.setProperty(k, `rgb(${c[0]|0}, ${c[1]|0}, ${c[2]|0})`);
@@ -142,7 +143,7 @@ export default function Site() {
     };
     tick();
     return () => { if (raf) cancelAnimationFrame(raf); };
-  }, [route]);
+  }, [route, theme]);
 
   return (
     <>

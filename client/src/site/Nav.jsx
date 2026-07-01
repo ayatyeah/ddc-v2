@@ -3,6 +3,7 @@ import { useLang, setLang, LANGS, useA11y, setA11y } from '../store.js';
 import { t } from '../i18n.js';
 import { useRoute, navigate } from './router.js';
 import { IcoEye } from './icons.jsx';
+import ThemeToggle from '../ThemeToggle.jsx';
 
 // Простой навбар: только названия разделов (максимум 7 страниц сайта).
 const LINKS = [
@@ -49,6 +50,7 @@ export default function Nav() {
               </button>
             ))}
           </div>
+          <ThemeToggle className="icon-btn" size={20} />
           <button className={`icon-btn a11y-btn ${a11y ? 'active' : ''}`} onClick={() => setA11y(!a11y)}
             aria-pressed={a11y} title={t(lang, 'a11y.toggle')} aria-label={t(lang, 'a11y.toggle')}>
             <IcoEye size={20} />
