@@ -256,30 +256,10 @@ export function initScene(canvas) {
     mapMat.userData = { baseOp: 0.96 };
     const mapMesh = new THREE.Mesh(extrude, mapMat); mapMesh.position.y = -1.4; gMap.add(mapMesh); mapMats.push(mapMat);
 
-    // Светящаяся граница страны — жирная неоновая линия (Line2): яркое ядро + широкое
-    // мягкое свечение под ним (аддитивно). Толщина в пикселях экрана -> чёткий неон на
-    // любом отдалении. Контур приподнят над плитой, чтобы не «тонул» в бевеле.
-    const edgeFlat = [];
-    for (const p of outlinePts) edgeFlat.push(p.x, 0.18, -p.y + hub2.z);
-    edgeFlat.push(edgeFlat[0], edgeFlat[1], edgeFlat[2]);   // замкнуть контур
-    const edgeGeo = new LineGeometry(); edgeGeo.setPositions(edgeFlat);
-    const W0 = window.innerWidth, H0 = window.innerHeight;
-    edgeGlowMat = new LineMaterial({ color: 0x4cc8ff, linewidth: 3.6, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
-    edgeCoreMat = new LineMaterial({ color: 0xdaf3ff, linewidth: 0.9, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
-    edgeGlowMat.resolution.set(W0, H0); edgeCoreMat.resolution.set(W0, H0);
-    edgeGlowMat.userData = { baseOp: 0.42 }; edgeCoreMat.userData = { baseOp: 0.95 };
-    const edgeGlow = new Line2(edgeGeo, edgeGlowMat); edgeGlow.renderOrder = 4; gMap.add(edgeGlow);
-    const edgeCore = new Line2(edgeGeo, edgeCoreMat); edgeCore.renderOrder = 5; gMap.add(edgeCore);
-
-    // Нижний контур плиты — мягкая подсветка низа: берём ТОЛЬКО свечение (без яркого ядра),
-    // чтобы низ читался как объём, а не вторая яркая граница. Одна линия — лёгкая (и на мобиле).
-    extrude.computeBoundingBox();
-    const slabBottom = extrude.boundingBox.min.y + mapMesh.position.y + 0.04;
-    const bottomFlat = [];
-    for (const p of outlinePts) bottomFlat.push(p.x, slabBottom, -p.y + hub2.z);
-    bottomFlat.push(bottomFlat[0], bottomFlat[1], bottomFlat[2]);
-    const bottomGeo = new LineGeometry(); bottomGeo.setPositions(bottomFlat);
-    const bEdge = new Line2(bottomGeo, edgeGlowMat); bEdge.renderOrder = 3; gMap.add(bEdge);
+    // Сплошная неоновая граница страны убрана намеренно — карта более абстрактная.
+    // Контур страны читается теперь только по россыпи точек-огоньков (см. ниже),
+    // без «ровной» чёткой линии. edgeCoreMat/edgeGlowMat остаются null — все места,
+    // что их анимируют/ресайзят, защищены проверками `if (edgeCoreMat)` и просто пропускаются.
 
     // узлы-точки по стране (сияющие диски-спрайты)
     const dotCv = document.createElement('canvas'); dotCv.width = dotCv.height = 64;
@@ -357,10 +337,10 @@ export function initScene(canvas) {
       gMap.userData.packets.push(pkt);
     }
 
-    // ── Светящийся «пунктирный» контур страны: береговая линия из мелких огоньков
-    //    (ключевая деталь референса). Один THREE.Points → один drawcall.
-    //    На мобиле пропускаем весь блок (точки + пыль = тяжёлый additive overdraw). ──
-    if (!mobile) {
+    // ── Абстрактный контур страны: только россыпь мелких огоньков вдоль границы
+    //    (без сплошной неон-линии). Один THREE.Points → один drawcall, поэтому рисуем
+    //    его И НА МОБИЛЕ — иначе после удаления неон-границы контур страны пропал бы. ──
+    {
       const STEP = 0.85;                 // шаг между огоньками вдоль контура (ед. сцены)
       const dots = [];
       const n = outlinePts.length;
@@ -375,16 +355,21 @@ export function initScene(canvas) {
       }
       const og = new THREE.BufferGeometry();
       og.setAttribute('position', new THREE.Float32BufferAttribute(dots, 3));
+      // Чуть ярче/крупнее прежнего — компенсируем отсутствие сплошной границы, но контур
+      // остаётся «пунктирным», абстрактным, без ровной линии.
       const outlineDotMat = new THREE.PointsMaterial({
-        map: dotTex, color: 0x7ad6ff, size: 1.45, sizeAttenuation: true,
-        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.9,
+        map: dotTex, color: 0x7ad6ff, size: 1.7, sizeAttenuation: true,
+        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.95,
       });
-      outlineDotMat.userData = { baseOp: 0.9 };
+      outlineDotMat.userData = { baseOp: 0.95 };
       const outlineDots = new THREE.Points(og, outlineDotMat); outlineDots.renderOrder = 6; gMap.add(outlineDots);
       mapMats.push(outlineDotMat);
       gMap.userData.outlineDots = outlineDots; gMap.userData.outlineN = dots.length / 3;   // для boot-интро (прорисовка контура)
+    }
 
-      // ── Тонкая внутренняя «звёздная пыль» по площади страны — еле заметная фактура суши ──
+    // ── Тонкая внутренняя «звёздная пыль» по площади страны — еле заметная фактура суши.
+    //    Тяжёлый additive overdraw → только на десктопе. ──
+    if (!mobile) {
       const inside = (px, py) => {
         let c = false;
         for (let i = 0, j = raw.length - 1; i < raw.length; j = i++) {
