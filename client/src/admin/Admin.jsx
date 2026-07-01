@@ -14,10 +14,9 @@ const ServicesManager = lazy(() => import('./ServicesManager.jsx'));
 const Analytics = lazy(() => import('./Analytics.jsx'));
 const Users = lazy(() => import('./Users.jsx'));
 const AiPanel = lazy(() => import('./AiPanel.jsx'));
-const PerfTester = lazy(() => import('./PerfTester.jsx'));
 
 const ROLE_LABEL = { admin: 'Администратор', manager: 'Начальник отдела', staff: 'Сотрудник', editor: 'Редактор', viewer: 'Просмотр' };
-const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', services: 'Услуги', news: 'Новости', history: 'История', users: 'Пользователи', perf: 'Перф' };
+const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', services: 'Услуги', news: 'Новости', history: 'История', users: 'Пользователи' };
 
 function Ico({ name, size = 20 }) {
   const p = {
@@ -29,7 +28,6 @@ function Ico({ name, size = 20 }) {
     news: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
     services: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" /></>,
     users: <><circle cx="9" cy="8" r="3" /><path d="M3 20a6 6 0 0 1 12 0M16 6.5a3 3 0 0 1 0 5M21 20a5 5 0 0 0-4-4.9" /></>,
-    perf: <><path d="M3 12h4l3 8 4-16 3 8h4" /></>,
   }[name];
   return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
 }
@@ -124,7 +122,6 @@ export default function Admin() {
     { id: 'news', show: isAdmin || role === 'editor' || role === 'viewer' },
     { id: 'history', show: !isStaff },
     { id: 'users', show: isAdmin },
-    { id: 'perf', show: !isStaff },
   ].filter((x) => x.show);
 
   return (
@@ -165,7 +162,6 @@ export default function Admin() {
             {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEditNews} />}
             {tab === 'history' && <History onAuthLost={() => setState('login')} />}
             {tab === 'users' && isAdmin && <Users onAuthLost={() => setState('login')} me={me} />}
-            {tab === 'perf' && !isStaff && <PerfTester />}
           </Suspense>
         </main>
       </div>

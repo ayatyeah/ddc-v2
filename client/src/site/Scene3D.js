@@ -571,9 +571,6 @@ export function initScene(canvas) {
     disp += (progress - disp) * kSmooth;        // плавный бесшовный переход между страницами/скроллом
     dispYaw += (viewYaw - dispYaw) * kSmooth;    // плавный доворот карты к углу текущей страницы
     const p = disp;
-    // Публикуем прогресс сцены и текущий адаптивный DPR — их пишет монитор фризов
-    // (perfMonitor), чтобы понять, в каком МОМЕНТЕ фона случаются просадки.
-    window.__sceneProgress = p; window.__sceneDpr = curDpr;
 
     // камера: фокус на верхних этажах / крышах (адаптивно)
     px += (tx - px) * kSmooth; py += (ty - py) * kSmooth;

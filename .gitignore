@@ -13,3 +13,5 @@ public/workbox-*.js
 .DS_Store
 .vscode/
 .idea/
+
+ddc_perf_*.json
