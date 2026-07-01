@@ -23,6 +23,9 @@ export default function PortalApp() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('chat');
+  // На мобиле при открытом диалоге прячем нижний таб-бар (мессенджер-стиль, как в Telegram).
+  const [convOpen, setConvOpen] = useState(false);
+  const goTab = (id) => { setConvOpen(false); setTab(id); };
 
   useEffect(() => {
     hideSplash();
@@ -68,12 +71,14 @@ export default function PortalApp() {
   }
 
   return (
-    <div className="pt pt-shell">
+    <div className={`pt pt-shell ${convOpen ? 'pt-conv-open' : ''}`}>
       <aside className="pt-rail">
         <div className="pt-brand"><img src="/logo_ddc.svg?v=2" alt="DDC" /></div>
         <nav className="pt-nav">
           {TABS.map((tb) => (
-            <button key={tb.id} className={`pt-tab ${tab === tb.id ? 'active' : ''}`} onClick={() => setTab(tb.id)}>{tb.label}</button>
+            <button key={tb.id} className={`pt-tab ${tab === tb.id ? 'active' : ''}`} onClick={() => goTab(tb.id)}>
+              <PtIco name={tb.id} /><span className="pt-tab-l">{tb.label}</span>
+            </button>
           ))}
         </nav>
         <div className="pt-foot">
@@ -85,12 +90,23 @@ export default function PortalApp() {
       </aside>
       <main className="pt-main">
         {tab === 'chat' && <TeamChat me={me} onAuthLost={onAuthLost} />}
-        {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} />}
+        {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
         {tab === 'depts' && <Departments onAuthLost={onAuthLost} />}
       </main>
     </div>
   );
+}
+
+/* Иконки таб-бара портала (мессенджер-стиль) */
+function PtIco({ name }) {
+  const p = {
+    chat: <path d="M4 5h16v11H8l-4 4V5z" />,
+    dm: <><path d="M4 5h16v14l-3-3H4z" /><path d="M8 10h8M8 13h5" /></>,
+    tasks: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 12l2.5 2.5L16 9" /></>,
+    depts: <><circle cx="9" cy="8" r="2.6" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a2.6 2.6 0 0 1 0 4.6M20.5 19a5 5 0 0 0-3.5-4.4" /></>,
+  }[name];
+  return <svg className="pt-tab-i" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{p}</svg>;
 }
 
 /* ── Командный чат ── */
@@ -137,20 +153,27 @@ function TeamChat({ me, onAuthLost }) {
       </div>
       <form className="pt-compose" onSubmit={send}>
         <input className="adm-input" placeholder="Сообщение в командный чат…" value={text} onChange={(e) => setText(e.target.value)} />
-        <button className="adm-btn" type="submit">Отправить</button>
+        <button className="adm-btn pt-send" type="submit" aria-label="Отправить">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+        </button>
       </form>
     </div>
   );
 }
 
-/* ── Личные сообщения ── */
-function Dm({ me, onAuthLost }) {
+/* ── Личные сообщения (мессенджер-стиль: список → диалог на весь экран) ── */
+function Dm({ me, onAuthLost, onConv }) {
   const [users, setUsers] = useState([]);
   const [active, setActive] = useState(null);
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState('');
   const boxRef = useRef(null);
   const scrollDown = () => { const b = boxRef.current; if (b) b.scrollTop = b.scrollHeight; };
+
+  const openChat = (u) => { setActive(u); setMsgs([]); onConv?.(true); };
+  const closeChat = () => { setActive(null); onConv?.(false); };
+  // Уходя со вкладки ЛС — снимаем режим диалога, чтобы вернулся нижний таб-бар.
+  useEffect(() => () => onConv?.(false), [onConv]);
 
   useEffect(() => {
     getJSON('/api/portal/users').then((u) => setUsers(u.filter((x) => x.id !== me?.id))).catch((e) => { if (e.status === 401) onAuthLost?.(); });
@@ -177,21 +200,27 @@ function Dm({ me, onAuthLost }) {
   };
 
   return (
-    <div className="pt-view pt-dm">
+    <div className={`pt-view pt-dm ${active ? 'has-active' : ''}`}>
       <div className="pt-dm-list">
-        <div className="pt-view-h"><h2>Сотрудники</h2></div>
+        <div className="pt-view-h"><h2>Личные сообщения</h2></div>
         {users.length === 0 && <div className="pt-empty sm">Список пуст.</div>}
         {users.map((u) => (
-          <button key={u.id} className={`pt-user ${active?.id === u.id ? 'active' : ''}`} onClick={() => setActive(u)}>
+          <button key={u.id} className={`pt-user ${active?.id === u.id ? 'active' : ''}`} onClick={() => openChat(u)}>
             <span className="pt-av sm">{initials(u.name)}</span>
             <span className="pt-user-t"><b>{u.name}</b><small>{u.department || u.role}</small></span>
           </button>
         ))}
       </div>
       <div className="pt-dm-conv">
-        {!active ? <div className="pt-empty">Выберите сотрудника слева, чтобы написать в личку.</div> : (
+        {!active ? <div className="pt-empty pt-dm-hint">Выберите сотрудника слева, чтобы написать в личку.</div> : (
           <>
-            <div className="pt-view-h"><h2>{active.name}</h2><span className="pt-hint">{active.department || active.role}</span></div>
+            <div className="pt-conv-head">
+              <button className="pt-back-btn" onClick={closeChat} aria-label="Назад">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+              </button>
+              <span className="pt-av sm">{initials(active.name)}</span>
+              <div className="pt-conv-who"><b>{active.name}</b><small>{active.department || active.role}</small></div>
+            </div>
             <div className="pt-chat" ref={boxRef}>
               {msgs.length === 0 && <div className="pt-empty">Начните диалог.</div>}
               {msgs.map((m) => (
@@ -202,7 +231,9 @@ function Dm({ me, onAuthLost }) {
             </div>
             <form className="pt-compose" onSubmit={send}>
               <input className="adm-input" placeholder={`Написать ${active.name}…`} value={text} onChange={(e) => setText(e.target.value)} />
-              <button className="adm-btn" type="submit">Отправить</button>
+              <button className="adm-btn pt-send" type="submit" aria-label="Отправить">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+              </button>
             </form>
           </>
         )}

@@ -19,9 +19,10 @@
 .pt-brand { width: 46px; height: 46px; border-radius: 13px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); display: grid; place-items: center; margin-bottom: 12px; }
 .pt-brand img { width: 32px; height: 32px; }
 .pt-nav { display: flex; flex-direction: column; gap: 4px; }
-.pt-tab { text-align: left; background: transparent; border: none; color: #8a93a6; font: inherit; font-size: 14px; padding: 11px 14px; border-radius: 11px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.pt-tab { display: flex; align-items: center; gap: 11px; text-align: left; background: transparent; border: none; color: #8a93a6; font: inherit; font-size: 14px; padding: 11px 14px; border-radius: 11px; cursor: pointer; transition: background 0.15s, color 0.15s; }
 .pt-tab:hover { color: #e8edf5; background: rgba(255,255,255,0.05); }
 .pt-tab.active { color: #fff; background: var(--blue); }
+.pt-tab-i { flex: none; }
 .pt-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; }
 .pt-me { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .pt-me-n { font-size: 13px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -62,6 +63,16 @@
 .pt-bubble p { font-size: 14px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pt-compose { display: flex; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .pt-compose .adm-input { flex: 1; }
+/* Кнопка отправки — иконка «бумажный самолётик» (мессенджер-стиль) */
+.pt-send { flex: none; width: 44px; padding: 0; display: grid; place-items: center; }
+
+/* Шапка диалога (мессенджер): назад + аватар + имя */
+.pt-conv-head { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.pt-back-btn { display: none; width: 36px; height: 36px; flex: none; border: none; background: transparent; color: var(--ink); border-radius: 10px; cursor: pointer; place-items: center; }
+.pt-back-btn:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.pt-conv-who { display: flex; flex-direction: column; min-width: 0; }
+.pt-conv-who b { font-size: 15px; letter-spacing: -0.01em; }
+.pt-conv-who small { font-size: 12px; color: var(--ink-faint); }
 
 /* Личные сообщения */
 .pt-dm { flex-direction: row; padding: 0; gap: 0; }
@@ -96,15 +107,53 @@
 .pt-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 4px 10px 4px 4px; border-radius: 980px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
 
 @media (max-width: 760px) {
-  .pt-rail { position: fixed; bottom: 0; left: 0; right: 0; top: auto; width: 100%; height: auto; flex-direction: row; align-items: center; gap: 4px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border-right: none; border-top: 1px solid rgba(255,255,255,0.08); z-index: 60; overflow-x: auto; }
+  /* Нижний таб-бар в стиле мессенджера: иконка + подпись */
+  .pt-rail { position: fixed; bottom: 0; left: 0; right: 0; top: auto; width: 100%; height: auto; flex-direction: row; align-items: stretch; gap: 2px; padding: 5px 6px calc(5px + env(safe-area-inset-bottom)); border-right: none; border-top: 1px solid rgba(255,255,255,0.08); z-index: 60; }
   .pt-brand { display: none; }
   .pt-nav { flex-direction: row; gap: 2px; flex: 1; }
-  .pt-tab { flex: 0 0 auto; font-size: 12.5px; padding: 9px 12px; white-space: nowrap; }
-  .pt-foot { margin: 0; flex: 0 0 auto; }
-  .pt-me-n { display: none; }
-  .pt-main { height: auto; min-height: 100vh; padding-bottom: 76px; }
-  .pt-view { height: auto; min-height: calc(100vh - 76px); }
+  .pt-tab { flex: 1; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; line-height: 1.1; padding: 6px 4px; border-radius: 12px; white-space: nowrap; }
+  .pt-tab .pt-tab-l { font-size: 10px; }
+  .pt-tab.active { background: transparent; color: var(--blue); }   /* активная вкладка — цветом, без пилюли */
+  .pt-foot { margin: 0; flex: 0 0 auto; align-items: center; }
+  .pt-foot .pt-me { display: none; }
+  .pt-main { height: auto; min-height: 100vh; padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .pt-view { height: auto; min-height: calc(100vh - 64px); padding: 16px 16px 0; }
+  .pt-view-h h2 { font-size: 1.25rem; }
   .pt-chat { min-height: 40vh; }
-  .pt-dm { flex-direction: column; }
-  .pt-dm-list { width: 100%; flex: none; border-right: none; border-bottom: 1px solid var(--line); max-height: 34vh; }
+
+  /* Режим открытого диалога: таб-бар прячем, экран под мессенджер */
+  .pt-conv-open .pt-rail { display: none; }
+  .pt-conv-open .pt-main { padding-bottom: 0; }
+
+  /* ЛС: список ИЛИ диалог на весь экран (как в Telegram), а не два столбца */
+  .pt-dm { flex-direction: column; padding: 0; }
+  .pt-dm-list { width: 100%; flex: 1; border-right: none; border-bottom: none; max-height: none; padding: 16px 12px calc(70px + env(safe-area-inset-bottom)); overflow-y: auto; }
+  .pt-dm .pt-dm-conv { display: none; }
+  .pt-dm.has-active .pt-dm-list { display: none; }
+  .pt-dm.has-active .pt-dm-conv { display: flex; height: 100vh; height: 100dvh; padding: 0; }
+  .pt-dm-hint { display: none; }
+  /* крупные строки списка чатов */
+  .pt-dm-list .pt-user { padding: 12px 12px; border-radius: 14px; gap: 12px; }
+  .pt-dm-list .pt-av.sm { width: 46px; height: 46px; font-size: 15px; }
+  .pt-dm-list .pt-user-t b { font-size: 15px; }
+  .pt-dm-list .pt-user-t small { font-size: 12.5px; }
+
+  /* Шапка диалога — липкая сверху, показываем кнопку «назад» */
+  .pt-dm.has-active .pt-conv-head {
+    position: sticky; top: 0; z-index: 5; margin: 0; padding: 10px 12px;
+    background: var(--card); border-bottom: 1px solid var(--line);
+  }
+  .pt-back-btn { display: grid; }
+  .pt-dm.has-active .pt-chat { flex: 1; padding: 12px 12px 8px; }
+
+  /* Поле ввода — липкое снизу, с безопасной зоной */
+  .pt-compose { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
+  .pt-view > .pt-compose { margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+
+  /* Telegram-пузыри: крупнее радиус, «хвостик» у своего/чужого угла */
+  .pt-msg { max-width: 84%; }
+  .pt-bubble { border-radius: 18px; padding: 8px 13px; }
+  .pt-msg:not(.own) .pt-bubble { border-bottom-left-radius: 6px; }
+  .pt-msg.own .pt-bubble { border-bottom-right-radius: 6px; }
+  .pt-msg.own .pt-bubble { background: color-mix(in srgb, var(--blue) 26%, var(--card)); border-color: transparent; }
 }
