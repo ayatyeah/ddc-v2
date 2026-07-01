@@ -5,12 +5,24 @@ import ThemeToggle from '../ThemeToggle.jsx';
 import '../admin/admin.css';
 import './portal.css';
 
-const TABS = [
-  { id: 'chat', label: 'Командный чат' },
-  { id: 'dm', label: 'Личные сообщения' },
-  { id: 'tasks', label: 'Задачи' },
-  { id: 'depts', label: 'Отделы' },
+// Разделы портала (внутренняя соцсеть/интранет). Порядок = порядок в меню.
+const SECTIONS = [
+  { id: 'home', label: 'Главная', icon: 'home' },
+  { id: 'profile', label: 'Профиль', icon: 'user' },
+  { id: 'people', label: 'Сотрудники', icon: 'people' },
+  { id: 'calendar', label: 'Календарь', icon: 'calendar' },
+  { id: 'news', label: 'Новости', icon: 'news' },
+  { id: 'docs', label: 'Документы', icon: 'docs' },
+  { id: 'requests', label: 'Заявки', icon: 'requests' },
+  { id: 'tasks', label: 'Задачи', icon: 'tasks' },
+  { id: 'depts', label: 'Отделы', icon: 'depts' },
+  { id: 'dm', label: 'Личные сообщения', icon: 'dm' },
+  { id: 'chat', label: 'Командный чат', icon: 'chat' },
 ];
+const labelOf = (id) => SECTIONS.find((s) => s.id === id)?.label || '';
+
+const ROLE_LABEL = { admin: 'Администратор', manager: 'Начальник отдела', staff: 'Сотрудник', editor: 'Редактор', viewer: 'Просмотр' };
+const roleLabel = (r) => ROLE_LABEL[r] || r || 'Сотрудник';
 
 const fmtTime = (iso) => { try { return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 const initials = (n) => (n || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -22,10 +34,12 @@ export default function PortalApp() {
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState('chat');
-  // На мобиле при открытом диалоге прячем нижний таб-бар (мессенджер-стиль, как в Telegram).
+  const [tab, setTab] = useState('home');
+  // На мобиле при открытом диалоге прячем верхнюю панель (мессенджер-стиль).
   const [convOpen, setConvOpen] = useState(false);
-  const goTab = (id) => { setConvOpen(false); setTab(id); };
+  // Боковое меню (на телефоне выезжает слева по бургеру; на десктопе всегда видно).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const goTab = (id) => { setConvOpen(false); setMenuOpen(false); setTab(id); };
 
   useEffect(() => {
     hideSplash();
@@ -71,13 +85,22 @@ export default function PortalApp() {
   }
 
   return (
-    <div className={`pt pt-shell ${convOpen ? 'pt-conv-open' : ''}`}>
+    <div className={`pt pt-shell ${convOpen ? 'pt-conv-open' : ''} ${menuOpen ? 'pt-menu-open' : ''}`}>
+      {/* Мобильная верхняя панель: бургер + название текущего раздела */}
+      <header className="pt-topbar">
+        <button className="pt-burger" onClick={() => setMenuOpen((o) => !o)} aria-label="Меню" aria-expanded={menuOpen}>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d={menuOpen ? 'M6 6l12 12M18 6L6 18' : 'M3 6h18M3 12h18M3 18h18'} /></svg>
+        </button>
+        <span className="pt-topbar-t">{labelOf(tab)}</span>
+      </header>
+      <div className="pt-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+
       <aside className="pt-rail">
         <div className="pt-brand"><img src="/logo_ddc.svg?v=2" alt="DDC" /></div>
         <nav className="pt-nav">
-          {TABS.map((tb) => (
-            <button key={tb.id} className={`pt-tab ${tab === tb.id ? 'active' : ''}`} onClick={() => goTab(tb.id)}>
-              <PtIco name={tb.id} /><span className="pt-tab-l">{tb.label}</span>
+          {SECTIONS.map((s) => (
+            <button key={s.id} className={`pt-tab ${tab === s.id ? 'active' : ''}`} onClick={() => goTab(s.id)}>
+              <PtIco name={s.icon} /><span className="pt-tab-l">{s.label}</span>
             </button>
           ))}
         </nav>
@@ -88,25 +111,142 @@ export default function PortalApp() {
           <button className="pt-foot-btn" onClick={doLogout} title="Выйти">⎋</button>
         </div>
       </aside>
+
       <main className="pt-main">
-        {tab === 'chat' && <TeamChat me={me} onAuthLost={onAuthLost} />}
-        {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
+        {tab === 'home' && <Home me={me} onGo={goTab} />}
+        {tab === 'profile' && <Profile me={me} onAuthLost={onAuthLost} />}
+        {tab === 'people' && <People onAuthLost={onAuthLost} />}
+        {tab === 'calendar' && <Stub icon="calendar" title="Календарь" note="Праздники, выходные, отпуска сотрудников, корпоративные мероприятия и дни рождения." />}
+        {tab === 'news' && <Stub icon="news" title="Новости" note="Объявления по категориям (HR, IT, Финансы, Компания, Важное) с лайками и комментариями." />}
+        {tab === 'docs' && <Stub icon="docs" title="Документы" note="Шаблоны, регламенты, инструкции, политика безопасности, брендбук, NDA, договоры." />}
+        {tab === 'requests' && <Stub icon="requests" title="Заявки" note="Отпуск, больничный, командировка, справка, закупка, доступ к системе, пропуск — со статусами согласования." />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
         {tab === 'depts' && <Departments onAuthLost={onAuthLost} />}
+        {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
+        {tab === 'chat' && <TeamChat me={me} onAuthLost={onAuthLost} />}
       </main>
     </div>
   );
 }
 
-/* Иконки таб-бара портала (мессенджер-стиль) */
+/* Иконки разделов портала */
 function PtIco({ name }) {
   const p = {
-    chat: <path d="M4 5h16v11H8l-4 4V5z" />,
-    dm: <><path d="M4 5h16v14l-3-3H4z" /><path d="M8 10h8M8 13h5" /></>,
+    home: <><path d="M4 11l8-7 8 7" /><path d="M6 10v9h12v-9" /></>,
+    user: <><circle cx="12" cy="8" r="3.4" /><path d="M5 20a7 7 0 0 1 14 0" /></>,
+    people: <><circle cx="9" cy="8" r="2.6" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a2.6 2.6 0 0 1 0 4.6M20.5 19a5 5 0 0 0-3.5-4.4" /></>,
+    calendar: <><rect x="3.5" y="5" width="17" height="16" rx="2" /><path d="M3.5 9h17M8 3v4M16 3v4" /></>,
+    news: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
+    docs: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M9 13h6M9 17h6" /></>,
+    requests: <><path d="M9 4h6l1 3H8z" /><rect x="4" y="7" width="16" height="14" rx="2" /><path d="M9 13l2 2 4-4" /></>,
     tasks: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 12l2.5 2.5L16 9" /></>,
     depts: <><circle cx="9" cy="8" r="2.6" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a2.6 2.6 0 0 1 0 4.6M20.5 19a5 5 0 0 0-3.5-4.4" /></>,
+    dm: <><path d="M4 5h16v14l-3-3H4z" /><path d="M8 10h8M8 13h5" /></>,
+    chat: <path d="M4 5h16v11H8l-4 4V5z" />,
   }[name];
   return <svg className="pt-tab-i" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{p}</svg>;
+}
+
+/* ── Главная: приветствие + быстрые ссылки ── */
+function Home({ me, onGo }) {
+  const tiles = [
+    { id: 'requests', label: 'Подать заявку', note: 'отпуск, справка, доступ' },
+    { id: 'docs', label: 'Документы', note: 'шаблоны, регламенты' },
+    { id: 'people', label: 'Сотрудники', note: 'справочник команды' },
+    { id: 'chat', label: 'Командный чат', note: 'общий канал' },
+    { id: 'calendar', label: 'Календарь', note: 'события и отпуска' },
+    { id: 'news', label: 'Новости', note: 'объявления компании' },
+  ];
+  return (
+    <div className="pt-view">
+      <div className="pt-view-h"><h2>Здравствуйте, {me?.username}!</h2><span className="pt-hint">Рабочее пространство DDC</span></div>
+      <div className="pt-tiles">
+        {tiles.map((t) => (
+          <button className="pt-tile" key={t.id} onClick={() => onGo(t.id)}>
+            <PtIco name={SECTIONS.find((s) => s.id === t.id)?.icon || 'home'} />
+            <b>{t.label}</b><span>{t.note}</span>
+          </button>
+        ))}
+      </div>
+      <div className="pt-widget">
+        <b>Виджеты</b>
+        <p className="pt-empty sm">Новости компании, дни рождения и новые сотрудники появятся здесь.</p>
+      </div>
+    </div>
+  );
+}
+
+/* ── Профиль сотрудника ── */
+function Profile({ me, onAuthLost }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    getJSON('/api/portal/users').then((list) => setInfo(list.find((u) => u.id === me?.id) || null)).catch((e) => { if (e.status === 401) onAuthLost?.(); });
+  }, [me, onAuthLost]);
+  const rows = [
+    ['Должность', roleLabel(me?.role)],
+    ['Отдел', info?.department || '—'],
+    ['Руководитель', '—'],
+    ['Телефон', '—'],
+    ['Почта', '—'],
+    ['Дата приёма', '—'],
+    ['Рабочий график', '—'],
+  ];
+  return (
+    <div className="pt-view">
+      <div className="pt-view-h"><h2>Профиль</h2></div>
+      <div className="pt-profile">
+        <div className="pt-profile-top">
+          <span className="pt-av xl">{initials(me?.username)}</span>
+          <div className="pt-profile-id">
+            <h3>{me?.username}</h3>
+            <p>{roleLabel(me?.role)}{info?.department ? ` · ${info.department}` : ''}</p>
+          </div>
+        </div>
+        <div className="pt-fields">
+          {rows.map(([k, v]) => <div className="pt-field" key={k}><span>{k}</span><b>{v}</b></div>)}
+        </div>
+        <div className="pt-field-note">Контакты, навыки и график заполняются в HR-профиле.</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Сотрудники: справочник + поиск ── */
+function People({ onAuthLost }) {
+  const [users, setUsers] = useState([]);
+  const [q, setQ] = useState('');
+  useEffect(() => { getJSON('/api/portal/users').then(setUsers).catch((e) => { if (e.status === 401) onAuthLost?.(); }); }, [onAuthLost]);
+  const ql = q.trim().toLowerCase();
+  const list = ql ? users.filter((u) => [u.name, u.department, u.role, roleLabel(u.role)].some((x) => (x || '').toLowerCase().includes(ql))) : users;
+  return (
+    <div className="pt-view">
+      <div className="pt-view-h"><h2>Сотрудники</h2><span className="pt-hint">{users.length} чел.</span></div>
+      <input className="adm-input pt-search" placeholder="Поиск: имя, отдел, должность…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="pt-people">
+        {list.map((u) => (
+          <div className="pt-person" key={u.id}>
+            <span className="pt-av">{initials(u.name)}</span>
+            <div className="pt-person-t"><b>{u.name}</b><small>{roleLabel(u.role)}{u.department ? ` · ${u.department}` : ''}</small></div>
+          </div>
+        ))}
+        {list.length === 0 && <div className="pt-empty">{users.length ? 'Никого не найдено.' : 'Список пуст.'}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Заглушка раздела «в разработке» ── */
+function Stub({ icon, title, note }) {
+  return (
+    <div className="pt-view">
+      <div className="pt-view-h"><h2>{title}</h2></div>
+      <div className="pt-stub">
+        <span className="pt-stub-ico"><PtIco name={icon} /></span>
+        <h3>Раздел в разработке</h3>
+        <p>{note}</p>
+      </div>
+    </div>
+  );
 }
 
 /* ── Командный чат ── */
