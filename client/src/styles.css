@@ -1198,6 +1198,22 @@ a { transition: color 0.2s var(--ease); }
 [data-theme='dark'] .nc-card,
 [data-theme='dark'] .ncard { border-color: rgba(125, 195, 255, 0.16); }
 
+/* Светлая тема: стеклянные плашки были захардкожены тёмными — осветляем,
+   иначе на светлом сайте панель героя/контактов остаётся чёрной (текст тонет). */
+[data-theme='light'] .text-glass {
+  background: linear-gradient(135deg, rgba(255,255,255,0.82), rgba(244,248,255,0.74) 55%, rgba(235,243,255,0.78));
+  border-color: rgba(20, 50, 110, 0.12);
+  box-shadow: 0 10px 40px rgba(20, 40, 80, 0.10), inset 0 1px 0 rgba(255,255,255,0.75);
+}
+[data-theme='light'] .text-glass h1, [data-theme='light'] .text-glass .h2, [data-theme='light'] .text-glass h2,
+[data-theme='light'] .text-glass .lede, [data-theme='light'] .text-glass p, [data-theme='light'] .text-glass .eyebrow { text-shadow: none; }
+[data-theme='light'] .text-glass::before { background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0) 24%); }
+[data-theme='light'] .cta-band {
+  background: linear-gradient(135deg, rgba(232,240,253,0.92), rgba(246,250,255,0.94));
+  border-color: rgba(20, 50, 110, 0.14);
+  box-shadow: 0 18px 50px rgba(20, 40, 80, 0.10);
+}
+
 /* Тонкая светящаяся кромка сверху у плиток услуг */
 [data-theme='dark'] .svc { position: relative; }
 [data-theme='dark'] .svc::after {
