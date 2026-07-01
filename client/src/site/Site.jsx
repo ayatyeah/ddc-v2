@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useA11y } from '../store.js';
 import { useRoute } from './router.js';
-import { ROUTES } from './pages.jsx';
+import { ROUTES, NotFoundPage } from './pages.jsx';
 import Nav from './Nav.jsx';
 import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
@@ -42,8 +42,9 @@ function isLowPowerDevice() {
 
 export default function Site() {
   const path = useRoute();
-  const route = ROUTES[path] || ROUTES['/'];
-  const Page = route.Comp;
+  const known = ROUTES[path];
+  const route = known || ROUTES['/'];       // фон/оттенок неба для 404 берём как у главной
+  const Page = known ? route.Comp : NotFoundPage;
   const isMobile = useIsMobile();
   const lowPower = useState(isLowPowerDevice)[0];   // считаем один раз на маунте
   const a11y = useA11y();   // версия для слабовидящих — без 3D, частиц и тумана

@@ -8,18 +8,23 @@ import About from './About.jsx';
 import News from './News.jsx';
 import Contact from './Contact.jsx';
 import Privacy from './Privacy.jsx';
+import CtaBand from './CtaBand.jsx';
+import NotFound from './NotFound.jsx';
 
 export function HomePage() {
   return (<><Hero /><Stats /><div className="page-soft"><News /></div></>);
 }
 export function ServicesPage() {
-  return (<div className="page-top"><Showcase /><Services /></div>);
+  return (<div className="page-top"><Showcase /><Services /><CtaBand /></div>);
 }
 export function ProjectsPage() {
-  return (<div className="page-top"><Projects /></div>);
+  return (<div className="page-top"><Projects /><CtaBand /></div>);
+}
+export function NotFoundPage() {
+  return (<div className="page-top"><NotFound /></div>);
 }
 export function AboutPage() {
-  return (<div className="page-top"><About /><BuildingShot /></div>);
+  return (<div className="page-top"><About /><BuildingShot /><CtaBand /></div>);
 }
 export function ContactPage() {
   return (<div className="page-top"><Contact /></div>);

@@ -65,6 +65,10 @@ export const DICT = {
     'projects.eyebrow': 'Проекты и инновации',
     'projects.title': 'Технологии национального масштаба',
     'projects.sub': 'Ключевые продукты и инициативы, которые мы разрабатываем и сопровождаем для Национального Банка и финансового сектора Казахстана — от больших данных до цифровых активов.',
+    'nf.code': 'Ошибка 404', 'nf.title': 'Страница не найдена',
+    'nf.sub': 'Похоже, такой страницы нет или она переехала. Вернитесь на главную или посмотрите услуги.',
+    'nf.home': 'На главную', 'nf.services': 'Услуги',
+    'cta.title': 'Обсудим ваш проект?', 'cta.sub': 'Расскажите задачу — предложим цифровое решение под неё.', 'cta.btn': 'Оставить заявку',
   },
   kk: {
     'nav.home': 'Басты бет', 'nav.services': 'Қызметтер', 'nav.about': 'Біз туралы', 'nav.news': 'Жаңалықтар', 'nav.contacts': 'Байланыс',
@@ -130,6 +134,10 @@ export const DICT = {
     'projects.eyebrow': 'Жобалар мен инновациялар',
     'projects.title': 'Ұлттық ауқымдағы технологиялар',
     'projects.sub': 'Ұлттық Банк пен Қазақстанның қаржы секторы үшін әзірлейтін және сүйемелдейтін негізгі өнімдер мен бастамалар — үлкен деректерден цифрлық активтерге дейін.',
+    'nf.code': '404 қатесі', 'nf.title': 'Бет табылмады',
+    'nf.sub': 'Мұндай бет жоқ немесе орны ауысқан сияқты. Басты бетке оралыңыз немесе қызметтерді қараңыз.',
+    'nf.home': 'Басты бетке', 'nf.services': 'Қызметтер',
+    'cta.title': 'Жобаңызды талқылайық па?', 'cta.sub': 'Міндетті айтыңыз — соған сай цифрлық шешім ұсынамыз.', 'cta.btn': 'Өтінім қалдыру',
   },
   en: {
     'nav.home': 'Home', 'nav.services': 'Services', 'nav.about': 'About', 'nav.news': 'News', 'nav.contacts': 'Contacts',
@@ -195,6 +203,10 @@ export const DICT = {
     'projects.eyebrow': 'Projects & Innovation',
     'projects.title': 'Technology at a national scale',
     'projects.sub': 'Key products and initiatives we build and operate for the National Bank and Kazakhstan’s financial sector — from big data to digital assets.',
+    'nf.code': 'Error 404', 'nf.title': 'Page not found',
+    'nf.sub': 'This page doesn’t exist or has moved. Head back home or explore our services.',
+    'nf.home': 'Home', 'nf.services': 'Services',
+    'cta.title': 'Let’s discuss your project?', 'cta.sub': 'Tell us your goal — we’ll propose a digital solution for it.', 'cta.btn': 'Get in touch',
   },
 };
 

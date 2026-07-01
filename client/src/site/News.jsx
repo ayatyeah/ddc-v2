@@ -38,6 +38,7 @@ export default function News() {
   const [feed, setFeed] = useState([]);
   const [feedAt, setFeedAt] = useState(null);
   const [feedDigest, setFeedDigest] = useState('');
+  const [feedLoaded, setFeedLoaded] = useState(false);
   const [aiActive, setAiActive] = useState(null);
 
   useEffect(() => {
@@ -56,8 +57,9 @@ export default function News() {
           const arr = Array.isArray(d.items) ? d.items : [];
           setFeed(arr); setFeedAt(d.updated_at || null); setFeedDigest(d.digest || '');
           if (arr.length === 0 && tries < 3) { tries += 1; timer = setTimeout(loadFeed, 6000); } // лента ещё собирается
+          else setFeedLoaded(true);
         })
-        .catch(() => {});
+        .catch(() => { if (alive) setFeedLoaded(true); });
     };
     loadFeed();
     return () => { alive = false; if (timer) clearTimeout(timer); };
@@ -103,7 +105,16 @@ export default function News() {
 
         <h3 className="news-part">{t(lang, 'news.ours')}</h3>
         <div style={{ marginTop: 20 }}>
-          {loaded && items.length === 0 ? (
+          {!loaded ? (
+            <div className="nc-track nc-skel">
+              {[0, 1, 2].map((i) => (
+                <div className="nc-card is-skel" key={i}>
+                  <div className="ph skel" />
+                  <div className="body"><span className="skel-l w40" /><span className="skel-l" /><span className="skel-l w80" /></div>
+                </div>
+              ))}
+            </div>
+          ) : items.length === 0 ? (
             <div className="news-empty">{t(lang, 'news.empty')}</div>
           ) : (
             <Reveal>
@@ -150,7 +161,13 @@ export default function News() {
         </div>
         {pickT(feedDigest, lang) && <div className="ai-digest"><span className="ai-digest-lbl">{t(lang, 'news.digest')}</span>{pickT(feedDigest, lang)}</div>}
         <div className="ai-feed">
-          {feed.length === 0 ? (
+          {!feedLoaded && feed.length === 0 ? (
+            [0, 1, 2, 3].map((i) => (
+              <div className="af-card is-skel" key={`s${i}`}>
+                <div className="af-ph skel" /><span className="skel-l w40" /><span className="skel-l" /><span className="skel-l w80" />
+              </div>
+            ))
+          ) : feed.length === 0 ? (
             <div className="news-empty">{t(lang, 'news.aiEmpty')}</div>
           ) : feed.map((it, i) => (
             <button className="af-card" key={i} onClick={() => setAiActive(it)}>
