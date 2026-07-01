@@ -38,6 +38,21 @@ export default function Nav() {
                 {t(lang, l.k)}
               </a>
             ))}
+            {/* На телефоне «Вход в портал» и переключатель языка переезжают внутрь шторки,
+               чтобы верхний островок не переполнялся. На десктопе блок скрыт (CSS). */}
+            <div className="nav-drawer-tools">
+              <a className="nav-portal-btn" href="/portal" data-spa onClick={() => setOpen(false)}>
+                {t(lang, 'portal.enter')}
+              </a>
+              <div className="lang" role="group" aria-label="Язык / Тіл / Language">
+                {LANGS.map((l) => (
+                  <button key={l} className={l === lang ? 'active' : ''} onClick={() => setLang(l)}
+                    aria-pressed={l === lang} aria-label={l === 'kk' ? 'Қазақша' : l === 'ru' ? 'Русский' : 'English'}>
+                    {l === 'kk' ? 'KZ' : l.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <a className="nav-portal-btn" href="/portal" data-spa onClick={() => setOpen(false)}>
             {t(lang, 'portal.enter')}

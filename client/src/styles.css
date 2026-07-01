@@ -323,6 +323,8 @@ button { font-family: inherit; cursor: pointer; }
     inset 0 -1px 1px rgba(255, 255, 255, 0.05);
 }
 .nav-links { display: flex; gap: 2px; }
+/* Блок инструментов внутри шторки (портал + языки) — виден только на телефоне */
+.nav-drawer-tools { display: none; }
 .nav-links a {
   font-size: 13.5px; color: var(--ink-soft); padding: 8px 14px; border-radius: 980px;
   transition: color 0.2s, background 0.2s;
@@ -1339,6 +1341,21 @@ html.lenis, html.lenis body { height: auto; }
   .nav-island { gap: 4px; padding: 5px; }
   .lang button { padding: 8px 9px; font-size: 12px; }
   .icon-btn { width: 38px; height: 38px; }
+
+  /* «Вход в портал» и языки переехали в шторку — в островке остаются
+     только [тема][a11y][бургер], островок больше не переполняется. */
+  .nav-island > .nav-portal-btn,
+  .nav-island > .lang { display: none; }
+  .nav-drawer-tools {
+    display: flex; flex-direction: column; gap: 16px; width: 100%;
+    margin-top: auto; padding-top: 22px; border-top: 1px solid rgba(255,255,255,0.14);
+  }
+  .nav-drawer-tools .nav-portal-btn {
+    display: inline-flex; justify-content: center; width: 100%;
+    font-size: 16px; padding: 15px 22px; border-radius: 14px;
+  }
+  .nav-drawer-tools .lang { gap: 8px; }
+  .nav-drawer-tools .lang button { padding: 11px 18px; font-size: 15px; border: 1px solid rgba(255,255,255,0.14); }
 }
 
 @media (max-width: 760px) {
