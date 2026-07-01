@@ -5,16 +5,35 @@ import { sendJSON } from '../api.js';
 import Reveal from './Reveal.jsx';
 
 const EMPTY = { full_name: '', email: '', phone: '', message: '' };
+const CV_EXTS = ['pdf', 'doc', 'docx'];
+const CV_MAX = 5 * 1024 * 1024;
+const readCv = (file) => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res({ name: file.name, data: String(r.result) });
+  r.onerror = () => rej(new Error('read'));
+  r.readAsDataURL(file);
+});
 
 /* Универсальная inline-форма заявки → /api/leads. subject — тема (напр. «Партнёрство»
-   или «Отклик на вакансию»), чтобы в админке было видно источник. title/sub — заголовки. */
-export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey }) {
+   или «Отклик на вакансию»), чтобы в админке было видно источник. title/sub — заголовки.
+   withFile+kind — для карьеры: приём CV (проверка типа/размера на клиенте и сервере). */
+export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey, kind, withFile }) {
   const lang = useLang();
   const [form, setForm] = useState(EMPTY);
+  const [cv, setCv] = useState(null);
   const [consent, setConsent] = useState(false);
   const [state, setState] = useState('idle');
   const [err, setErr] = useState('');
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const onCv = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) { setCv(null); return; }
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    if (!CV_EXTS.includes(ext)) { setErr(t(lang, 'careers.cv.type')); setState('error'); e.target.value = ''; return; }
+    if (f.size > CV_MAX) { setErr(t(lang, 'careers.cv.big')); setState('error'); e.target.value = ''; return; }
+    setCv(f); if (state === 'error') { setState('idle'); setErr(''); }
+  };
 
   const submit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
@@ -24,13 +43,16 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey 
     if (!consent) { setErr(t(lang, 'contact.err.consent')); setState('error'); return; }
     setState('sending'); setErr('');
     try {
-      await sendJSON('/api/leads', 'POST', {
+      const payload = {
         full_name: form.full_name.trim(), email: form.email.trim(), phone: form.phone.trim(),
         subject: t(lang, subject), message: form.message.trim(),
-      });
-      setState('sent'); setForm(EMPTY); setConsent(false);
+      };
+      if (kind) payload.kind = kind;
+      if (withFile && cv) payload.cv = await readCv(cv);
+      await sendJSON('/api/leads', 'POST', payload);
+      setState('sent'); setForm(EMPTY); setConsent(false); setCv(null);
       setTimeout(() => setState('idle'), 3500);
-    } catch { setErr(t(lang, 'contact.err.server')); setState('error'); }
+    } catch (e2) { setErr(e2?.message || t(lang, 'contact.err.server')); setState('error'); }
   };
 
   const btnClass = state === 'sent' ? 'btn btn-primary ok' : state === 'error' ? 'btn btn-primary bad' : 'btn btn-primary';
@@ -61,6 +83,17 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey 
               </div>
               <textarea className="inp" placeholder={t(lang, msgPlaceholderKey || 'contact.message')} aria-label={t(lang, 'contact.message')}
                 value={form.message} onChange={set('message')} />
+              {withFile && (
+                <div className="cv-upload">
+                  <label className="cv-btn">
+                    <input type="file" accept=".pdf,.doc,.docx" onChange={onCv} hidden />
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11l-8.5 8.5a4.5 4.5 0 0 1-6.4-6.4l8.7-8.7a3 3 0 0 1 4.3 4.3l-8.7 8.7a1.5 1.5 0 0 1-2.1-2.1l7.9-7.9" /></svg>
+                    <span>{cv ? cv.name : t(lang, 'careers.cv.pick')}</span>
+                  </label>
+                  {cv && <button type="button" className="cv-x" onClick={() => setCv(null)} aria-label="Убрать файл">✕</button>}
+                  <p className="cv-hint">{t(lang, 'careers.cv.hint')}</p>
+                </div>
+              )}
               <label className="form-consent">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
                 <span>{t(lang, 'contact.consent')}</span>

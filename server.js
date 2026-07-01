@@ -36,6 +36,8 @@ const helmet = require('helmet');
 const compression = require('compression');
 const expressStaticGzip = require('express-static-gzip');
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { buildReportPDF, fontsAvailable } = require('./pdfReport');
@@ -74,6 +76,10 @@ const COOKIE_OPTS = {
 
 // Папка с собранным React-приложением (vite build → ../public)
 const STATIC_DIR = path.join(__dirname, 'public');
+// Загруженные файлы (CV, вложения чата) храним ВНЕ web-root и НЕ отдаём статикой —
+// только через контролируемый эндпоинт /api/files/:id (с проверкой прав и заголовками).
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch (e) { console.error('mkdir uploads:', e.message); }
 
 // За reverse-proxy (DigitalOcean App Platform) — доверяем заголовкам X-Forwarded-*,
 // иначе rate-limit видит один IP на всех и secure-cookie не выставляется.
@@ -112,8 +118,58 @@ app.use(cors({
   origin: origins.length ? origins : true,   // в dev можно true; на проде укажи домены
   credentials: true,
 }));
-app.use(express.json({ limit: '3mb' }));   // под фото новостей (base64); 8mb был избыточен для DoS
+app.use(express.json({ limit: '10mb' }));  // под base64 фото новостей и вложения (файл ≤6 МБ → ~8 МБ base64 + запас)
 app.use(cookieParser());
+
+// ── Безопасная загрузка файлов (base64 в JSON, без сторонних зависимостей) ──────
+// Защита: белый список расширений по типу, лимит размера, проверка СИГНАТУРЫ (magic bytes),
+// случайное имя, хранение вне web-root, отдача только через /api/files с nosniff.
+const FILE_RULES = {
+  cv:   { exts: ['pdf', 'doc', 'docx'], max: 5 * 1024 * 1024 },
+  chat: { exts: ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'txt'], max: 6 * 1024 * 1024 },
+};
+const MIME = {
+  pdf: 'application/pdf', doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', txt: 'text/plain',
+};
+// Сигнатура файла должна соответствовать расширению (иначе .exe под видом .pdf и т.п.)
+function signatureOk(ext, b) {
+  switch (ext) {
+    case 'pdf': return b.slice(0, 5).toString('latin1') === '%PDF-';
+    case 'png': return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a';
+    case 'jpg': case 'jpeg': return b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF;
+    case 'gif': return b.slice(0, 4).toString('latin1') === 'GIF8';
+    case 'webp': return b.slice(0, 4).toString('latin1') === 'RIFF' && b.slice(8, 12).toString('latin1') === 'WEBP';
+    case 'docx': return b[0] === 0x50 && b[1] === 0x4B && (b[2] === 0x03 || b[2] === 0x05 || b[2] === 0x07); // zip (OOXML)
+    case 'doc': return b.slice(0, 8).toString('hex') === 'd0cf11e0a1b11ae1';                                // OLE2
+    case 'txt': return !b.slice(0, 8192).includes(0);                                                        // без нулевых байт
+    default: return false;
+  }
+}
+function httpErr(status, msg) { const e = new Error(msg); e.status = status; return e; }
+
+// Принимает { name, data(base64|dataURL) }, валидирует, сохраняет, пишет строку в files.
+async function saveUpload(file, kind, uploaderId) {
+  const rule = FILE_RULES[kind];
+  if (!rule) throw httpErr(400, 'Неизвестный тип загрузки');
+  if (!file || typeof file.data !== 'string' || !file.name) throw httpErr(400, 'Файл не передан');
+  const orig = String(file.name).slice(0, 200);
+  const ext = (orig.split('.').pop() || '').toLowerCase();
+  if (!rule.exts.includes(ext)) throw httpErr(400, `Недопустимый тип файла (.${ext}). Разрешено: ${rule.exts.join(', ')}`);
+  const b64 = file.data.includes(',') ? file.data.slice(file.data.indexOf(',') + 1) : file.data;
+  let buf;
+  try { buf = Buffer.from(b64, 'base64'); } catch { throw httpErr(400, 'Повреждённые данные файла'); }
+  if (!buf.length) throw httpErr(400, 'Пустой файл');
+  if (buf.length > rule.max) throw httpErr(400, `Файл больше ${Math.round(rule.max / 1024 / 1024)} МБ`);
+  if (!signatureOk(ext, buf)) throw httpErr(400, 'Содержимое файла не соответствует расширению (возможно, файл повреждён или подменён)');
+  const stored = crypto.randomBytes(16).toString('hex') + '.' + ext + '.bin';   // .bin — не исполняется/не отдаётся статикой
+  await fs.promises.writeFile(path.join(UPLOAD_DIR, stored), buf, { mode: 0o600 });
+  const { rows } = await db.query(
+    `INSERT INTO files (stored, orig, mime, size, kind, uploaded_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, orig, mime, size`,
+    [stored, orig, MIME[ext] || 'application/octet-stream', buf.length, kind, uploaderId || null]);
+  return rows[0];
+}
 
 // Раздаём собранный фронт как статику. express-static-gzip отдаёт предсжатые .br/.gz
 // (их генерит vite-plugin-compression при сборке), если клиент их поддерживает —
@@ -260,10 +316,14 @@ app.post('/api/leads', formLimiter, async (req, res) => {
   if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
     return res.status(400).json({ error: 'Некорректный email' });
   }
+  const kind = req.body?.kind === 'career' ? 'career' : '';   // отклик на вакансию помечаем отдельно
   try {
+    // CV принимаем только для откликов на вакансию; валидация+сохранение внутри saveUpload.
+    let cv = null;
+    if (kind === 'career' && req.body?.cv) cv = await saveUpload(req.body.cv, 'cv', null);
     const { rows } = await db.query(
-      `INSERT INTO leads (full_name, email, phone, subject, message)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO leads (full_name, email, phone, subject, message, kind, cv_file_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, created_at`,
       [
         String(full_name).trim().slice(0, 300),
@@ -271,12 +331,14 @@ app.post('/api/leads', formLimiter, async (req, res) => {
         (phone || '').trim().slice(0, 60),
         (subject || '').trim().slice(0, 300),
         (message || '').trim().slice(0, 4000),
+        kind,
+        cv?.id || null,
       ]
     );
     res.status(201).json({ ok: true, id: rows[0].id, created_at: rows[0].created_at });
   } catch (e) {
     console.error('POST /api/leads:', e.message);
-    res.status(500).json({ error: 'Не удалось сохранить заявку' });
+    res.status(e.status || 500).json({ error: e.status ? e.message : 'Не удалось сохранить заявку' });
   }
 });
 
@@ -873,27 +935,33 @@ app.get('/api/portal/departments', auth, async (req, res) => {
 
 // Поля сообщения, отдаваемые клиенту (тело удалённых — пустое)
 const MSG_COLS = `id, author_id, author_name, recipient_id, chat_id,
-  CASE WHEN deleted THEN '' ELSE body END AS body, created_at, edited_at, deleted`;
+  CASE WHEN deleted THEN '' ELSE body END AS body, created_at, edited_at, deleted, file_id`;
+// Чтение сообщений с присоединённым вложением (имя/тип/размер файла)
+const MSG_READ = `SELECT m.id, m.author_id, m.author_name, m.recipient_id, m.chat_id,
+  CASE WHEN m.deleted THEN '' ELSE m.body END AS body, m.created_at, m.edited_at, m.deleted,
+  m.file_id, f.orig AS file_name, f.mime AS file_mime, f.size AS file_size
+  FROM messages m LEFT JOIN files f ON f.id = m.file_id`;
 
 // ── Командный чат (общий канал: recipient_id IS NULL И chat_id IS NULL) ──
 app.get('/api/portal/chat', auth, async (req, res) => {
   try {
     // Полное чтение последних сообщений (не инкремент) — чтобы правки/удаления доходили при поллинге.
     const { rows } = await db.query(
-      `SELECT ${MSG_COLS} FROM messages WHERE recipient_id IS NULL AND chat_id IS NULL ORDER BY id DESC LIMIT 80`);
+      `${MSG_READ} WHERE m.recipient_id IS NULL AND m.chat_id IS NULL ORDER BY m.id DESC LIMIT 80`);
     res.json(rows.reverse());
   } catch (e) { console.error('GET /api/portal/chat:', e.message); res.status(500).json({ error: 'Ошибка чтения чата' }); }
 });
 app.post('/api/portal/chat', auth, async (req, res) => {
   const body = clip(req.body?.body, 2000);
-  if (!body) return res.status(400).json({ error: 'Пустое сообщение' });
+  if (!body && !req.body?.file) return res.status(400).json({ error: 'Пустое сообщение' });
   try {
+    const saved = req.body?.file ? await saveUpload(req.body.file, 'chat', req.admin.id) : null;
     const { rows } = await db.query(
-      `INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1, $2, NULL, $3)
+      `INSERT INTO messages (author_id, author_name, recipient_id, body, file_id) VALUES ($1, $2, NULL, $3, $4)
        RETURNING ${MSG_COLS}`,
-      [req.admin.id, req.admin.u, body]);
-    res.status(201).json(rows[0]);
-  } catch (e) { console.error('POST /api/portal/chat:', e.message); res.status(500).json({ error: 'Не удалось отправить' }); }
+      [req.admin.id, req.admin.u, body, saved?.id || null]);
+    res.status(201).json({ ...rows[0], file_name: saved?.orig, file_mime: saved?.mime, file_size: saved?.size });
+  } catch (e) { console.error('POST /api/portal/chat:', e.message); res.status(e.status || 500).json({ error: e.status ? e.message : 'Не удалось отправить' }); }
 });
 
 // ── Личные сообщения (диалог с конкретным сотрудником) ──
@@ -903,9 +971,9 @@ app.get('/api/portal/dm/:userId(\\d+)', auth, async (req, res) => {
   const other = Number(req.params.userId);
   try {
     const { rows } = await db.query(
-      `SELECT ${MSG_COLS} FROM messages
-        WHERE chat_id IS NULL AND ((author_id = $1 AND recipient_id = $2) OR (author_id = $2 AND recipient_id = $1))
-        ORDER BY id ASC LIMIT 300`, [me, other]);
+      `${MSG_READ}
+        WHERE m.chat_id IS NULL AND ((m.author_id = $1 AND m.recipient_id = $2) OR (m.author_id = $2 AND m.recipient_id = $1))
+        ORDER BY m.id ASC LIMIT 300`, [me, other]);
     res.json(rows);
   } catch (e) { console.error('GET /api/portal/dm:', e.message); res.status(500).json({ error: 'Ошибка чтения диалога' }); }
 });
@@ -914,15 +982,16 @@ app.post('/api/portal/dm', auth, async (req, res) => {
   if (!me) return res.status(403).json({ error: 'Личные сообщения доступны сотрудникам с учётной записью' });
   const to = Number(req.body?.to);
   const body = clip(req.body?.body, 2000);
-  if (!Number.isInteger(to) || !body) return res.status(400).json({ error: 'Укажите адресата и текст' });
+  if (!Number.isInteger(to) || (!body && !req.body?.file)) return res.status(400).json({ error: 'Укажите адресата и текст' });
   try {
+    const saved = req.body?.file ? await saveUpload(req.body.file, 'chat', me) : null;
     const { rows } = await db.query(
-      `INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1, $2, $3, $4)
+      `INSERT INTO messages (author_id, author_name, recipient_id, body, file_id) VALUES ($1, $2, $3, $4, $5)
        RETURNING ${MSG_COLS}`,
-      [me, req.admin.u, to, body]);
-    if (to !== me) await notify(to, 'dm', null, 'Личное сообщение', `${req.admin.u}: ${body.slice(0, 80)}`);
-    res.status(201).json(rows[0]);
-  } catch (e) { console.error('POST /api/portal/dm:', e.message); res.status(500).json({ error: 'Не удалось отправить' }); }
+      [me, req.admin.u, to, body, saved?.id || null]);
+    if (to !== me) await notify(to, 'dm', null, 'Личное сообщение', `${req.admin.u}: ${(body || 'файл').slice(0, 80)}`);
+    res.status(201).json({ ...rows[0], file_name: saved?.orig, file_mime: saved?.mime, file_size: saved?.size });
+  } catch (e) { console.error('POST /api/portal/dm:', e.message); res.status(e.status || 500).json({ error: e.status ? e.message : 'Не удалось отправить' }); }
 });
 
 // ── Групповые чаты команд ──
@@ -972,25 +1041,95 @@ app.get('/api/portal/chats/:id(\\d+)/messages', auth, async (req, res) => {
   if (!(await isChatMember(chatId, me))) return res.status(403).json({ error: 'Вы не участник этого чата' });
   try {
     const { rows } = await db.query(
-      `SELECT ${MSG_COLS} FROM messages WHERE chat_id = $1 ORDER BY id DESC LIMIT 100`, [chatId]);
+      `${MSG_READ} WHERE m.chat_id = $1 ORDER BY m.id DESC LIMIT 100`, [chatId]);
     res.json(rows.reverse());
   } catch (e) { console.error('GET /api/portal/chats/messages:', e.message); res.status(500).json({ error: 'Ошибка чтения чата' }); }
 });
 app.post('/api/portal/chats/:id(\\d+)/messages', auth, async (req, res) => {
   const me = req.admin.id, chatId = Number(req.params.id);
   const body = clip(req.body?.body, 2000);
-  if (!body) return res.status(400).json({ error: 'Пустое сообщение' });
+  if (!body && !req.body?.file) return res.status(400).json({ error: 'Пустое сообщение' });
   if (!(await isChatMember(chatId, me))) return res.status(403).json({ error: 'Вы не участник этого чата' });
   try {
+    const saved = req.body?.file ? await saveUpload(req.body.file, 'chat', me) : null;
     const { rows } = await db.query(
-      `INSERT INTO messages (author_id, author_name, chat_id, body) VALUES ($1, $2, $3, $4) RETURNING ${MSG_COLS}`,
-      [me, req.admin.u, chatId, body]);
+      `INSERT INTO messages (author_id, author_name, chat_id, body, file_id) VALUES ($1, $2, $3, $4, $5) RETURNING ${MSG_COLS}`,
+      [me, req.admin.u, chatId, body, saved?.id || null]);
     // уведомляем остальных участников
     const { rows: mem } = await db.query(`SELECT user_id FROM chat_members WHERE chat_id = $1 AND user_id <> $2`, [chatId, me]);
     const { rows: ch } = await db.query(`SELECT name FROM chats WHERE id = $1`, [chatId]);
-    for (const m of mem) await notify(m.user_id, 'chat', null, ch[0]?.name || 'Чат', `${req.admin.u}: ${body.slice(0, 80)}`);
-    res.status(201).json(rows[0]);
-  } catch (e) { console.error('POST /api/portal/chats/messages:', e.message); res.status(500).json({ error: 'Не удалось отправить' }); }
+    for (const m of mem) await notify(m.user_id, 'chat', null, ch[0]?.name || 'Чат', `${req.admin.u}: ${(body || 'файл').slice(0, 80)}`);
+    res.status(201).json({ ...rows[0], file_name: saved?.orig, file_mime: saved?.mime, file_size: saved?.size });
+  } catch (e) { console.error('POST /api/portal/chats/messages:', e.message); res.status(e.status || 500).json({ error: e.status ? e.message : 'Не удалось отправить' }); }
+});
+
+// ── Скачивание/просмотр загруженного файла (контролируемая отдача) ──
+app.get('/api/files/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const { rows } = await db.query(`SELECT * FROM files WHERE id = $1`, [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Файл не найден' });
+    const f = rows[0];
+    // CV откликов — только рекрутерам (admin/manager). Вложения чата — любому авторизованному.
+    if (f.kind === 'cv' && !['admin', 'manager'].includes(req.admin.role)) return res.status(403).json({ error: 'Доступ только для рекрутеров' });
+    const p = path.join(UPLOAD_DIR, f.stored);
+    if (!fs.existsSync(p)) return res.status(404).json({ error: 'Файл отсутствует на диске' });
+    const inline = /^image\//.test(f.mime);                       // картинки показываем, остальное — скачиваем
+    const safe = String(f.orig || 'file').replace(/[\r\n"]+/g, '_');
+    res.setHeader('Content-Type', f.mime);
+    res.setHeader('X-Content-Type-Options', 'nosniff');           // запрет MIME-sniffing
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(safe)}`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    fs.createReadStream(p).pipe(res);
+  } catch (e) { console.error('GET /api/files:', e.message); res.status(500).json({ error: 'Ошибка чтения файла' }); }
+});
+
+// ── Отклики на вакансии (карьера): список + ИИ-анализ кандидатов ──────────────
+app.get('/api/admin/careers', auth, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT l.id, l.full_name, l.email, l.phone, l.subject, l.message, l.created_at,
+              l.cv_file_id, f.orig AS cv_name,
+              a.fit_score, a.verdict, a.created_at AS analyzed_at
+         FROM leads l
+         LEFT JOIN files f ON f.id = l.cv_file_id
+         LEFT JOIN career_ai a ON a.lead_id = l.id
+        WHERE l.kind = 'career' ORDER BY l.created_at DESC LIMIT 500`);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/admin/careers:', e.message); res.status(500).json({ error: 'Ошибка чтения откликов' }); }
+});
+
+// ИИ-анализ конкретного кандидата (Gemini): скор пригодности + сильные/слабые стороны + рекомендация
+app.post('/api/admin/careers/:id(\\d+)/analyze', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const { rows } = await db.query(`SELECT * FROM leads WHERE id = $1 AND kind = 'career'`, [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Отклик не найден' });
+    const l = rows[0];
+    const prompt = `Ты — опытный IT-рекрутер Центра цифрового развития (ЦЦР) Нацбанка Казахстана.
+Проанализируй отклик на вакансию и верни СТРОГО валидный JSON без пояснений в формате:
+{"fit_score": <целое 0-100>, "summary": "<2-3 предложения по сути кандидата>",
+ "strengths": ["<сильная сторона>", ...], "risks": ["<риск/пробел>", ...],
+ "recommendation": "invite|maybe|reject", "reason": "<короткое обоснование рекомендации>"}
+Оценивай по релевантности вакансии, мотивации и полноте отклика. Данные кандидата:
+- Имя: ${l.full_name}
+- Тема/вакансия: ${l.subject || '—'}
+- Контакты: ${l.email || '—'} ${l.phone || ''}
+- Сопроводительное письмо: ${(l.message || '').slice(0, 3000) || '(не заполнено)'}
+- Резюме (CV): ${l.cv_file_id ? 'приложено файлом (текст не распознан автоматически)' : 'не приложено'}`;
+    const text = await callGemini(prompt, 1024);
+    const j = parseJsonLoose(text) || {};
+    const fit = Math.max(0, Math.min(100, Math.round(Number(j.fit_score) || 0)));
+    await db.query(
+      `INSERT INTO career_ai (lead_id, fit_score, verdict) VALUES ($1, $2, $3)
+       ON CONFLICT (lead_id) DO UPDATE SET fit_score = EXCLUDED.fit_score, verdict = EXCLUDED.verdict, created_at = now()`,
+      [id, fit, JSON.stringify(j)]);
+    logAudit(req, 'career', id, 'ai', `ИИ-анализ отклика #${id} (скор ${fit})`);
+    res.json({ lead_id: id, fit_score: fit, verdict: j, analyzed_at: new Date().toISOString() });
+  } catch (e) {
+    console.error('POST /api/admin/careers/analyze:', e.message);
+    res.status(500).json({ error: 'ИИ недоступен: ' + (e.message || 'ошибка') });
+  }
 });
 
 // ── Правка / удаление своего сообщения (мессенджер-фичи) ──
@@ -1711,8 +1850,28 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        user_id INTEGER NOT NULL,
        PRIMARY KEY (chat_id, user_id)
      );
-     CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages (chat_id, id);`
-  ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats) на месте'); return seedServices(); })
+     CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages (chat_id, id);
+     -- Загруженные файлы (CV откликов, вложения чата)
+     CREATE TABLE IF NOT EXISTS files (
+       id          SERIAL PRIMARY KEY,
+       stored      TEXT NOT NULL UNIQUE,
+       orig        TEXT NOT NULL DEFAULT '',
+       mime        TEXT NOT NULL DEFAULT 'application/octet-stream',
+       size        INTEGER NOT NULL DEFAULT 0,
+       kind        TEXT NOT NULL DEFAULT '',
+       uploaded_by INTEGER,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_id INTEGER;    -- вложение сообщения
+     ALTER TABLE leads ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT '';        -- 'career' = отклик на вакансию
+     ALTER TABLE leads ADD COLUMN IF NOT EXISTS cv_file_id INTEGER;    -- прикреплённое CV
+     CREATE TABLE IF NOT EXISTS career_ai (
+       lead_id    INTEGER PRIMARY KEY,
+       fit_score  INTEGER,
+       verdict    JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );`
+  ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)

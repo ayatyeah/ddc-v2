@@ -27,6 +27,17 @@ const roleLabel = (r) => ROLE_LABEL[r] || r || 'Сотрудник';
 const fmtTime = (iso) => { try { return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 const initials = (n) => (n || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
+// Вложения чата
+const ATTACH_ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.txt';
+const MAX_ATTACH = 6 * 1024 * 1024;
+const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' МБ' : Math.max(1, Math.round((n || 0) / 1024)) + ' КБ');
+const fileToPayload = (file) => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve({ name: file.name, data: String(r.result) });
+  r.onerror = () => reject(new Error('Не удалось прочитать файл'));
+  r.readAsDataURL(file);
+});
+
 export default function PortalApp() {
   const [state, setState] = useState('checking'); // checking | login | app
   const [me, setMe] = useState(null);
@@ -258,6 +269,7 @@ function Thread({ me, title, sub, avatar, showAuthor, onBack, poll, post }) {
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState('');
   const [editId, setEditId] = useState(null);
+  const [file, setFile] = useState(null);
   const boxRef = useRef(null);
   const scrollDown = () => { const b = boxRef.current; if (b) b.scrollTop = b.scrollHeight; };
 
@@ -266,17 +278,25 @@ function Thread({ me, title, sub, avatar, showAuthor, onBack, poll, post }) {
   }, [poll]);
   useEffect(() => { reload(); const t = setInterval(reload, 4000); return () => clearInterval(t); }, [reload]);
 
+  const onPick = (e) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    if (f.size > MAX_ATTACH) { alert('Файл больше 6 МБ'); return; }
+    setFile(f);
+  };
   const submit = async (e) => {
     e?.preventDefault?.();
-    const body = text.trim(); if (!body) return;
+    const body = text.trim();
+    if (!body && !file) return;
     setText('');
+    const pending = file; setFile(null);
     try {
       if (editId) { await sendJSON(`/api/portal/messages/${editId}`, 'PATCH', { body }); setEditId(null); }
-      else { await post(body); }
+      else { await post(body, pending ? await fileToPayload(pending) : null); }
       await reload();
-    } catch (e2) { if (e2.status === 403) alert(e2.message || 'Нет доступа'); }
+    } catch (e2) { alert(e2.message || 'Не удалось отправить'); }
   };
-  const startEdit = (m) => { setEditId(m.id); setText(m.body); };
+  const startEdit = (m) => { setEditId(m.id); setText(m.body); setFile(null); };
   const cancelEdit = () => { setEditId(null); setText(''); };
   const del = async (m) => {
     if (!window.confirm('Удалить сообщение?')) return;
@@ -304,7 +324,10 @@ function Thread({ me, title, sub, avatar, showAuthor, onBack, poll, post }) {
               {showAuthor && !own && <span className="pt-av sm">{initials(m.author_name)}</span>}
               <div className="pt-bubble">
                 {showAuthor && !own && <div className="pt-msg-top"><b>{m.author_name}</b></div>}
-                {m.deleted ? <p className="pt-del">сообщение удалено</p> : <p>{m.body}</p>}
+                {m.deleted ? <p className="pt-del">сообщение удалено</p> : (<>
+                  {m.file_id && <Attachment m={m} />}
+                  {m.body && <p>{m.body}</p>}
+                </>)}
                 <time>{fmtTime(m.created_at)}{m.edited_at && !m.deleted ? ' · изм.' : ''}</time>
                 {canEdit && (
                   <div className="pt-msg-tools">
@@ -318,11 +341,37 @@ function Thread({ me, title, sub, avatar, showAuthor, onBack, poll, post }) {
         })}
       </div>
       <form className="pt-compose" onSubmit={submit}>
+        {file && (
+          <div className="pt-att-pending">
+            <span>📎 {file.name} · {fmtSize(file.size)}</span>
+            <button type="button" onClick={() => setFile(null)} aria-label="Убрать файл">✕</button>
+          </div>
+        )}
         {editId && <button type="button" className="pt-edit-x" onClick={cancelEdit} aria-label="Отмена правки" title="Отмена">✕</button>}
+        {!editId && (
+          <label className="pt-attach" title="Прикрепить файл">
+            <input type="file" hidden accept={ATTACH_ACCEPT} onChange={onPick} />
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11l-8.5 8.5a4.5 4.5 0 0 1-6.4-6.4l8.7-8.7a3 3 0 0 1 4.3 4.3l-8.7 8.7a1.5 1.5 0 0 1-2.1-2.1l7.9-7.9" /></svg>
+          </label>
+        )}
         <input className="adm-input" placeholder={editId ? 'Изменить сообщение…' : 'Сообщение…'} value={text} onChange={(e) => setText(e.target.value)} />
         <button className="adm-btn pt-send" type="submit" aria-label={editId ? 'Сохранить' : 'Отправить'}>{editId ? '✓' : <PaperPlane />}</button>
       </form>
     </>
+  );
+}
+
+/* Вложение сообщения: картинки показываем, остальное — файл со скачиванием */
+function Attachment({ m }) {
+  const url = `/api/files/${m.file_id}`;
+  if (/^image\//.test(m.file_mime || '')) {
+    return <a className="pt-att-img" href={url} target="_blank" rel="noreferrer"><img src={url} alt={m.file_name || ''} loading="lazy" /></a>;
+  }
+  return (
+    <a className="pt-att-file" href={url} target="_blank" rel="noreferrer">
+      <span className="pt-att-ic">📎</span>
+      <span className="pt-att-t"><b>{m.file_name || 'файл'}</b><small>{fmtSize(m.file_size)}</small></span>
+    </a>
   );
 }
 
@@ -338,7 +387,7 @@ function Chats({ me, onAuthLost, onConv }) {
   const close = () => { setActive(null); onConv?.(false); loadChats(); };
 
   const poll = useCallback(() => (active?.id === 'team' ? getJSON('/api/portal/chat') : getJSON(`/api/portal/chats/${active.id}/messages`)), [active]);
-  const post = useCallback((body) => (active?.id === 'team' ? sendJSON('/api/portal/chat', 'POST', { body }) : sendJSON(`/api/portal/chats/${active.id}/messages`, 'POST', { body })), [active]);
+  const post = useCallback((body, file) => (active?.id === 'team' ? sendJSON('/api/portal/chat', 'POST', { body, file }) : sendJSON(`/api/portal/chats/${active.id}/messages`, 'POST', { body, file })), [active]);
 
   return (
     <div className={`pt-view pt-dm ${active ? 'has-active' : ''}`}>
@@ -417,7 +466,7 @@ function Dm({ me, onAuthLost, onConv }) {
   }, [me, onAuthLost]);
 
   const poll = useCallback(() => getJSON(`/api/portal/dm/${active.id}`), [active]);
-  const post = useCallback((body) => sendJSON('/api/portal/dm', 'POST', { to: active.id, body }), [active]);
+  const post = useCallback((body, file) => sendJSON('/api/portal/dm', 'POST', { to: active.id, body, file }), [active]);
 
   return (
     <div className={`pt-view pt-dm ${active ? 'has-active' : ''}`}>

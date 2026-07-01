@@ -29,7 +29,7 @@ export function NotFoundPage() {
 // Карьера и Партнёрам — лендинг + своя форма-заявка (в админку падает как лид)
 export function CareersPage() {
   return (<div className="page-top"><SectionLanding sectionKey="careers" hideCta />
-    <LeadForm subject="careers.form.subject" titleKey="careers.form.title" subKey="careers.form.sub" msgPlaceholderKey="careers.form.msg" /></div>);
+    <LeadForm subject="careers.form.subject" titleKey="careers.form.title" subKey="careers.form.sub" msgPlaceholderKey="careers.form.msg" kind="career" withFile /></div>);
 }
 export function PartnersPage() {
   return (<div className="page-top"><SectionLanding sectionKey="partners" hideCta />
