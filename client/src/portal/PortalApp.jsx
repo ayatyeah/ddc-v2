@@ -17,7 +17,7 @@ const SECTIONS = [
   { id: 'tasks', label: 'Задачи', icon: 'tasks' },
   { id: 'depts', label: 'Отделы', icon: 'depts' },
   { id: 'dm', label: 'Личные сообщения', icon: 'dm' },
-  { id: 'chat', label: 'Командный чат', icon: 'chat' },
+  { id: 'chat', label: 'Чаты', icon: 'chat' },
 ];
 const labelOf = (id) => SECTIONS.find((s) => s.id === id)?.label || '';
 
@@ -123,7 +123,7 @@ export default function PortalApp() {
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
         {tab === 'depts' && <Departments onAuthLost={onAuthLost} />}
         {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
-        {tab === 'chat' && <TeamChat me={me} onAuthLost={onAuthLost} />}
+        {tab === 'chat' && <Chats me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
       </main>
     </div>
   );
@@ -249,95 +249,175 @@ function Stub({ icon, title, note }) {
   );
 }
 
-/* ── Командный чат ── */
-function TeamChat({ me, onAuthLost }) {
+const PaperPlane = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+);
+
+/* ── Универсальная лента сообщений: поллинг, отправка, правка/удаление своих ── */
+function Thread({ me, title, sub, avatar, showAuthor, onBack, poll, post }) {
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState('');
-  const lastId = useRef(0);
+  const [editId, setEditId] = useState(null);
   const boxRef = useRef(null);
   const scrollDown = () => { const b = boxRef.current; if (b) b.scrollTop = b.scrollHeight; };
 
-  const poll = useCallback(async () => {
-    try {
-      const q = lastId.current ? `?after=${lastId.current}` : '';
-      const rows = await getJSON('/api/portal/chat' + q);
-      if (rows.length) {
-        setMsgs((prev) => (lastId.current ? [...prev, ...rows] : rows));
-        lastId.current = rows[rows.length - 1].id;
-        setTimeout(scrollDown, 20);
-      }
-    } catch (e) { if (e.status === 401) onAuthLost?.(); }
-  }, [onAuthLost]);
+  const reload = useCallback(async () => {
+    try { const rows = await poll(); setMsgs(rows || []); setTimeout(scrollDown, 20); } catch { /* тихо: временная сетевая ошибка */ }
+  }, [poll]);
+  useEffect(() => { reload(); const t = setInterval(reload, 4000); return () => clearInterval(t); }, [reload]);
 
-  useEffect(() => { poll(); const t = setInterval(poll, 4000); return () => clearInterval(t); }, [poll]);
-
-  const send = async (e) => {
+  const submit = async (e) => {
     e?.preventDefault?.();
     const body = text.trim(); if (!body) return;
     setText('');
-    try { await sendJSON('/api/portal/chat', 'POST', { body }); await poll(); }
-    catch (e2) { if (e2.status === 401) onAuthLost?.(); }
+    try {
+      if (editId) { await sendJSON(`/api/portal/messages/${editId}`, 'PATCH', { body }); setEditId(null); }
+      else { await post(body); }
+      await reload();
+    } catch (e2) { if (e2.status === 403) alert(e2.message || 'Нет доступа'); }
+  };
+  const startEdit = (m) => { setEditId(m.id); setText(m.body); };
+  const cancelEdit = () => { setEditId(null); setText(''); };
+  const del = async (m) => {
+    if (!window.confirm('Удалить сообщение?')) return;
+    try { await apiFetch(`/api/portal/messages/${m.id}`, { method: 'DELETE' }); await reload(); } catch { /* пропускаем */ }
   };
 
   return (
-    <div className="pt-view">
-      <div className="pt-view-h"><h2>Командный чат</h2><span className="pt-hint">Общий канал команды DDC</span></div>
-      <div className="pt-chat" ref={boxRef}>
-        {msgs.length === 0 && <div className="pt-empty">Пока нет сообщений. Напишите первое!</div>}
-        {msgs.map((m) => (
-          <div key={m.id} className={`pt-msg ${m.author_name === me?.username ? 'own' : ''}`}>
-            <span className="pt-av sm">{initials(m.author_name)}</span>
-            <div className="pt-bubble"><div className="pt-msg-top"><b>{m.author_name}</b><time>{fmtTime(m.created_at)}</time></div><p>{m.body}</p></div>
-          </div>
-        ))}
+    <>
+      <div className="pt-conv-head">
+        {onBack && (
+          <button className="pt-back-btn" onClick={onBack} aria-label="Назад">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+          </button>
+        )}
+        <span className="pt-av sm">{avatar || initials(title)}</span>
+        <div className="pt-conv-who"><b>{title}</b>{sub && <small>{sub}</small>}</div>
       </div>
-      <form className="pt-compose" onSubmit={send}>
-        <input className="adm-input" placeholder="Сообщение в командный чат…" value={text} onChange={(e) => setText(e.target.value)} />
-        <button className="adm-btn pt-send" type="submit" aria-label="Отправить">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
-        </button>
+      <div className="pt-chat" ref={boxRef}>
+        {msgs.length === 0 && <div className="pt-empty">Пока нет сообщений.</div>}
+        {msgs.map((m) => {
+          const own = (m.author_id != null && m.author_id === me?.id) || (m.author_id == null && m.author_name === me?.username);
+          const canEdit = !!m.author_id && m.author_id === me?.id && !m.deleted;
+          return (
+            <div key={m.id} className={`pt-msg ${own ? 'own' : ''}`}>
+              {showAuthor && !own && <span className="pt-av sm">{initials(m.author_name)}</span>}
+              <div className="pt-bubble">
+                {showAuthor && !own && <div className="pt-msg-top"><b>{m.author_name}</b></div>}
+                {m.deleted ? <p className="pt-del">сообщение удалено</p> : <p>{m.body}</p>}
+                <time>{fmtTime(m.created_at)}{m.edited_at && !m.deleted ? ' · изм.' : ''}</time>
+                {canEdit && (
+                  <div className="pt-msg-tools">
+                    <button onClick={() => startEdit(m)} aria-label="Изменить" title="Изменить">✎</button>
+                    <button onClick={() => del(m)} aria-label="Удалить" title="Удалить" className="danger">🗑</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <form className="pt-compose" onSubmit={submit}>
+        {editId && <button type="button" className="pt-edit-x" onClick={cancelEdit} aria-label="Отмена правки" title="Отмена">✕</button>}
+        <input className="adm-input" placeholder={editId ? 'Изменить сообщение…' : 'Сообщение…'} value={text} onChange={(e) => setText(e.target.value)} />
+        <button className="adm-btn pt-send" type="submit" aria-label={editId ? 'Сохранить' : 'Отправить'}>{editId ? '✓' : <PaperPlane />}</button>
       </form>
+    </>
+  );
+}
+
+/* ── Чаты: общий канал + групповые чаты команд (создание) ── */
+function Chats({ me, onAuthLost, onConv }) {
+  const [chats, setChats] = useState([]);
+  const [active, setActive] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const loadChats = useCallback(() => getJSON('/api/portal/chats').then(setChats).catch((e) => { if (e.status === 401) onAuthLost?.(); }), [onAuthLost]);
+  useEffect(() => { loadChats(); }, [loadChats]);
+  useEffect(() => () => onConv?.(false), [onConv]);
+  const open = (c) => { setActive(c); onConv?.(true); };
+  const close = () => { setActive(null); onConv?.(false); loadChats(); };
+
+  const poll = useCallback(() => (active?.id === 'team' ? getJSON('/api/portal/chat') : getJSON(`/api/portal/chats/${active.id}/messages`)), [active]);
+  const post = useCallback((body) => (active?.id === 'team' ? sendJSON('/api/portal/chat', 'POST', { body }) : sendJSON(`/api/portal/chats/${active.id}/messages`, 'POST', { body })), [active]);
+
+  return (
+    <div className={`pt-view pt-dm ${active ? 'has-active' : ''}`}>
+      <div className="pt-dm-list">
+        <div className="pt-view-h"><h2>Чаты</h2><button className="pt-new" onClick={() => setCreating(true)}>+ Чат</button></div>
+        <button className={`pt-user ${active?.id === 'team' ? 'active' : ''}`} onClick={() => open({ id: 'team', name: 'Общий канал' })}>
+          <span className="pt-av sm">#</span>
+          <span className="pt-user-t"><b>Общий канал</b><small>вся команда DDC</small></span>
+        </button>
+        {chats.map((c) => (
+          <button key={c.id} className={`pt-user ${active?.id === c.id ? 'active' : ''}`} onClick={() => open(c)}>
+            <span className="pt-av sm">{initials(c.name)}</span>
+            <span className="pt-user-t"><b>{c.name}</b><small>{c.members} участн.</small></span>
+          </button>
+        ))}
+        {chats.length === 0 && <div className="pt-empty sm">Групповых чатов пока нет. Создайте первый.</div>}
+      </div>
+      <div className="pt-dm-conv">
+        {!active ? <div className="pt-empty pt-dm-hint">Выберите чат или создайте новый.</div>
+          : <Thread key={active.id} me={me} title={active.name} sub={active.id === 'team' ? 'вся команда DDC' : `${active.members || ''} участников`} avatar={active.id === 'team' ? '#' : null} showAuthor onBack={close} poll={poll} post={post} />}
+      </div>
+      {creating && <CreateChat me={me} onAuthLost={onAuthLost} onClose={() => setCreating(false)} onCreated={(c) => { setCreating(false); loadChats(); open(c); }} />}
     </div>
   );
 }
 
-/* ── Личные сообщения (мессенджер-стиль: список → диалог на весь экран) ── */
+/* ── Модалка создания группового чата ── */
+function CreateChat({ me, onClose, onCreated, onAuthLost }) {
+  const [name, setName] = useState('');
+  const [users, setUsers] = useState([]);
+  const [sel, setSel] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { getJSON('/api/portal/users').then((u) => setUsers(u.filter((x) => x.id !== me?.id))).catch(() => {}); }, [me]);
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const create = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    try { const c = await sendJSON('/api/portal/chats', 'POST', { name: name.trim(), member_ids: [...sel] }); onCreated(c); }
+    catch (e) { if (e.status === 401) onAuthLost?.(); else alert(e.message || 'Не удалось создать чат'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="pt-modal-ov" onClick={onClose}>
+      <div className="pt-modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Новый чат команды</h3>
+        <input className="adm-input" placeholder="Название чата" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <div className="pt-modal-sub">Участники ({sel.size})</div>
+        <div className="pt-modal-users">
+          {users.length === 0 && <div className="pt-empty sm">Нет сотрудников.</div>}
+          {users.map((u) => (
+            <label key={u.id} className={`pt-pick ${sel.has(u.id) ? 'on' : ''}`}>
+              <input type="checkbox" checked={sel.has(u.id)} onChange={() => toggle(u.id)} />
+              <span className="pt-av xs">{initials(u.name)}</span>
+              <span className="pt-pick-n">{u.name}<small>{u.department || roleLabel(u.role)}</small></span>
+            </label>
+          ))}
+        </div>
+        <div className="pt-modal-foot">
+          <button className="adm-ghost" onClick={onClose}>Отмена</button>
+          <button className="adm-btn" onClick={create} disabled={busy || !name.trim()}>{busy ? 'Создаём…' : 'Создать'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Личные сообщения (список → диалог через Thread) ── */
 function Dm({ me, onAuthLost, onConv }) {
   const [users, setUsers] = useState([]);
   const [active, setActive] = useState(null);
-  const [msgs, setMsgs] = useState([]);
-  const [text, setText] = useState('');
-  const boxRef = useRef(null);
-  const scrollDown = () => { const b = boxRef.current; if (b) b.scrollTop = b.scrollHeight; };
-
-  const openChat = (u) => { setActive(u); setMsgs([]); onConv?.(true); };
+  const openChat = (u) => { setActive(u); onConv?.(true); };
   const closeChat = () => { setActive(null); onConv?.(false); };
-  // Уходя со вкладки ЛС — снимаем режим диалога, чтобы вернулся нижний таб-бар.
   useEffect(() => () => onConv?.(false), [onConv]);
-
   useEffect(() => {
     getJSON('/api/portal/users').then((u) => setUsers(u.filter((x) => x.id !== me?.id))).catch((e) => { if (e.status === 401) onAuthLost?.(); });
   }, [me, onAuthLost]);
 
-  const loadDm = useCallback(async (uid) => {
-    try { const rows = await getJSON(`/api/portal/dm/${uid}`); setMsgs(rows); setTimeout(scrollDown, 20); }
-    catch (e) { if (e.status === 401) onAuthLost?.(); else setMsgs([]); }
-  }, [onAuthLost]);
-
-  useEffect(() => {
-    if (!active) return;
-    loadDm(active.id);
-    const t = setInterval(() => loadDm(active.id), 4500);
-    return () => clearInterval(t);
-  }, [active, loadDm]);
-
-  const send = async (e) => {
-    e?.preventDefault?.();
-    const body = text.trim(); if (!body || !active) return;
-    setText('');
-    try { await sendJSON('/api/portal/dm', 'POST', { to: active.id, body }); await loadDm(active.id); }
-    catch (e2) { if (e2.status === 401) onAuthLost?.(); else if (e2.status === 403) alert('ЛС доступны сотрудникам с учётной записью (не супер-админу).'); }
-  };
+  const poll = useCallback(() => getJSON(`/api/portal/dm/${active.id}`), [active]);
+  const post = useCallback((body) => sendJSON('/api/portal/dm', 'POST', { to: active.id, body }), [active]);
 
   return (
     <div className={`pt-view pt-dm ${active ? 'has-active' : ''}`}>
@@ -352,31 +432,8 @@ function Dm({ me, onAuthLost, onConv }) {
         ))}
       </div>
       <div className="pt-dm-conv">
-        {!active ? <div className="pt-empty pt-dm-hint">Выберите сотрудника слева, чтобы написать в личку.</div> : (
-          <>
-            <div className="pt-conv-head">
-              <button className="pt-back-btn" onClick={closeChat} aria-label="Назад">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-              </button>
-              <span className="pt-av sm">{initials(active.name)}</span>
-              <div className="pt-conv-who"><b>{active.name}</b><small>{active.department || active.role}</small></div>
-            </div>
-            <div className="pt-chat" ref={boxRef}>
-              {msgs.length === 0 && <div className="pt-empty">Начните диалог.</div>}
-              {msgs.map((m) => (
-                <div key={m.id} className={`pt-msg ${m.author_id === me?.id ? 'own' : ''}`}>
-                  <div className="pt-bubble"><p>{m.body}</p><time>{fmtTime(m.created_at)}</time></div>
-                </div>
-              ))}
-            </div>
-            <form className="pt-compose" onSubmit={send}>
-              <input className="adm-input" placeholder={`Написать ${active.name}…`} value={text} onChange={(e) => setText(e.target.value)} />
-              <button className="adm-btn pt-send" type="submit" aria-label="Отправить">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
-              </button>
-            </form>
-          </>
-        )}
+        {!active ? <div className="pt-empty pt-dm-hint">Выберите сотрудника слева, чтобы написать в личку.</div>
+          : <Thread key={active.id} me={me} title={active.name} sub={active.department || active.role} showAuthor={false} onBack={closeChat} poll={poll} post={post} />}
       </div>
     </div>
   );

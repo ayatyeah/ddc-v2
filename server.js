@@ -871,16 +871,17 @@ app.get('/api/portal/departments', auth, async (req, res) => {
   } catch (e) { console.error('GET /api/portal/departments:', e.message); res.status(500).json({ error: 'Ошибка чтения отделов' }); }
 });
 
-// ── Командный чат (общий канал) ──
+// Поля сообщения, отдаваемые клиенту (тело удалённых — пустое)
+const MSG_COLS = `id, author_id, author_name, recipient_id, chat_id,
+  CASE WHEN deleted THEN '' ELSE body END AS body, created_at, edited_at, deleted`;
+
+// ── Командный чат (общий канал: recipient_id IS NULL И chat_id IS NULL) ──
 app.get('/api/portal/chat', auth, async (req, res) => {
-  const after = Number(req.query.after) || 0;
   try {
+    // Полное чтение последних сообщений (не инкремент) — чтобы правки/удаления доходили при поллинге.
     const { rows } = await db.query(
-      after
-        ? `SELECT id, author_id, author_name, body, created_at FROM messages WHERE recipient_id IS NULL AND id > $1 ORDER BY id ASC LIMIT 200`
-        : `SELECT id, author_id, author_name, body, created_at FROM messages WHERE recipient_id IS NULL ORDER BY id DESC LIMIT 60`,
-      after ? [after] : []);
-    res.json(after ? rows : rows.reverse());
+      `SELECT ${MSG_COLS} FROM messages WHERE recipient_id IS NULL AND chat_id IS NULL ORDER BY id DESC LIMIT 80`);
+    res.json(rows.reverse());
   } catch (e) { console.error('GET /api/portal/chat:', e.message); res.status(500).json({ error: 'Ошибка чтения чата' }); }
 });
 app.post('/api/portal/chat', auth, async (req, res) => {
@@ -889,7 +890,7 @@ app.post('/api/portal/chat', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1, $2, NULL, $3)
-       RETURNING id, author_id, author_name, body, created_at`,
+       RETURNING ${MSG_COLS}`,
       [req.admin.id, req.admin.u, body]);
     res.status(201).json(rows[0]);
   } catch (e) { console.error('POST /api/portal/chat:', e.message); res.status(500).json({ error: 'Не удалось отправить' }); }
@@ -900,13 +901,11 @@ app.get('/api/portal/dm/:userId(\\d+)', auth, async (req, res) => {
   const me = req.admin.id;
   if (!me) return res.status(403).json({ error: 'Личные сообщения доступны сотрудникам с учётной записью' });
   const other = Number(req.params.userId);
-  const after = Number(req.query.after) || 0;
   try {
     const { rows } = await db.query(
-      `SELECT id, author_id, author_name, recipient_id, body, created_at FROM messages
-        WHERE ((author_id = $1 AND recipient_id = $2) OR (author_id = $2 AND recipient_id = $1))
-        ${after ? 'AND id > $3' : ''} ORDER BY id ASC LIMIT 300`,
-      after ? [me, other, after] : [me, other]);
+      `SELECT ${MSG_COLS} FROM messages
+        WHERE chat_id IS NULL AND ((author_id = $1 AND recipient_id = $2) OR (author_id = $2 AND recipient_id = $1))
+        ORDER BY id ASC LIMIT 300`, [me, other]);
     res.json(rows);
   } catch (e) { console.error('GET /api/portal/dm:', e.message); res.status(500).json({ error: 'Ошибка чтения диалога' }); }
 });
@@ -919,11 +918,102 @@ app.post('/api/portal/dm', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1, $2, $3, $4)
-       RETURNING id, author_id, author_name, recipient_id, body, created_at`,
+       RETURNING ${MSG_COLS}`,
       [me, req.admin.u, to, body]);
     if (to !== me) await notify(to, 'dm', null, 'Личное сообщение', `${req.admin.u}: ${body.slice(0, 80)}`);
     res.status(201).json(rows[0]);
   } catch (e) { console.error('POST /api/portal/dm:', e.message); res.status(500).json({ error: 'Не удалось отправить' }); }
+});
+
+// ── Групповые чаты команд ──
+async function isChatMember(chatId, userId) {
+  if (!userId) return false;
+  const { rows } = await db.query(`SELECT 1 FROM chat_members WHERE chat_id = $1 AND user_id = $2`, [chatId, userId]);
+  return rows.length > 0;
+}
+
+// Список моих групповых чатов (где я состою)
+app.get('/api/portal/chats', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.json([]);
+  try {
+    const { rows } = await db.query(
+      `SELECT c.id, c.name, c.created_by,
+              (SELECT count(*)::int FROM chat_members m WHERE m.chat_id = c.id) AS members,
+              (SELECT max(id) FROM messages msg WHERE msg.chat_id = c.id) AS last_msg_id
+         FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
+        WHERE cm.user_id = $1 ORDER BY last_msg_id DESC NULLS LAST, c.id DESC`, [me]);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/portal/chats:', e.message); res.status(500).json({ error: 'Ошибка чтения чатов' }); }
+});
+
+// Создать групповой чат: {name, member_ids:[]}
+app.post('/api/portal/chats', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Создавать чаты могут сотрудники с учётной записью' });
+  const name = clip(req.body?.name, 120);
+  if (!name) return res.status(400).json({ error: 'Укажите название чата' });
+  const ids = Array.isArray(req.body?.member_ids) ? req.body.member_ids.map(Number).filter(Number.isInteger) : [];
+  try {
+    const { rows } = await db.query(`INSERT INTO chats (name, created_by) VALUES ($1, $2) RETURNING id, name, created_by`, [name, me]);
+    const chatId = rows[0].id;
+    const members = Array.from(new Set([me, ...ids]));                    // создатель всегда участник
+    for (const uid of members) {
+      await db.query(`INSERT INTO chat_members (chat_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [chatId, uid]);
+      if (uid !== me) await notify(uid, 'chat', null, 'Новый чат', `${req.admin.u} добавил вас в «${name}»`);
+    }
+    res.status(201).json({ ...rows[0], members: members.length });
+  } catch (e) { console.error('POST /api/portal/chats:', e.message); res.status(500).json({ error: 'Не удалось создать чат' }); }
+});
+
+// Сообщения группового чата (только участникам)
+app.get('/api/portal/chats/:id(\\d+)/messages', auth, async (req, res) => {
+  const me = req.admin.id, chatId = Number(req.params.id);
+  if (!(await isChatMember(chatId, me))) return res.status(403).json({ error: 'Вы не участник этого чата' });
+  try {
+    const { rows } = await db.query(
+      `SELECT ${MSG_COLS} FROM messages WHERE chat_id = $1 ORDER BY id DESC LIMIT 100`, [chatId]);
+    res.json(rows.reverse());
+  } catch (e) { console.error('GET /api/portal/chats/messages:', e.message); res.status(500).json({ error: 'Ошибка чтения чата' }); }
+});
+app.post('/api/portal/chats/:id(\\d+)/messages', auth, async (req, res) => {
+  const me = req.admin.id, chatId = Number(req.params.id);
+  const body = clip(req.body?.body, 2000);
+  if (!body) return res.status(400).json({ error: 'Пустое сообщение' });
+  if (!(await isChatMember(chatId, me))) return res.status(403).json({ error: 'Вы не участник этого чата' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO messages (author_id, author_name, chat_id, body) VALUES ($1, $2, $3, $4) RETURNING ${MSG_COLS}`,
+      [me, req.admin.u, chatId, body]);
+    // уведомляем остальных участников
+    const { rows: mem } = await db.query(`SELECT user_id FROM chat_members WHERE chat_id = $1 AND user_id <> $2`, [chatId, me]);
+    const { rows: ch } = await db.query(`SELECT name FROM chats WHERE id = $1`, [chatId]);
+    for (const m of mem) await notify(m.user_id, 'chat', null, ch[0]?.name || 'Чат', `${req.admin.u}: ${body.slice(0, 80)}`);
+    res.status(201).json(rows[0]);
+  } catch (e) { console.error('POST /api/portal/chats/messages:', e.message); res.status(500).json({ error: 'Не удалось отправить' }); }
+});
+
+// ── Правка / удаление своего сообщения (мессенджер-фичи) ──
+app.patch('/api/portal/messages/:id(\\d+)', auth, async (req, res) => {
+  const me = req.admin.id, id = Number(req.params.id);
+  const body = clip(req.body?.body, 2000);
+  if (!body) return res.status(400).json({ error: 'Пустой текст' });
+  try {
+    const { rows } = await db.query(
+      `UPDATE messages SET body = $1, edited_at = now() WHERE id = $2 AND author_id = $3 AND deleted = FALSE
+       RETURNING ${MSG_COLS}`, [body, id, me]);
+    if (!rows.length) return res.status(404).json({ error: 'Сообщение не найдено или нет прав' });
+    res.json(rows[0]);
+  } catch (e) { console.error('PATCH /api/portal/messages:', e.message); res.status(500).json({ error: 'Не удалось изменить' }); }
+});
+app.delete('/api/portal/messages/:id(\\d+)', auth, async (req, res) => {
+  const me = req.admin.id, id = Number(req.params.id);
+  try {
+    const { rows } = await db.query(
+      `UPDATE messages SET deleted = TRUE, body = '' WHERE id = $1 AND author_id = $2 RETURNING ${MSG_COLS}`, [id, me]);
+    if (!rows.length) return res.status(404).json({ error: 'Сообщение не найдено или нет прав' });
+    res.json(rows[0]);
+  } catch (e) { console.error('DELETE /api/portal/messages:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });
 
 // ── Рабочие задачи ──
@@ -1605,8 +1695,24 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        descr      TEXT NOT NULL DEFAULT '',
        sort_order INTEGER NOT NULL DEFAULT 0,
        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-     );`
-  ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments) на месте'); return seedServices(); })
+     );
+     -- Групповые чаты команд + мессенджер-фичи (правка/удаление сообщений)
+     ALTER TABLE messages ADD COLUMN IF NOT EXISTS chat_id INTEGER;      -- NULL = общий канал/ЛС, иначе групповой чат
+     ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+     ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
+     CREATE TABLE IF NOT EXISTS chats (
+       id         SERIAL PRIMARY KEY,
+       name       TEXT NOT NULL,
+       created_by INTEGER,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE TABLE IF NOT EXISTS chat_members (
+       chat_id INTEGER NOT NULL,
+       user_id INTEGER NOT NULL,
+       PRIMARY KEY (chat_id, user_id)
+     );
+     CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages (chat_id, id);`
+  ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats) на месте'); return seedServices(); })
    .then(() => seedDepartments())
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)

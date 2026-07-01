@@ -78,6 +78,34 @@
 .pt-conv-who b { font-size: 15px; letter-spacing: -0.01em; }
 .pt-conv-who small { font-size: 12px; color: var(--ink-faint); }
 
+/* Правка/удаление своих сообщений */
+.pt-bubble { position: relative; }
+.pt-bubble time { display: block; margin-top: 2px; }
+.pt-del { font-style: italic; color: var(--ink-faint); }
+.pt-msg-tools { position: absolute; top: 4px; right: 6px; display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+.pt-msg.own .pt-bubble:hover .pt-msg-tools { opacity: 1; }
+.pt-msg-tools button { width: 22px; height: 22px; border: none; background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink-soft); border-radius: 6px; font-size: 11px; line-height: 1; cursor: pointer; display: grid; place-items: center; }
+.pt-msg-tools button:hover { background: color-mix(in srgb, var(--ink) 18%, transparent); color: var(--ink); }
+.pt-msg-tools button.danger:hover { background: rgba(224,59,59,0.16); color: #e03b3b; }
+.pt-edit-x { flex: none; width: 40px; border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); border-radius: 10px; cursor: pointer; }
+.pt-new { margin-left: auto; background: var(--blue); color: #fff; border: none; border-radius: 980px; padding: 7px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.pt-new:hover { filter: brightness(1.08); }
+
+/* Модалка создания чата */
+.pt-modal-ov { position: fixed; inset: 0; z-index: 200; background: rgba(2,6,16,0.5); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 20px; }
+.pt-modal { width: min(440px, 100%); max-height: 86vh; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: var(--shadow-pop); }
+.pt-modal h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 14px; }
+.pt-modal .adm-input { width: 100%; }
+.pt-modal-sub { font-size: 12.5px; color: var(--ink-faint); margin: 16px 0 8px; }
+.pt-modal-users { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; min-height: 80px; }
+.pt-pick { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 11px; cursor: pointer; }
+.pt-pick:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.pt-pick.on { background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.pt-pick input { accent-color: var(--blue); width: 18px; height: 18px; flex: none; }
+.pt-pick-n { display: flex; flex-direction: column; font-size: 14px; min-width: 0; }
+.pt-pick-n small { font-size: 11.5px; color: var(--ink-faint); }
+.pt-modal-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
 /* Личные сообщения */
 .pt-dm { flex-direction: row; padding: 0; gap: 0; }
 .pt-dm-list { width: 280px; flex: 0 0 280px; border-right: 1px solid var(--line); padding: 22px 16px; overflow-y: auto; }
@@ -218,4 +246,8 @@
   .pt-bubble { border-radius: 18px; padding: 9px 13px; }
   .pt-msg:not(.own) .pt-bubble { border-bottom-left-radius: 6px; }
   .pt-msg.own .pt-bubble { border-bottom-right-radius: 6px; background: color-mix(in srgb, var(--blue) 26%, var(--card)); border-color: transparent; }
+  /* На телефоне нет ховера — кнопки правки/удаления видны всегда, крупнее */
+  .pt-msg.own .pt-msg-tools { opacity: 1; position: static; justify-content: flex-end; margin-top: 6px; }
+  .pt-msg-tools button { width: 30px; height: 30px; font-size: 14px; }
+  .pt-modal { border-radius: 16px; padding: 18px; }
 }
