@@ -15,6 +15,7 @@ export default function Footer() {
         <a href="/politika-konfidencialnosti" onClick={goPrivacy}>Политика конфиденциальности</a>
         <a href="tel:+77272584958">+7 727 258-49-58</a>
         <a href="mailto:info@bsbnb.kz">info@bsbnb.kz</a>
+        <a href="/portal" data-spa>{t(lang, 'portal.enter')}</a>
         <a href="/admin" data-spa>{t(lang, 'footer.admin')}</a>
       </div>
     </footer>

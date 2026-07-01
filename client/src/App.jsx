@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
    и наоборот. Это режет первичную загрузку, не меняя внешний вид. */
 const Site = lazy(() => import('./site/Site.jsx'));
 const Admin = lazy(() => import('./admin/Admin.jsx'));
+const PortalApp = lazy(() => import('./portal/PortalApp.jsx'));
 
 /* Простейший роутинг по pathname: /admin → админка, всё остальное → сайт.
    SPA-fallback на сервере отдаёт index.html для любого пути. */
@@ -32,7 +33,7 @@ export default function App() {
   // fallback=null: фон страницы тёмный, кратковременная пустота незаметна
   return (
     <Suspense fallback={null}>
-      {path.startsWith('/admin') ? <Admin /> : <Site />}
+      {path.startsWith('/admin') ? <Admin /> : path.startsWith('/portal') ? <PortalApp /> : <Site />}
     </Suspense>
   );
 }

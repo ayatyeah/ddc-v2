@@ -4,11 +4,14 @@ import { t } from '../i18n.js';
 import { useRoute, navigate } from './router.js';
 import { IcoEye } from './icons.jsx';
 
+// Простой навбар: только названия разделов (максимум 7 страниц сайта).
 const LINKS = [
   { to: '/', k: 'nav.home' },
   { to: '/uslugi', k: 'nav.services' },
   { to: '/proekty', k: 'nav.projects' },
   { to: '/o-nas', k: 'nav.about' },
+  { to: '/karera', k: 'nav.careers' },
+  { to: '/partners', k: 'nav.partners' },
   { to: '/kontakty', k: 'nav.contacts' },
 ];
 
@@ -35,6 +38,9 @@ export default function Nav() {
               </a>
             ))}
           </div>
+          <a className="nav-portal-btn" href="/portal" data-spa onClick={() => setOpen(false)}>
+            {t(lang, 'portal.enter')}
+          </a>
           <div className="lang" role="group" aria-label="Язык / Тіл / Language">
             {LANGS.map((l) => (
               <button key={l} className={l === lang ? 'active' : ''} onClick={() => setLang(l)}

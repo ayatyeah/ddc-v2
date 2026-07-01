@@ -7,6 +7,7 @@ import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Fog from './Fog.jsx';
+import OrnamentField from './OrnamentField.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
@@ -160,6 +161,7 @@ export default function Site() {
       {/* Немного мелких частиц на фоне (лёгкий слой). Тяжёлый DataFlow отключён ради плавности. */}
       {!isMobile && !lowPower && !a11y && <Particles />}
       {!a11y && <Fog />}
+      {!a11y && <OrnamentField />}
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
       <Brand />

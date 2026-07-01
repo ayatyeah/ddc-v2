@@ -834,6 +834,141 @@ app.delete('/api/admin/services/:id', auth, requireRole('admin', 'editor'), asyn
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Портал сотрудников: командный чат, личные сообщения, задачи, отделы.
+// Доступ по общей авторизации (auth). Отдельно от админки — это рабочее
+// пространство для сотрудников (соц-сеть-стиль).
+// ══════════════════════════════════════════════════════════════════════════════
+const DEPARTMENTS = [
+  { name: 'Разработка ИС', desc: 'Проектирование и сопровождение информационных систем.' },
+  { name: 'Информационная безопасность', desc: 'Защита данных и ИТ-систем, соответствие требованиям регулятора.' },
+  { name: 'ИТ-инфраструктура', desc: 'Серверы, облака, хранение данных, сети.' },
+  { name: 'Аналитика и данные', desc: 'Дашборды, регуляторная отчётность, большие данные.' },
+  { name: 'Поддержка 1477', desc: 'Единый контакт-центр для граждан и бизнеса.' },
+  { name: 'Проектный офис', desc: 'Управление проектами и координация команд.' },
+];
+const clip = (v, n) => String(v ?? '').trim().slice(0, n);
+
+// Список сотрудников портала (для выбора адресата ЛС и назначения задач)
+app.get('/api/portal/users', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, username, full_name, department, role FROM users WHERE active = TRUE ORDER BY full_name NULLS LAST, username`);
+    res.json(rows.map((u) => ({ id: u.id, name: u.full_name || u.username, department: u.department || '', role: u.role })));
+  } catch (e) { console.error('GET /api/portal/users:', e.message); res.status(500).json({ error: 'Ошибка чтения сотрудников' }); }
+});
+
+// Отделы DDC + их участники
+app.get('/api/portal/departments', auth, async (req, res) => {
+  try {
+    const { rows: users } = await db.query(`SELECT full_name, username, department, role FROM users WHERE active = TRUE`);
+    const departments = DEPARTMENTS.map((d) => ({
+      ...d,
+      members: users.filter((u) => (u.department || '') === d.name).map((u) => ({ name: u.full_name || u.username, role: u.role })),
+    }));
+    res.json({ departments, total: users.length });
+  } catch (e) { console.error('GET /api/portal/departments:', e.message); res.status(500).json({ error: 'Ошибка чтения отделов' }); }
+});
+
+// ── Командный чат (общий канал) ──
+app.get('/api/portal/chat', auth, async (req, res) => {
+  const after = Number(req.query.after) || 0;
+  try {
+    const { rows } = await db.query(
+      after
+        ? `SELECT id, author_id, author_name, body, created_at FROM messages WHERE recipient_id IS NULL AND id > $1 ORDER BY id ASC LIMIT 200`
+        : `SELECT id, author_id, author_name, body, created_at FROM messages WHERE recipient_id IS NULL ORDER BY id DESC LIMIT 60`,
+      after ? [after] : []);
+    res.json(after ? rows : rows.reverse());
+  } catch (e) { console.error('GET /api/portal/chat:', e.message); res.status(500).json({ error: 'Ошибка чтения чата' }); }
+});
+app.post('/api/portal/chat', auth, async (req, res) => {
+  const body = clip(req.body?.body, 2000);
+  if (!body) return res.status(400).json({ error: 'Пустое сообщение' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1, $2, NULL, $3)
+       RETURNING id, author_id, author_name, body, created_at`,
+      [req.admin.id, req.admin.u, body]);
+    res.status(201).json(rows[0]);
+  } catch (e) { console.error('POST /api/portal/chat:', e.message); res.status(500).json({ error: 'Не удалось отправить' }); }
+});
+
+// ── Личные сообщения (диалог с конкретным сотрудником) ──
+app.get('/api/portal/dm/:userId(\\d+)', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Личные сообщения доступны сотрудникам с учётной записью' });
+  const other = Number(req.params.userId);
+  const after = Number(req.query.after) || 0;
+  try {
+    const { rows } = await db.query(
+      `SELECT id, author_id, author_name, recipient_id, body, created_at FROM messages
+        WHERE ((author_id = $1 AND recipient_id = $2) OR (author_id = $2 AND recipient_id = $1))
+        ${after ? 'AND id > $3' : ''} ORDER BY id ASC LIMIT 300`,
+      after ? [me, other, after] : [me, other]);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/portal/dm:', e.message); res.status(500).json({ error: 'Ошибка чтения диалога' }); }
+});
+app.post('/api/portal/dm', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Личные сообщения доступны сотрудникам с учётной записью' });
+  const to = Number(req.body?.to);
+  const body = clip(req.body?.body, 2000);
+  if (!Number.isInteger(to) || !body) return res.status(400).json({ error: 'Укажите адресата и текст' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1, $2, $3, $4)
+       RETURNING id, author_id, author_name, recipient_id, body, created_at`,
+      [me, req.admin.u, to, body]);
+    if (to !== me) await notify(to, 'dm', null, 'Личное сообщение', `${req.admin.u}: ${body.slice(0, 80)}`);
+    res.status(201).json(rows[0]);
+  } catch (e) { console.error('POST /api/portal/dm:', e.message); res.status(500).json({ error: 'Не удалось отправить' }); }
+});
+
+// ── Рабочие задачи ──
+app.get('/api/portal/tasks', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, title, body, assignee_id, assignee_name, created_by, status, created_at
+         FROM tasks WHERE assignee_id = $1 OR created_by = $2
+        ORDER BY (status = 'done'), id DESC LIMIT 200`,
+      [req.admin.id, req.admin.u]);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/portal/tasks:', e.message); res.status(500).json({ error: 'Ошибка чтения задач' }); }
+});
+app.post('/api/portal/tasks', auth, async (req, res) => {
+  const title = clip(req.body?.title, 200);
+  const body = clip(req.body?.body, 2000);
+  if (!title) return res.status(400).json({ error: 'Укажите название задачи' });
+  const aid = Number(req.body?.assignee_id);
+  try {
+    let assignee_id = null, assignee_name = '';
+    if (Number.isInteger(aid)) {
+      const u = await db.query(`SELECT id, username, full_name FROM users WHERE id = $1 AND active = TRUE`, [aid]);
+      if (u.rows.length) { assignee_id = u.rows[0].id; assignee_name = u.rows[0].full_name || u.rows[0].username; }
+    }
+    const { rows } = await db.query(
+      `INSERT INTO tasks (title, body, assignee_id, assignee_name, created_by) VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, title, body, assignee_id, assignee_name, created_by, status, created_at`,
+      [title, body, assignee_id, assignee_name, req.admin.u]);
+    if (assignee_id && assignee_id !== req.admin.id) await notify(assignee_id, 'task', null, 'Новая задача', title);
+    res.status(201).json(rows[0]);
+  } catch (e) { console.error('POST /api/portal/tasks:', e.message); res.status(500).json({ error: 'Не удалось создать задачу' }); }
+});
+app.patch('/api/portal/tasks/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  const status = req.body?.status === 'done' ? 'done' : 'open';
+  try {
+    const { rows } = await db.query(
+      `UPDATE tasks SET status = $1, updated_at = now()
+        WHERE id = $2 AND (assignee_id = $3 OR created_by = $4)
+       RETURNING id, title, body, assignee_id, assignee_name, created_by, status, created_at`,
+      [status, id, req.admin.id, req.admin.u]);
+    if (!rows.length) return res.status(404).json({ error: 'Задача не найдена или нет прав' });
+    res.json(rows[0]);
+  } catch (e) { console.error('PATCH /api/portal/tasks:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
+});
+
 // ── Админ: пользователи (только роль admin) ───────────────────────────────────
 const ALLOWED_ROLES = ['admin', 'manager', 'staff', 'editor', 'viewer'];
 
@@ -1356,8 +1491,28 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        published  BOOLEAN NOT NULL DEFAULT TRUE,
        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE TABLE IF NOT EXISTS messages (
+       id           SERIAL PRIMARY KEY,
+       author_id    INTEGER,
+       author_name  TEXT NOT NULL DEFAULT '',
+       recipient_id INTEGER,                       -- NULL = командный чат, иначе личное сообщение
+       body         TEXT NOT NULL,
+       created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE INDEX IF NOT EXISTS idx_messages_recip ON messages (recipient_id, id);
+     CREATE TABLE IF NOT EXISTS tasks (
+       id            SERIAL PRIMARY KEY,
+       title         TEXT NOT NULL,
+       body          TEXT NOT NULL DEFAULT '',
+       assignee_id   INTEGER,
+       assignee_name TEXT NOT NULL DEFAULT '',
+       created_by    TEXT NOT NULL DEFAULT '',
+       status        TEXT NOT NULL DEFAULT 'open',
+       created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+       updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
      );`
-  ).then(() => { console.log('✓ Миграции (image_fit/image_pos/facts/services) на месте'); return seedServices(); })
+  ).then(() => { console.log('✓ Миграции (services/messages/tasks) на месте'); return seedServices(); })
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);

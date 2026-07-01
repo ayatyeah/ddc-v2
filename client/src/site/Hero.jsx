@@ -22,6 +22,7 @@ export default function Hero() {
           <div className="hero-loc">
             <span className="dot" />{t(lang, 'hq.caption')}
           </div>
+          <div className="kz-ornament" aria-hidden="true" />
         </div>
       </div>
     </header>

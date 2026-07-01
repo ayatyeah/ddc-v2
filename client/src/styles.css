@@ -343,7 +343,7 @@ button { font-family: inherit; cursor: pointer; }
 .icon-btn:hover { background: var(--card-glass); }
 .nav-burger { display: none; }
 
-@media (max-width: 860px) {
+@media (max-width: 1120px) {
   .nav-burger { display: grid; position: relative; z-index: 130; }  /* поверх панели — заодно служит кнопкой закрытия */
   /* Меню выезжает с ПРАВОЙ стороны почти во весь экран */
   .nav-links {
@@ -1385,3 +1385,102 @@ html.lenis, html.lenis body { height: auto; }
 .nc-card.is-skel, .af-card.is-skel { pointer-events: none; }
 .af-card.is-skel { padding: 14px; }
 @media (prefers-reduced-motion: reduce) { .skel::after { animation: none; } }
+
+/* ════════════════ Мега-меню навигации (новая архитектура) ════════════════ */
+.nav-sp { display: none; }
+.mega-trigger {
+  display: inline-flex; align-items: center; gap: 9px; padding: 8px 15px; border-radius: 980px;
+  border: 1px solid var(--line-2); background: transparent; color: var(--ink);
+  font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+}
+.mega-trigger:hover, .mega-trigger.is-open { border-color: var(--accent, var(--blue)); }
+.mega-trigger-dot { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.mega-trigger-dot i { width: 4px; height: 4px; border-radius: 1px; background: currentColor; transition: transform 0.25s var(--ease); }
+.mega-trigger.is-open .mega-trigger-dot i { transform: scale(0.72); }
+.nav-active-hint { font-size: 12.5px; color: var(--ink-faint); }
+@media (max-width: 700px) { .nav-active-hint { display: none; } .mega-trigger-t { display: none; } .mega-trigger { padding: 9px 11px; } }
+
+.mega-backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(2, 6, 16, 0.5); animation: fade 0.2s var(--ease); }
+.mega-panel {
+  position: fixed; left: 0; right: 0; top: 74px; z-index: 95;
+  max-height: calc(100vh - 84px); overflow-y: auto; padding: 0 24px;
+  animation: megaIn 0.28s var(--ease) both;
+}
+@keyframes megaIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+.mega-inner {
+  width: 100%; max-width: var(--maxw); margin: 0 auto;
+  background: linear-gradient(155deg, rgba(14, 22, 42, 0.98), rgba(7, 11, 24, 0.98));
+  border: 1px solid rgba(125, 195, 255, 0.16); border-radius: 22px; padding: 26px 28px;
+  box-shadow: var(--shadow-pop);
+}
+.mega-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 22px 26px; }
+.mega-col { min-width: 0; }
+.mega-sec { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--line); color: var(--ink); font-weight: 600; }
+.mega-sec:hover, .mega-sec.active { color: var(--accent, var(--blue)); }
+.mega-sec-ico { display: inline-flex; color: var(--accent, var(--blue)); flex: none; }
+.mega-sec-t { font-size: 14.5px; }
+.mega-items { list-style: none; display: flex; flex-direction: column; gap: 1px; }
+.mega-items a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; color: var(--ink-soft); transition: color 0.15s; }
+.mega-items a:hover { color: var(--ink); }
+.mega-wow { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; padding: 2px 5px; border-radius: 5px; background: color-mix(in srgb, var(--accent, #3fe7ff) 22%, transparent); color: var(--accent, #3fe7ff); font-weight: 700; }
+@media (max-width: 760px) {
+  .mega-panel { top: 66px; max-height: calc(100vh - 74px); padding: 0 14px; }
+  .mega-inner { border-radius: 18px; padding: 20px 18px; }
+  .mega-grid { grid-template-columns: 1fr 1fr; gap: 18px; }
+}
+@media (max-width: 460px) { .mega-grid { grid-template-columns: 1fr; } }
+
+/* SectionLanding — метка WOW + кнопка */
+.sl-wow { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; padding: 3px 7px; border-radius: 6px; background: color-mix(in srgb, var(--accent, #3fe7ff) 20%, transparent); color: var(--accent, #3fe7ff); font-weight: 700; }
+.sl-back { margin-top: 30px; }
+
+/* ════════════════ Кнопка портала + страница портала ════════════════ */
+.nav-portal-btn {
+  padding: 8px 15px; border-radius: 980px; border: none; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600;
+  background: linear-gradient(120deg, var(--accent-2, #79a6ff), var(--accent, #3fe7ff)); color: #04121f; transition: filter 0.2s;
+  white-space: nowrap;
+}
+.nav-portal-btn:hover { filter: brightness(1.07); }
+@media (max-width: 480px) { .nav-portal-btn { padding: 8px 12px; font-size: 12.5px; } }
+
+.portal-head { max-width: 760px; }
+.portal-badge { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 980px; font-size: 12px; font-weight: 600; color: var(--accent, #3fe7ff); background: color-mix(in srgb, var(--accent, #3fe7ff) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent, #3fe7ff) 30%, transparent); }
+.portal-notice { margin-top: 16px; font-size: 14px; color: var(--ink-soft); }
+.leadform-sec { padding-top: clamp(20px, 4vw, 48px); }
+
+/* ════════════════ Казахский орнамент (синие линии) + вход в портал ════════════════ */
+/* Тонкая тайлящаяся орнаментальная линия (стилизованный «қошқар мүйіз») — синим неоном. */
+.kz-ornament {
+  height: 18px; margin: 16px 0 8px; opacity: 0.6; pointer-events: none;
+  background: center / auto 18px repeat-x url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='20' viewBox='0 0 48 20'%3E%3Cg fill='none' stroke='%234aa6f0' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M0 10h10'/%3E%3Cpath d='M24 10c0-6-4-8-8-6-3 1.5-2 5 1 5'/%3E%3Cpath d='M24 10c0 6-4 8-8 6-3-1.5-2-5 1-5'/%3E%3Cpath d='M24 10c0-6 4-8 8-6 3 1.5 2 5-1 5'/%3E%3Cpath d='M24 10c0 6 4 8 8 6 3-1.5 2-5-1-5'/%3E%3Cpath d='M38 10h10'/%3E%3Ccircle cx='24' cy='10' r='1.6' fill='%234aa6f0'/%3E%3C/g%3E%3C/svg%3E");
+}
+.hero-inner .kz-ornament { max-width: 320px; margin-top: 22px; }
+.svc-head .kz-ornament { max-width: 280px; }
+html[data-a11y='on'] .kz-ornament { display: none; }
+
+/* Летающие орнаменты на фоне карты (над 3D-сценой, под контентом) */
+.kz-field { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.kz-orn-img {
+  position: absolute; opacity: 0.12; will-change: transform;
+  filter: brightness(1.35) saturate(1.1) drop-shadow(0 0 12px rgba(74,166,240,0.35));
+  animation: kzDrift var(--dur, 40s) ease-in-out var(--delay, 0s) infinite alternate;
+}
+@keyframes kzDrift {
+  from { transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)); }
+  to   { transform: translate3d(var(--dx, 24px), var(--dy, -30px), 0) rotate(calc(var(--rot, 0deg) + 10deg)); }
+}
+[data-theme='light'] .kz-orn-img { opacity: 0.08; filter: brightness(0.9) saturate(1.2); }
+@media (prefers-reduced-motion: reduce) { .kz-orn-img { animation: none; } }
+html[data-a11y='on'] .kz-field { display: none; }
+@media (max-width: 760px) {
+  .kz-orn-img { opacity: 0.09; }
+  .kz-field .kz-orn-img:nth-child(n + 4) { display: none; }
+}
+
+/* Вход в портал — центрированная карточка-логин */
+.portal-login-wrap { max-width: 480px; margin: 0 auto; }
+.portal-login { text-align: center; }
+.portal .kz-ornament { margin: 8px auto 16px; max-width: 260px; }
+.portal-form { max-width: 340px; margin: 6px auto 0; text-align: left; }
+.portal-form .btn { justify-content: center; margin-top: 2px; }
+.portal-notice { margin-top: 14px; font-size: 13.5px; color: var(--ink-faint); }
