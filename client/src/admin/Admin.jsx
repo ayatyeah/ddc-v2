@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
 import NotificationBell from './NotificationBell.jsx';
 import ThemeToggle from '../ThemeToggle.jsx';
+import { useLogo } from '../store.js';
 import { hideSplash } from '../splash.js';
 import './admin.css';
 
@@ -45,6 +46,7 @@ export default function Admin() {
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const logo = useLogo();   // чёрный логотип на светлой теме, белый на тёмной
 
   useEffect(() => {
     hideSplash();   // админка смонтирована — убираем загрузочный экран
@@ -82,7 +84,7 @@ export default function Admin() {
       <div className="adm">
         <div className="adm-login">
           <div className="adm-login-card">
-            <div className="adm-login-logo"><img src="/logo_ddc.svg?v=2" alt="" className="adm-logo-img" /> DDC · Админ</div>
+            <div className="adm-login-logo"><img src={logo} alt="" className="adm-logo-img" /> DDC · Админ</div>
             <h1>Вход в панель</h1>
             <p className="sub">Центр цифрового развития</p>
             <div className="adm-field">
@@ -131,7 +133,7 @@ export default function Admin() {
   return (
     <div className="adm adm-shell">
       <aside className="adm-rail">
-        <div className="rail-brand"><img src="/logo_ddc.svg?v=2" alt="DDC" /></div>
+        <div className="rail-brand"><img src={logo} alt="DDC" /></div>
         <nav className="rail-nav">
           {items.map((it) => (
             <button key={it.id} className={`rail-btn ${tab === it.id ? 'active' : ''}`} onClick={() => setTab(it.id)} title={titleOf(it.id)}>

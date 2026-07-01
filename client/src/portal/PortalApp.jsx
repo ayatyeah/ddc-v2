@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
 import { hideSplash } from '../splash.js';
 import ThemeToggle from '../ThemeToggle.jsx';
+import { useLogo } from '../store.js';
 import '../admin/admin.css';
 import './portal.css';
 
@@ -51,6 +52,7 @@ export default function PortalApp() {
   // Боковое меню (на телефоне выезжает слева по бургеру; на десктопе всегда видно).
   const [menuOpen, setMenuOpen] = useState(false);
   const goTab = (id) => { setConvOpen(false); setMenuOpen(false); setTab(id); };
+  const logo = useLogo();   // чёрный логотип на светлой теме, белый на тёмной
 
   useEffect(() => {
     hideSplash();
@@ -79,7 +81,7 @@ export default function PortalApp() {
       <div className="pt">
         <div className="pt-login">
           <div className="pt-login-card">
-            <div className="pt-login-logo"><img src="/logo_ddc.svg?v=2" alt="" /> Портал DDC</div>
+            <div className="pt-login-logo"><img src={logo} alt="" /> Портал DDC</div>
             <h1>Вход в портал</h1>
             <p className="pt-sub">Рабочее пространство сотрудников</p>
             <div className="adm-field"><label>Логин</label>
@@ -107,7 +109,7 @@ export default function PortalApp() {
       <div className="pt-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
 
       <aside className="pt-rail">
-        <div className="pt-brand"><img src="/logo_ddc.svg?v=2" alt="DDC" /></div>
+        <div className="pt-brand"><img src={logo} alt="DDC" /></div>
         <nav className="pt-nav">
           {SECTIONS.map((s) => (
             <button key={s.id} className={`pt-tab ${tab === s.id ? 'active' : ''}`} onClick={() => goTab(s.id)}>
