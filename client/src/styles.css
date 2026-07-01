@@ -408,6 +408,22 @@ button { font-family: inherit; cursor: pointer; }
       linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 40%, rgba(255,255,255,0.05)),
       rgba(10, 15, 28, 0.82);
   }
+
+  /* Светлая тема: выдвижная шторка-меню тоже светлеет (была захардкожена тёмной). */
+  [data-theme='light'] .nav-links {
+    background:
+      linear-gradient(160deg, rgba(255,255,255,0.92), rgba(248,250,255,0.84) 45%, rgba(243,247,255,0.90));
+    border-left-color: rgba(20, 50, 110, 0.12);
+    box-shadow: -22px 0 60px rgba(20, 40, 80, 0.16), inset 1px 0 0 rgba(255, 255, 255, 0.7);
+  }
+  [data-theme='light'] .nav-links a:hover,
+  [data-theme='light'] .nav-links a:focus-visible,
+  [data-theme='light'] .nav-links a.active {
+    color: var(--ink);
+    background: linear-gradient(135deg, rgba(20,60,130,0.10), rgba(20,60,130,0.03) 55%, rgba(20,60,130,0.06));
+    border-color: rgba(20, 50, 110, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 8px 24px rgba(20,40,80,0.12);
+  }
 }
 
 /* ── Интро-локап: крупный логотип + надпись Digital / Development / Center рядом ── */
@@ -469,6 +485,17 @@ button { font-family: inherit; cursor: pointer; }
 }
 .hero-sub { margin: 22px 0 0; max-width: 48ch; font-size: clamp(1.02rem, 1.4vw, 1.22rem); color: var(--ink); opacity: 0.92; line-height: 1.5; text-shadow: 0 1px 16px rgba(4,9,22,0.55); }
 .hero-cta { margin-top: 36px; display: flex; gap: 12px; justify-content: flex-start; flex-wrap: wrap; }
+/* Мобильная типографика/ритм: заголовок героя не переполняет узкую панель,
+   секции и карточки компактнее — меньше пустого скролла на телефоне. */
+@media (max-width: 600px) {
+  .hero { min-height: 90vh; padding: 84px 0 46px; }
+  .hero h1 { font-size: clamp(2.05rem, 8.6vw, 2.95rem); line-height: 1.1; letter-spacing: -0.03em; }
+  .hero-sub { margin-top: 16px; }
+  .hero-cta { margin-top: 26px; }
+  .section { padding: clamp(52px, 11vw, 96px) 0; }
+  .section-head { margin-bottom: 32px; }
+  .svc { padding: 24px 22px 26px; }
+}
 /* На телефоне делаем призыв к действию явным: кнопки в столбик во всю ширину,
    крупный тап-таргет — первый заход сразу понимает, куда идти («Наши услуги»). */
 @media (max-width: 600px) {
@@ -1213,6 +1240,19 @@ a { transition: color 0.2s var(--ease); }
   border-color: rgba(20, 50, 110, 0.14);
   box-shadow: 0 18px 50px rgba(20, 40, 80, 0.10);
 }
+/* Карточки проектов тоже были захардкожены тёмными — осветляем в светлой теме. */
+[data-theme='light'] .proj-card {
+  background: linear-gradient(150deg, rgba(255,255,255,0.92), rgba(243,247,255,0.88));
+  border-color: rgba(20, 50, 110, 0.12);
+}
+[data-theme='light'] .proj-card::before { background: linear-gradient(90deg, var(--blue), transparent 75%); }
+[data-theme='light'] .proj-card:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, transparent);
+  box-shadow: 0 18px 50px rgba(20, 40, 80, 0.12), 0 0 0 1px color-mix(in srgb, var(--blue) 22%, transparent);
+}
+[data-theme='light'] .proj-ico { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
+[data-theme='light'] .proj-sub { color: var(--blue); opacity: 0.85; }
+[data-theme='light'] .proj-tag { background: rgba(20, 50, 110, 0.05); color: var(--ink-soft); border-color: rgba(20, 50, 110, 0.12); }
 
 /* Тонкая светящаяся кромка сверху у плиток услуг */
 [data-theme='dark'] .svc { position: relative; }
@@ -1372,6 +1412,8 @@ html.lenis, html.lenis body { height: auto; }
   }
   .nav-drawer-tools .lang { gap: 8px; }
   .nav-drawer-tools .lang button { padding: 11px 18px; font-size: 15px; border: 1px solid rgba(255,255,255,0.14); }
+  [data-theme='light'] .nav-drawer-tools { border-top-color: rgba(20, 50, 110, 0.14); }
+  [data-theme='light'] .nav-drawer-tools .lang button { border-color: rgba(20, 50, 110, 0.16); }
 }
 
 @media (max-width: 760px) {

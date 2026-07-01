@@ -36,11 +36,20 @@ try {
     || (navigator.deviceMemory || 8) <= 4;
 } catch { /* старый браузер — оставляем дефолт */ }
 
+// Телефон/планшет: узкий экран или мобильный UA. На таких физический DPR часто 2.5–3×,
+// а fill-rate GPU слабый → рендер в полный DPR = главный источник фризов при скролле 3D-сцены.
+let mobile = false;
+try {
+  mobile = window.matchMedia('(max-width: 820px)').matches
+    || /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || '');
+} catch { /* оставляем дефолт desktop */ }
+
 // Потолок разрешения рендера WebGL и MSAA по движку/устройству.
-// blink/webkit — полное качество; gecko (Firefox) — ниже разрешение ради высокого/стабильного
-// FPS (его fill-rate слабее → меньше пикселей = глаже анимация); слабые устройства — ещё ниже.
-const dprCap = lowPower ? 1.2 : engine === 'gecko' ? 1.3 : 1.75;
-const antialias = !(lowPower || engine === 'gecko');
+// blink/webkit — полное качество; gecko (Firefox) — ниже ради стабильного FPS; телефон —
+// заметно ниже (меньше пикселей = глаже скролл); слабые устройства — ещё ниже. Поверх
+// этого адаптивный DPR в сцене ещё опускает качество при реальных просадках FPS.
+const dprCap = lowPower ? 1.1 : mobile ? 1.35 : engine === 'gecko' ? 1.3 : 1.75;
+const antialias = !(lowPower || mobile || engine === 'gecko');
 
 // Метки на <html> — их используют per-engine/per-browser правила в styles.css
 try {
