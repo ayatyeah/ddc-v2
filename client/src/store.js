@@ -65,5 +65,5 @@ export function useLang() { return useStore().lang; }
 export function useA11y() { return useStore().a11y === 'on'; }
 export function useTheme() { return useStore().theme; }
 // Логотип под тему: на светлой — чёрная версия, на тёмной — белая.
-export function useLogo() { return useStore().theme === 'light' ? '/logo_ddc_black.svg?v=2' : '/logo_ddc.svg?v=2'; }
+export function useLogo() { return useStore().theme === 'light' ? '/logo_ddc_black.svg?v=3' : '/logo_ddc.svg?v=2'; }
 export { LANGS, THEMES };
