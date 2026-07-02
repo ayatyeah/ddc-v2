@@ -37,6 +37,7 @@ const compression = require('compression');
 const expressStaticGzip = require('express-static-gzip');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
@@ -205,11 +206,23 @@ const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, ...limiterOp
 const formLimiter  = rateLimit({ windowMs: 60 * 1000, max: 10, ...limiterOpts });
 
 // ── Авторизация ───────────────────────────────────────────────────────────────
+// Присутствие «онлайн»: обновляем users.last_seen не чаще раза в 45с на пользователя
+// (лёгкий апдейт), чтобы Mission Control видел, кто сейчас в системе.
+const _presence = new Map();
+function touchPresence(id) {
+  if (!id) return;
+  const now = Date.now();
+  if (now - (_presence.get(id) || 0) < 45000) return;
+  _presence.set(id, now);
+  db.query(`UPDATE users SET last_seen = now() WHERE id = $1`, [id]).catch(() => {});
+}
+
 function auth(req, res, next) {
   const token = req.cookies && req.cookies.ddc_token;
   if (!token) return res.status(401).json({ error: 'Не авторизован' });
   try {
     req.admin = jwt.verify(token, SECRET);
+    touchPresence(req.admin.id);
     next();
   } catch {
     return res.status(401).json({ error: 'Сессия истекла' });
@@ -1155,6 +1168,51 @@ app.delete('/api/portal/messages/:id(\\d+)', auth, async (req, res) => {
   } catch (e) { console.error('DELETE /api/portal/messages:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });
 
+// ── Mission Control: сводная телеметрия портала ───────────────────────────────
+app.get('/api/portal/mission', auth, async (req, res) => {
+  try {
+    const [online, users, msgs, tasks, chats, files, actMsg, actTask, actFile, actAudit] = await Promise.all([
+      db.query(`SELECT id, full_name, username, department, last_seen FROM users
+                 WHERE active = TRUE AND last_seen > now() - interval '3 minutes' ORDER BY last_seen DESC LIMIT 60`),
+      db.query(`SELECT count(*)::int AS total, count(*) FILTER (WHERE active)::int AS active FROM users`),
+      db.query(`SELECT count(*) FILTER (WHERE created_at > now() - interval '24 hours')::int AS today,
+                       count(*) FILTER (WHERE created_at > now() - interval '1 hour')::int AS hour,
+                       count(*)::int AS total FROM messages WHERE deleted = FALSE`),
+      db.query(`SELECT count(*) FILTER (WHERE status='open')::int AS open,
+                       count(*) FILTER (WHERE status='done')::int AS done, count(*)::int AS total FROM tasks`),
+      db.query(`SELECT count(*)::int AS total FROM chats`),
+      db.query(`SELECT count(*)::int AS total,
+                       count(*) FILTER (WHERE created_at > now() - interval '24 hours')::int AS today FROM files`),
+      db.query(`SELECT author_name, created_at FROM messages WHERE deleted = FALSE ORDER BY id DESC LIMIT 8`),
+      db.query(`SELECT title, created_by, created_at FROM tasks ORDER BY id DESC LIMIT 6`),
+      db.query(`SELECT orig, kind, created_at FROM files ORDER BY id DESC LIMIT 6`),
+      db.query(`SELECT actor, action, summary, created_at FROM audit_log ORDER BY id DESC LIMIT 8`).catch(() => ({ rows: [] })),
+    ]);
+    const activity = [
+      ...actMsg.rows.map((r) => ({ type: 'msg', text: `${r.author_name || 'Сотрудник'}: новое сообщение`, at: r.created_at })),
+      ...actTask.rows.map((r) => ({ type: 'task', text: `${r.created_by || 'Сотрудник'} создал задачу «${r.title}»`, at: r.created_at })),
+      ...actFile.rows.map((r) => ({ type: 'file', text: `Загружен файл: ${r.orig}`, at: r.created_at })),
+      ...actAudit.rows.map((r) => ({ type: 'audit', text: `${r.actor}: ${r.summary || r.action}`, at: r.created_at })),
+    ].filter((a) => a.at).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 16);
+
+    const cores = (os.cpus() || []).length || 1;
+    const la = (os.loadavg && os.loadavg()[0]) || 0;
+    const load = Math.max(0, Math.min(100, Math.round((la / cores) * 100)));
+    res.json({
+      online: online.rows.map((u) => ({ id: u.id, name: u.full_name || u.username, department: u.department || '' })),
+      onlineCount: online.rows.length,
+      users: users.rows[0],
+      messages: msgs.rows[0],
+      tasks: tasks.rows[0],
+      chats: chats.rows[0].total,
+      files: files.rows[0],
+      server: { uptimeSec: Math.round(process.uptime()), memMB: Math.round(process.memoryUsage().rss / 1048576), load, cores, loadavg: +la.toFixed(2) },
+      activity,
+      now: new Date().toISOString(),
+    });
+  } catch (e) { console.error('GET /api/portal/mission:', e.message); res.status(500).json({ error: 'Ошибка телеметрии' }); }
+});
+
 // ── Рабочие задачи ──
 app.get('/api/portal/tasks', auth, async (req, res) => {
   try {
@@ -1862,6 +1920,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        uploaded_by INTEGER,
        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
      );
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;  -- присутствие для Mission Control
      ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_id INTEGER;    -- вложение сообщения
      ALTER TABLE leads ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT '';        -- 'career' = отклик на вакансию
      ALTER TABLE leads ADD COLUMN IF NOT EXISTS cv_file_id INTEGER;    -- прикреплённое CV

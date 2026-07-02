@@ -266,3 +266,72 @@
   .pt-msg-tools button { width: 30px; height: 30px; font-size: 14px; }
   .pt-modal { border-radius: 16px; padding: 18px; }
 }
+
+/* ═══════════════ Mission Control — «центр управления» ═══════════════ */
+/* Всегда тёмная палитра (NASA-эстетика), независимо от темы портала. */
+.mc { background: #05080f; color: #cde6ff; }
+.mc.pt-view { padding: 20px 22px 28px; }
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(80,200,255,0.14); }
+.mc-title { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-weight: 700; font-size: 1.05rem; letter-spacing: 0.14em; color: #eaf6ff; }
+.mc-led { width: 10px; height: 10px; border-radius: 50%; background: #37e0a0; box-shadow: 0 0 10px #37e0a0; animation: mcPulse 1.6s ease-in-out infinite; }
+@keyframes mcPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.mc-clock { font-family: var(--mono); font-size: 13px; letter-spacing: 0.1em; color: #7fb2d6; display: flex; align-items: center; gap: 10px; }
+.mc-status { font-size: 10.5px; letter-spacing: 0.16em; padding: 3px 9px; border-radius: 6px; }
+.mc-status.ok { color: #37e0a0; background: rgba(55,224,160,0.12); }
+.mc-status.bad { color: #ff6b6b; background: rgba(255,80,80,0.14); }
+
+.mc-grid { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 14px; align-items: start; }
+.mc-kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+
+.mc-stat { position: relative; background: #0a1120; border: 1px solid rgba(90,150,210,0.18); border-radius: 14px; padding: 14px 14px 12px; overflow: hidden; }
+.mc-stat::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c, #3fe7ff); box-shadow: 0 0 12px var(--c, #3fe7ff); }
+.mc-stat.t-green { --c: #37e0a0; } .mc-stat.t-cyan { --c: #3fe7ff; } .mc-stat.t-amber { --c: #ffd24a; } .mc-stat.t-blue { --c: #6ea0ff; } .mc-stat.t-red { --c: #ff6b6b; }
+.mc-stat-k { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7fa6c6; }
+.mc-stat-v { font-family: var(--mono); font-weight: 700; font-size: 2rem; line-height: 1.1; color: #fff; margin-top: 4px; text-shadow: 0 0 16px color-mix(in srgb, var(--c) 45%, transparent); }
+.mc-stat-s { font-size: 11.5px; color: #6d90ae; margin-top: 2px; }
+
+.mc-panel { background: #0a1120; border: 1px solid rgba(90,150,210,0.18); border-radius: 14px; padding: 16px; min-width: 0; }
+.mc-panel-h { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: #6fa8cf; margin-bottom: 14px; }
+
+/* Круговой индикатор нагрузки */
+.mc-load { display: flex; flex-direction: column; align-items: center; }
+.mc-gauge { width: 152px; height: 152px; border-radius: 50%; display: grid; place-items: center; position: relative;
+  background: conic-gradient(var(--g, #37e0a0) calc(var(--p, 0) * 1%), rgba(120,170,220,0.08) 0); transition: background 0.6s; }
+.mc-gauge::before { content: ''; position: absolute; inset: 13px; border-radius: 50%; background: #0a1120; }
+.mc-gauge-v { position: relative; font-family: var(--mono); font-weight: 700; font-size: 2.2rem; color: #fff; }
+.mc-gauge-v small { font-size: 0.9rem; color: #7fa6c6; }
+.mc-metrics { display: flex; gap: 16px; margin-top: 16px; width: 100%; justify-content: space-around; }
+.mc-metrics div { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.mc-metrics span { font-size: 9.5px; letter-spacing: 0.1em; color: #6d90ae; }
+.mc-metrics b { font-family: var(--mono); font-size: 14px; color: #d6ecff; }
+
+/* Онлайн-сотрудники */
+.mc-online-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.mc-person { display: flex; align-items: center; gap: 10px; }
+.mc-av { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #04121f; background: linear-gradient(135deg, #37e0a0, #3fe7ff); }
+.mc-av i { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: #37e0a0; border: 2px solid #0a1120; box-shadow: 0 0 6px #37e0a0; }
+.mc-person-t { display: flex; flex-direction: column; min-width: 0; }
+.mc-person-t b { font-size: 13.5px; color: #eaf6ff; }
+.mc-person-t small { font-size: 11px; color: #6d90ae; }
+
+/* Лента последних изменений */
+.mc-feed-list { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; }
+.mc-ev { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px solid rgba(90,150,210,0.08); }
+.mc-ev-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #3fe7ff; box-shadow: 0 0 8px currentColor; color: #3fe7ff; }
+.mc-ev.e-task .mc-ev-dot { background: #ffd24a; color: #ffd24a; }
+.mc-ev.e-file .mc-ev-dot { background: #6ea0ff; color: #6ea0ff; }
+.mc-ev.e-audit .mc-ev-dot { background: #37e0a0; color: #37e0a0; }
+.mc-ev-t { flex: 1; min-width: 0; font-size: 13px; color: #b9d6ee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-ev time { font-family: var(--mono); font-size: 11px; color: #6d90ae; flex: none; }
+
+@media (max-width: 1080px) {
+  .mc-grid { grid-template-columns: 1fr 1fr; }
+  .mc-feed { grid-column: 1 / -1; }
+  .mc-kpis { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 760px) {
+  .mc.pt-view { padding: 16px 14px 24px; }
+  .mc-grid { grid-template-columns: 1fr; }
+  .mc-kpis { grid-template-columns: repeat(2, 1fr); }
+  .mc-stat-v { font-size: 1.7rem; }
+}

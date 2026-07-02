@@ -3,11 +3,13 @@ import { getJSON, sendJSON, apiFetch } from '../api.js';
 import { hideSplash } from '../splash.js';
 import ThemeToggle from '../ThemeToggle.jsx';
 import { useLogo } from '../store.js';
+import Mission from './Mission.jsx';
 import '../admin/admin.css';
 import './portal.css';
 
 // Разделы портала (внутренняя соцсеть/интранет). Порядок = порядок в меню.
 const SECTIONS = [
+  { id: 'mission', label: 'Mission Control', icon: 'mission' },
   { id: 'home', label: 'Главная', icon: 'home' },
   { id: 'profile', label: 'Профиль', icon: 'user' },
   { id: 'people', label: 'Сотрудники', icon: 'people' },
@@ -46,7 +48,7 @@ export default function PortalApp() {
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState('home');
+  const [tab, setTab] = useState('mission');
   // На мобиле при открытом диалоге прячем верхнюю панель (мессенджер-стиль).
   const [convOpen, setConvOpen] = useState(false);
   // Боковое меню (на телефоне выезжает слева по бургеру; на десктопе всегда видно).
@@ -126,6 +128,7 @@ export default function PortalApp() {
       </aside>
 
       <main className="pt-main">
+        {tab === 'mission' && <Mission onAuthLost={onAuthLost} />}
         {tab === 'home' && <Home me={me} onGo={goTab} />}
         {tab === 'profile' && <Profile me={me} onAuthLost={onAuthLost} />}
         {tab === 'people' && <People onAuthLost={onAuthLost} />}
@@ -145,6 +148,7 @@ export default function PortalApp() {
 /* Иконки разделов портала */
 function PtIco({ name }) {
   const p = {
+    mission: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.4" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></>,
     home: <><path d="M4 11l8-7 8 7" /><path d="M6 10v9h12v-9" /></>,
     user: <><circle cx="12" cy="8" r="3.4" /><path d="M5 20a7 7 0 0 1 14 0" /></>,
     people: <><circle cx="9" cy="8" r="2.6" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a2.6 2.6 0 0 1 0 4.6M20.5 19a5 5 0 0 0-3.5-4.4" /></>,
