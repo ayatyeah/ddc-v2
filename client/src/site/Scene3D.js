@@ -113,15 +113,22 @@ export function initScene(canvas) {
       baseGlow.rotation.x = -Math.PI / 2; baseGlow.position.set(-0.3, 0.15, 0); baseGlow.renderOrder = 3; gTowers.add(baseGlow);
     }
 
-    // Светящаяся надпись «DDC» на крыше высокой башни — спрайт всегда лицом к камере.
-    const signCv = document.createElement('canvas'); signCv.width = 256; signCv.height = 96;
+    // Логотип DDC на крыше высокой башни — спрайт всегда лицом к камере.
+    // Рисуем SVG-логотип в текстуру; на аддитивном блендинге светятся светлые части глифа.
+    const signCv = document.createElement('canvas'); signCv.width = signCv.height = 256;
     const sg = signCv.getContext('2d');
-    sg.font = '800 62px Inter, Arial, sans-serif'; sg.textAlign = 'center'; sg.textBaseline = 'middle';
-    sg.shadowColor = 'rgba(120,210,255,0.95)'; sg.shadowBlur = 26; sg.fillStyle = '#dff3ff';
-    sg.fillText('DDC', 128, 52);
     const signTex = new THREE.CanvasTexture(signCv);
-    const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-    sign.position.set(6.5, 32.0, 0); sign.scale.set(9, 3.4, 1); gTowers.add(sign);
+    const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.95 }));
+    sign.position.set(6.5, 33.4, 0); sign.scale.set(6, 6, 1); gTowers.add(sign);
+    const logoImg = new Image();
+    logoImg.onload = () => {
+      sg.clearRect(0, 0, 256, 256);
+      sg.shadowColor = 'rgba(120,210,255,0.9)'; sg.shadowBlur = 20;
+      sg.drawImage(logoImg, 26, 26, 204, 204);
+      signTex.needsUpdate = true;
+    };
+    logoImg.onerror = () => {};
+    logoImg.src = '/logo_ddc.svg';
 
     gTowers.traverse((o) => { if (o.material) { o.material.transparent = true; towerMats.push(o.material); } });
   })();
