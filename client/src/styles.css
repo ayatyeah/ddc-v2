@@ -50,8 +50,9 @@
   --blue-ink: #9cbcff;
   --gold: #d8b25a;
   --gold-soft: #e2c478;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.55);
-  --shadow-pop: 0 24px 70px rgba(0, 0, 0, 0.6);
+  /* Тональная глубина: покой — почти без тени (различие тонов + кромка), лифт — на ховере */
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-pop: 0 20px 54px rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -208,14 +209,21 @@ button { font-family: inherit; cursor: pointer; }
 /* Единый читаемый стиль текста поверх 3D-сцены: мягкая тёмная тень-ореол лифтит текст
    с любого фона; заголовки чуть плотнее, подзаголовки ярче. */
 .eyebrow {
+  display: inline-flex; align-items: center; gap: 9px;
   font-family: var(--mono);
   font-size: 12px; font-weight: 600;
   letter-spacing: 0.22em; text-transform: uppercase;
   color: var(--blue); text-shadow: 0 1px 12px rgba(4,9,22,0.6);
 }
+/* Точка-маркер перед надписью (как «навигационный маяк» секции) */
+.eyebrow::before {
+  content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; box-shadow: 0 0 8px currentColor;
+}
+html[data-a11y='on'] .eyebrow::before { display: none; }
 .h2 {
   font-size: clamp(1.75rem, 3.4vw, 2.7rem);
-  font-weight: 400; letter-spacing: -0.025em; line-height: 1.12;
+  font-weight: 400; letter-spacing: -0.032em; line-height: 1.1;
   text-shadow: 0 1px 22px rgba(4,9,22,0.65), 0 1px 3px rgba(4,9,22,0.55);
 }
 .lede {
@@ -475,8 +483,8 @@ button { font-family: inherit; cursor: pointer; }
 .orb.o3 { width: 520px; height: 520px; left: 30%; bottom: -180px; background: radial-gradient(circle, var(--blue-bright), transparent 70%); opacity: 0.3; }
 .hero-inner { position: relative; z-index: 1; max-width: 920px; }
 .hero h1 {
-  font-size: clamp(2.5rem, 6vw, 4.8rem); font-weight: 400; letter-spacing: -0.035em;
-  line-height: 1.06; margin: 18px 0 0;
+  font-size: clamp(2.5rem, 6vw, 4.8rem); font-weight: 400; letter-spacing: -0.045em;
+  line-height: 1.04; margin: 18px 0 0;
   text-shadow: 0 2px 32px rgba(4,9,22,0.6), 0 1px 4px rgba(4,9,22,0.55);   /* читаемость над сценой */
 }
 .hero h1 .grad {
@@ -1289,12 +1297,28 @@ a { transition: color 0.2s var(--ease); }
 }
 [data-theme='dark'] .btn-primary:hover { filter: brightness(1.07); box-shadow: 0 0 0 1px rgba(63, 231, 255, 0.55), 0 12px 34px rgba(40, 150, 210, 0.46); }
 
-/* Призрачная кнопка — стекло с неоновой рамкой */
+/* Призрачная кнопка — стекло с ГРАДИЕНТНОЙ рамкой (cyan→blue→gold) через двойной фон */
 [data-theme='dark'] .btn-ghost {
-  background: rgba(22, 34, 62, 0.42); color: var(--ink);
-  border: 1px solid rgba(125, 195, 255, 0.30);
+  color: var(--ink); border: 1px solid transparent;
+  background:
+    linear-gradient(rgba(22, 34, 62, 0.5), rgba(22, 34, 62, 0.5)) padding-box,
+    linear-gradient(95deg, var(--accent, #3fe7ff), #8fd0ff 52%, var(--gold-soft)) border-box;
 }
-[data-theme='dark'] .btn-ghost:hover { border-color: var(--accent); color: var(--ink); box-shadow: 0 0 18px rgba(63, 231, 255, 0.22); }
+[data-theme='dark'] .btn-ghost:hover { color: var(--ink); filter: brightness(1.06); box-shadow: 0 0 20px rgba(63, 231, 255, 0.22); }
+
+/* Атмосферный «световой столб» — мягкая радиальная подсветка сверху (только тёмная тема) */
+[data-theme='dark'] .hero::before {
+  content: ''; position: absolute; left: -10%; right: -10%; top: -25%; height: 78%; z-index: 0; pointer-events: none;
+  background: radial-gradient(55% 100% at 50% 0%, rgba(120, 180, 255, 0.12), transparent 68%);
+}
+[data-theme='dark'] .cta-band { position: relative; overflow: hidden; }
+[data-theme='dark'] .cta-band::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(85% 130% at 12% -25%, rgba(120, 180, 255, 0.18), transparent 58%);
+}
+[data-theme='dark'] .cta-band > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: no-preference) { [data-theme='dark'] .hero::before { animation: shaftBreath 9s var(--ease) infinite alternate; } }
+@keyframes shaftBreath { from { opacity: 0.75; } to { opacity: 1; } }
 
 /* Поля ввода — неоновый фокус */
 [data-theme='dark'] .inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(63, 231, 255, 0.14); }
