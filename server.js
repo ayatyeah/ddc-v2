@@ -2056,6 +2056,18 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);
 });
 
+// Порт занят другим процессом → внятное сообщение и чистый выход (без «зависшего» процесса).
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n⛔ Порт ${PORT} уже занят другим процессом — бэкенд не может запуститься.`);
+    console.error(`   Освободите порт (например, остановите тот процесс) или запустите на другом:`);
+    console.error(`   PowerShell:  $env:PORT=3001; node server.js   → затем откройте http://localhost:3001\n`);
+  } else {
+    console.error('Ошибка HTTP-сервера:', e.message);
+  }
+  process.exit(1);
+});
+
 // Не валим процесс молча — логируем и корректно завершаем
 process.on('unhandledRejection', (reason) => console.error('unhandledRejection:', reason));
 process.on('uncaughtException', (err) => { console.error('uncaughtException:', err); });

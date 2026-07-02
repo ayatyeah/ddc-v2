@@ -52,6 +52,8 @@ export default function Admin() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const logo = useLogo();   // чёрный логотип на светлой теме, белый на тёмной
+  const [menuOpen, setMenuOpen] = useState(false);   // боковое меню на телефоне
+  const goTab = (id) => { setTab(id); setMenuOpen(false); };
 
   useEffect(() => {
     hideSplash();   // админка смонтирована — убираем загрузочный экран
@@ -138,12 +140,13 @@ export default function Admin() {
   ].filter((x) => x.show);
 
   return (
-    <div className="adm adm-shell">
+    <div className={`adm adm-shell ${menuOpen ? 'adm-menu-open' : ''}`}>
+      <div className="adm-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
       <aside className="adm-rail">
         <div className="rail-brand"><img src={logo} alt="DDC" /></div>
         <nav className="rail-nav">
           {items.map((it) => (
-            <button key={it.id} className={`rail-btn ${tab === it.id ? 'active' : ''}`} onClick={() => setTab(it.id)} title={titleOf(it.id)}>
+            <button key={it.id} className={`rail-btn ${tab === it.id ? 'active' : ''}`} onClick={() => goTab(it.id)} title={titleOf(it.id)}>
               <Ico name={it.id} /><span>{titleOf(it.id)}</span>
             </button>
           ))}
@@ -161,6 +164,9 @@ export default function Admin() {
 
       <div className="adm-body">
         <header className="adm-bar">
+          <button className="adm-burger" onClick={() => setMenuOpen((o) => !o)} aria-label="Меню" aria-expanded={menuOpen}>
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d={menuOpen ? 'M6 6l12 12M18 6L6 18' : 'M3 6h18M3 12h18M3 18h18'} /></svg>
+          </button>
           <h1 className="adm-bar-title">{titleOf(tab)}</h1>
           <span className="sp" />
           <NotificationBell onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />

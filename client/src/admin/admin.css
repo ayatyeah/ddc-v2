@@ -407,6 +407,8 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
   overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none;
 }
 .adm-rail::-webkit-scrollbar { display: none; }
+/* Бургер и затемнение под боковое меню — только на телефоне */
+.adm-burger, .adm-backdrop { display: none; }
 /* Логотип сайта белый — на тёмном рейле показываем без белого квадрата (иначе сольётся) */
 .rail-brand { width: 48px; height: 48px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); display: grid; place-items: center; margin-bottom: 16px; transition: background 0.2s, border-color 0.2s; }
 .rail-brand:hover { background: rgba(255,255,255,0.11); }
@@ -449,54 +451,39 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .adm-main { padding: 30px 34px 60px; max-width: 1280px; margin: 0; }
 
 @media (max-width: 860px) {
-  .adm-shell { flex-direction: column; }
-  /* Рейл превращается в нижнюю навигацию */
+  .adm-shell { display: block; }
+  /* Бургер в шапке */
+  .adm-burger { display: grid; place-items: center; width: 42px; height: 42px; margin-right: 4px; flex: none; border: none; background: transparent; color: var(--ink); border-radius: 11px; cursor: pointer; }
+  .adm-burger:active { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+  /* Рейл — выдвижное меню слева (как в портале) */
   .adm-rail {
-    position: fixed; bottom: 0; left: 0; right: 0; top: auto;
-    width: 100%; height: auto; flex: none; align-self: stretch;
-    flex-direction: row; align-items: stretch; gap: 0;
-    padding: 6px max(8px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom));
-    border-right: none; border-top: 1px solid rgba(255,255,255,0.08);
-    background: rgba(14,17,22,0.96); backdrop-filter: blur(16px);
-    z-index: 60;
+    position: fixed; top: 0; left: 0; bottom: 0; height: 100%;
+    width: min(78vw, 300px); flex: none; align-items: stretch; z-index: 70;
+    transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 18px 12px calc(14px + env(safe-area-inset-bottom));
+    box-shadow: 22px 0 60px rgba(0,0,0,0.4);
   }
-  .rail-brand { display: none; }
-  /* Нижняя навигация: ПОДПИСАННЫЕ пункты + горизонтальный скролл со снапом — все разделы
-     понятны и доступны, тап-таргеты крупные. Справа «краешек» затухает (mask) → видно, что
-     панель листается. Активный раздел — синяя пилюля. */
-  .rail-nav {
-    flex-direction: row; gap: 2px; width: auto; flex: 1 1 auto;
-    justify-content: flex-start; overflow-x: auto; overflow-y: hidden;
-    scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; -ms-overflow-style: none;
-    -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent);
-            mask-image: linear-gradient(90deg, #000 90%, transparent);
-  }
-  .rail-nav::-webkit-scrollbar { display: none; }
-  .rail-btn {
-    flex: 0 0 auto; min-width: 62px; min-height: 52px; padding: 8px 10px 6px; border-radius: 14px; gap: 4px;
-    scroll-snap-align: start; justify-content: center;
-  }
-  .rail-btn span { display: block; font-size: 9.5px; white-space: nowrap; }
+  .adm-menu-open .adm-rail { transform: translateX(0); }
+  .adm-backdrop { display: block; position: fixed; inset: 0; z-index: 65; background: rgba(2,6,16,0.5); opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+  .adm-menu-open .adm-backdrop { opacity: 1; pointer-events: auto; }
+
+  .rail-brand { display: grid; margin-bottom: 14px; }
+  .rail-nav { flex-direction: column; gap: 4px; width: 100%; align-items: stretch; overflow: visible; }
+  /* Крупные пункты меню — иконка + подпись в строку */
+  .rail-btn { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; padding: 13px 14px; font-size: 15px; border-radius: 12px; min-width: 0; min-height: 0; }
+  .rail-btn span { display: block; font-size: 15px; white-space: nowrap; }
   .rail-btn svg { width: 22px; height: 22px; }
-  /* Foot-иконки закреплены справа, не уезжают со скроллом */
-  .rail-foot {
-    margin-top: 0; flex-direction: row; gap: 4px; align-items: center;
-    flex: 0 0 auto; padding-left: 8px; border-left: 1px solid rgba(255,255,255,0.08);
-  }
-  .rail-icon { width: 40px; height: 40px; }
-  /* Контент не должен прятаться под нижней панелью (она выше — с подписями) */
-  .adm-body { margin-left: 0; padding-bottom: calc(98px + env(safe-area-inset-bottom)); }
-  .adm-bar { padding: 16px 18px; }
-  .adm-bar-title { font-size: 1.25rem; }
-  .adm-main { padding: 20px 16px 40px; }
+  .rail-foot { margin-top: auto; flex-direction: row; gap: 8px; align-items: center; justify-content: flex-start; border-left: none; padding-left: 0; }
+
+  .adm-body { margin-left: 0; padding-bottom: 40px; }
+  .adm-bar { padding: 12px 14px; }
+  .adm-bar-title { font-size: 1.2rem; }
+  .adm-main { padding: 18px 14px 44px; }
 }
 
 @media (max-width: 520px) {
-  .rail-btn { padding: 7px 9px 6px; min-width: 58px; }
-  .rail-btn svg { width: 21px; height: 21px; }
-  .rail-foot { gap: 2px; }
-  .rail-icon { width: 34px; height: 34px; }
+  .adm-rail { width: min(84vw, 300px); }
   .adm-bar .who { font-size: 12px; }
   .adm-bar .who .us-role { display: none; }
 }
