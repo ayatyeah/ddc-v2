@@ -4,7 +4,10 @@ import viteCompression from 'vite-plugin-compression';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // Фронт собирается в ../public, откуда его раздаёт Express (server.js).
-// В режиме разработки /api проксируется на бэкенд (node server.js на :3000).
+// В режиме разработки /api проксируется на бэкенд. Порт бэкенда — через env
+// API_PORT (по умолчанию 3005). Если поднимаешь server.js на другом порту —
+// задай его: `API_PORT=3000 npm run dev` (или в .env для Vite).
+const API_PORT = process.env.API_PORT || 3005;
 export default defineConfig({
   plugins: [
     react(),
@@ -46,7 +49,7 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
-    proxy: { '/api': 'http://localhost:3000' },
+    proxy: { '/api': `http://localhost:${API_PORT}` },
   },
   build: {
     outDir: '../public',
