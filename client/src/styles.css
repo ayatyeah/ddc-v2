@@ -142,8 +142,8 @@ html[data-a11y='on'] .circuit-field { display: none; }
 @media (prefers-reduced-motion: reduce) { .circuit-field { transform: none; } }
 
 /* Процедурный туман (WebGL-шейдер, низкое разрешение → растягиваем, мягкий blend) */
-.fog-shader { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -4; pointer-events: none; opacity: 0.9; mix-blend-mode: screen; }
-[data-theme='light'] .fog-shader { mix-blend-mode: normal; opacity: 0.6; }
+.fog-shader { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -4; pointer-events: none; opacity: 0.5; mix-blend-mode: screen; }
+[data-theme='light'] .fog-shader { mix-blend-mode: normal; opacity: 0.5; }
 html[data-a11y='on'] .fog-shader { display: none; }
 
 /* 2D-планета на заднем фоне (вместо прежней 3D-планеты). Сидит позади 3D-сцены,

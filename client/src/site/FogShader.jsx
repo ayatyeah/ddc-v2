@@ -20,9 +20,9 @@ void main(){
   vec2 q = uv * vec2(u_res.x / u_res.y, 1.0) * 2.4;
   float t = u_t * 0.012;                                  // очень медленное течение
   float n = fbm(q + vec2(t, t * 0.5) + fbm(q * 0.5 - t * 0.25));
-  float m = smoothstep(0.32, 0.95, n);
+  float m = smoothstep(0.45, 0.98, n);                    // выше порог → туман только в «сгустках», не сплошняком
   vec3 col = mix(vec3(0.40, 0.58, 0.86), vec3(0.72, 0.84, 1.0), m);
-  gl_FragColor = vec4(col, m * 0.16);
+  gl_FragColor = vec4(col, m * 0.07);                     // слабее, чтобы НЕ вымывать тёмный фон
 }`;
 
 export default function FogShader() {
