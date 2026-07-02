@@ -47,6 +47,8 @@ export default defineConfig({
     viteCompression({ algorithm: 'brotliCompress', ext: '.br', threshold: 1024 }),
     viteCompression({ algorithm: 'gzip', ext: '.gz', threshold: 1024 }),
   ],
+  // Воркеры — ES-модули (scene.worker.js использует import() / code-splitting).
+  worker: { format: 'es' },
   server: {
     port: 5173,
     proxy: { '/api': `http://localhost:${API_PORT}` },

@@ -124,7 +124,7 @@ export function initScene(canvas) {
     logoImg.onload = () => {
       sg.clearRect(0, 0, 256, 256);
       sg.shadowColor = 'rgba(120,210,255,0.9)'; sg.shadowBlur = 20;
-      sg.drawImage(logoImg, 26, 26, 204, 204);
+      sg.drawImage(logoImg.__bitmap || logoImg, 26, 26, 204, 204);   // в воркере логотип приходит как ImageBitmap
       signTex.needsUpdate = true;
     };
     logoImg.onerror = () => {};
@@ -561,25 +561,27 @@ export function initScene(canvas) {
     // На Firefox (gecko) снижаем РАНЬШЕ и до меньшего пола — приоритет высокому/ровному FPS.
     perfAcc += rawDt; perfN++;
     if (t - perfT > 0.7 && perfN > 8) {
-      const avg = perfAcc / perfN;                                   // средняя длительность кадра, сек
-      const maxDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
-      const lowerAt = perf.engine === 'gecko' ? 0.0182 : 0.025;      // gecko: реагируем уже на ~55fps
-      const floor = perf.engine === 'gecko' ? 0.85 : 1.0;
-      let nd = curDpr;
-      if (avg > lowerAt && curDpr > floor) nd = Math.max(floor, curDpr - 0.2);          // просадка -> ниже разрешение
-      else if (avg < 0.0166 && curDpr < maxDpr) nd = Math.min(maxDpr, curDpr + 0.15);   // запас -> выше
-      if (Math.abs(nd - curDpr) > 0.02) { curDpr = nd; renderer.setPixelRatio(curDpr); renderer.setSize(window.innerWidth, window.innerHeight, false); }
+      // В off-thread режиме (рендер в Web Worker) НЕ снижаем DPR/качество: главный поток
+      // свободен, скролл плавный при любом fps рендера — держим чёткую картинку (без «мыла»).
+      if (!perf.offthread) {
+        const avg = perfAcc / perfN;                                   // средняя длительность кадра, сек
+        const maxDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+        const lowerAt = perf.engine === 'gecko' ? 0.0182 : 0.025;      // gecko: реагируем уже на ~55fps
+        const floor = perf.engine === 'gecko' ? 0.85 : 1.0;
+        let nd = curDpr;
+        if (avg > lowerAt && curDpr > floor) nd = Math.max(floor, curDpr - 0.2);          // просадка -> ниже разрешение
+        else if (avg < 0.0166 && curDpr < maxDpr) nd = Math.min(maxDpr, curDpr + 0.15);   // запас -> выше
+        if (Math.abs(nd - curDpr) > 0.02) { curDpr = nd; renderer.setPixelRatio(curDpr); renderer.setSize(window.innerWidth, window.innerHeight, false); }
 
-      // Второй уровень адаптации (после DPR): если и на минимальном разрешении FPS всё ещё
-      // низкий — гасим тяжёлые additive-слои (звёздная пыль + половина «пакетов»).
-      // Возвращаем, когда FPS уверенно восстановился. Гистерезис (порог 3 замера) — против мигания.
-      if (avg > 0.028) qBad = Math.min(6, qBad + 1);            // ~<36 fps
-      else if (avg < 0.0182) qBad = Math.max(0, qBad - 1);      // ~>55 fps
-      const wantLow = qBad >= 3;
-      if (wantLow !== qualityLow) {
-        qualityLow = wantLow;
-        if (gMap.userData.dust) gMap.userData.dust.visible = !qualityLow;
-        (gMap.userData.packets || []).forEach((pk, i) => { pk.visible = qualityLow ? (i % 2 === 0) : true; });
+        // Второй уровень: если и на минимальном DPR fps низкий — гасим тяжёлые additive-слои.
+        if (avg > 0.028) qBad = Math.min(6, qBad + 1);            // ~<36 fps
+        else if (avg < 0.0182) qBad = Math.max(0, qBad - 1);      // ~>55 fps
+        const wantLow = qBad >= 3;
+        if (wantLow !== qualityLow) {
+          qualityLow = wantLow;
+          if (gMap.userData.dust) gMap.userData.dust.visible = !qualityLow;
+          (gMap.userData.packets || []).forEach((pk, i) => { pk.visible = qualityLow ? (i % 2 === 0) : true; });
+        }
       }
       perfAcc = 0; perfN = 0; perfT = t;
     }

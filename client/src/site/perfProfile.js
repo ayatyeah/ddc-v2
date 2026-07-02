@@ -57,4 +57,6 @@ try {
   document.documentElement.dataset.browser = browser;
 } catch { /* SSR/edge */ }
 
-export const perf = { engine, browser, lowPower, dprCap, antialias };
+// offthread выставляется в true из scene.worker.js (рендер в Web Worker): в этом режиме
+// сцена не снижает DPR/качество под fps — главный поток свободен, скролл плавный.
+export const perf = { engine, browser, lowPower, dprCap, antialias, offthread: false };
