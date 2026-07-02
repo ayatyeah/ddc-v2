@@ -10,6 +10,7 @@ import Fog from './Fog.jsx';
 import OrnamentField from './OrnamentField.jsx';
 import CircuitField from './CircuitField.jsx';
 import FogShader from './FogShader.jsx';
+import MobileBackground from './MobileBackground.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
@@ -168,13 +169,16 @@ export default function Site() {
           микросхем (SVG/CSS с параллаксом) — на всех. Оба слоя ЗА 3D-сценой. */}
       {!isMobile && !lowPower && !a11y && <FogShader />}
       {!a11y && <CircuitField />}
-      {!a11y && (
+      {/* Десктоп — полная 3D-сцена; телефон — лёгкий 2D-канвас (плавно, без лагов). */}
+      {!a11y && (isMobile ? (
+        <MobileBackground />
+      ) : (
         <ErrorBoundary fallback={null}>
           <Suspense fallback={null}>
             <Background3D onReady={onReady} />
           </Suspense>
         </ErrorBoundary>
-      )}
+      ))}
       {/* Немного мелких частиц на фоне (лёгкий слой). Тяжёлый DataFlow отключён ради плавности. */}
       {!isMobile && !lowPower && !a11y && <Particles />}
       {!a11y && <Fog />}
