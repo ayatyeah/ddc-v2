@@ -8,6 +8,8 @@ import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Fog from './Fog.jsx';
 import OrnamentField from './OrnamentField.jsx';
+import CircuitField from './CircuitField.jsx';
+import FogShader from './FogShader.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
@@ -162,6 +164,10 @@ export default function Site() {
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="bg-planet" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
+      {/* Процедурный туман (шейдер) — только десктоп, чтобы не грузить телефон. Контуры
+          микросхем (SVG/CSS с параллаксом) — на всех. Оба слоя ЗА 3D-сценой. */}
+      {!isMobile && !lowPower && !a11y && <FogShader />}
+      {!a11y && <CircuitField />}
       {!a11y && (
         <ErrorBoundary fallback={null}>
           <Suspense fallback={null}>

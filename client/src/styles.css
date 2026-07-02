@@ -127,6 +127,25 @@ button { font-family: inherit; cursor: pointer; }
   width: 100%; height: 100%; display: block; opacity: 0.85;
 }
 
+/* Контуры микросхем на заднем плане (за 3D-сценой) + параллакс по скроллу */
+.circuit-field {
+  position: fixed; inset: -6% -6%; z-index: -4; pointer-events: none;
+  color: #2f6fe0; opacity: 0.42;
+  transform: translate3d(0, calc(var(--sy, 0px) * 0.05), 0); will-change: transform;
+}
+[data-theme='dark'] .circuit-field { color: #5a9bff; opacity: 0.22; }
+.circuit-svg { width: 100%; height: 118%; display: block; }
+.circuit-svg line, .circuit-svg rect, .circuit-svg path { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.circuit-svg .cf-inner { opacity: 0.55; }
+.circuit-svg .cf-dot, .circuit-svg .cf-pad { fill: currentColor; stroke: none; }
+html[data-a11y='on'] .circuit-field { display: none; }
+@media (prefers-reduced-motion: reduce) { .circuit-field { transform: none; } }
+
+/* Процедурный туман (WebGL-шейдер, низкое разрешение → растягиваем, мягкий blend) */
+.fog-shader { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -4; pointer-events: none; opacity: 0.9; mix-blend-mode: screen; }
+[data-theme='light'] .fog-shader { mix-blend-mode: normal; opacity: 0.6; }
+html[data-a11y='on'] .fog-shader { display: none; }
+
 /* 2D-планета на заднем фоне (вместо прежней 3D-планеты). Сидит позади 3D-сцены,
    медленно «дышит» и слегка дрейфует — тихий глобус в небе над страной. */
 /* Вместо планеты — тихое «цифровое сияние» в верхне-правом углу: мягкий голубой
