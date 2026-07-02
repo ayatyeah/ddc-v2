@@ -341,27 +341,35 @@ export function initScene(canvas) {
     //    (без сплошной неон-линии). Один THREE.Points → один drawcall, поэтому рисуем
     //    его И НА МОБИЛЕ — иначе после удаления неон-границы контур страны пропал бы. ──
     {
-      const STEP = 0.85;                 // шаг между огоньками вдоль контура (ед. сцены)
+      // Не ровный ряд по границе, а РАЗБРОСАННОЕ облако огоньков: каждый смещён поперёк
+      // контура на случайную величину + джиттер вдоль + редкие пропуски → абстрактный,
+      // «рваный» контур без читаемой линии. Псевдослучай детерминированный (стабилен между загрузками).
+      const STEP = 0.8;
       const dots = [];
+      let s2 = 991; const jr = () => { s2 = (s2 * 1103515245 + 12345) & 0x7fffffff; return s2 / 0x7fffffff; };
       const n = outlinePts.length;
       for (let i = 0; i < n; i++) {
         const a = outlinePts[i], b = outlinePts[(i + 1) % n];
-        const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const segLen = Math.hypot(dx, dy) || 1;
+        const nx = -dy / segLen, ny = dx / segLen;      // нормаль к сегменту (в плоскости контура)
         const steps = Math.max(1, Math.round(segLen / STEP));
         for (let s = 0; s < steps; s++) {
-          const t = s / steps;
-          dots.push(a.x + (b.x - a.x) * t, 0.3, -(a.y + (b.y - a.y) * t) + hub2.z);
+          if (jr() < 0.12) continue;                    // редкие пропуски — рваный край
+          const t = (s + (jr() - 0.5) * 0.8) / steps;   // джиттер вдоль сегмента
+          const off = (jr() - 0.5) * 3.6;               // джиттер ПОПЕРЁК границы → облако, не линия
+          const px = a.x + dx * t + nx * off, py = a.y + dy * t + ny * off;
+          dots.push(px, 0.3 + (jr() - 0.5) * 0.6, -py + hub2.z);
         }
       }
       const og = new THREE.BufferGeometry();
       og.setAttribute('position', new THREE.Float32BufferAttribute(dots, 3));
-      // Чуть ярче/крупнее прежнего — компенсируем отсутствие сплошной границы, но контур
-      // остаётся «пунктирным», абстрактным, без ровной линии.
+      // Мелкие рассеянные огоньки — контур читается облаком, а не сплошной кромкой.
       const outlineDotMat = new THREE.PointsMaterial({
-        map: dotTex, color: 0x7ad6ff, size: 1.7, sizeAttenuation: true,
-        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.95,
+        map: dotTex, color: 0x7ad6ff, size: 1.55, sizeAttenuation: true,
+        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.9,
       });
-      outlineDotMat.userData = { baseOp: 0.95 };
+      outlineDotMat.userData = { baseOp: 0.9 };
       const outlineDots = new THREE.Points(og, outlineDotMat); outlineDots.renderOrder = 6; gMap.add(outlineDots);
       mapMats.push(outlineDotMat);
       gMap.userData.outlineDots = outlineDots; gMap.userData.outlineN = dots.length / 3;   // для boot-интро (прорисовка контура)
@@ -382,19 +390,20 @@ export function initScene(canvas) {
       for (const p of raw) { minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y); }
       // детерминированный псевдослучай (без Math.random — стабильно между перезагрузками)
       let seed = 20260626; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+      // Плотнее прежнего: страна читается как рассеянное «созвездие» точек, а не сплошная плита.
       const dust = []; let tries = 0;
-      while (dust.length < 240 * 3 && tries < 6000) {
+      while (dust.length < 380 * 3 && tries < 9000) {
         tries++;
         const px = minx + rnd() * (maxx - minx), py = miny + rnd() * (maxy - miny);
-        if (inside(px, py)) dust.push(px, 0.24, -py + hub2.z);
+        if (inside(px, py)) dust.push(px, 0.24 + (rnd() - 0.5) * 0.5, -py + hub2.z);
       }
       const dustGeo = new THREE.BufferGeometry();
       dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dust, 3));
       const dustMat = new THREE.PointsMaterial({
-        map: dotTex, color: 0x63c4ec, size: 0.8, sizeAttenuation: true,
-        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.3,
+        map: dotTex, color: 0x63c4ec, size: 0.95, sizeAttenuation: true,
+        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.34,
       });
-      dustMat.userData = { baseOp: 0.3 };
+      dustMat.userData = { baseOp: 0.34 };
       const dustPts = new THREE.Points(dustGeo, dustMat); dustPts.renderOrder = 2; gMap.add(dustPts);
       mapMats.push(dustMat);
     }
