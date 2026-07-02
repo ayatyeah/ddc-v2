@@ -172,6 +172,28 @@ async function saveUpload(file, kind, uploaderId) {
   return rows[0];
 }
 
+// Извлечение текста из CV (PDF/DOCX) — чтобы ИИ анализировал само резюме, а не только письмо.
+// Библиотеки грузим лениво (только при анализе). Возвращаем обрезанный текст или '' при ошибке.
+async function extractCvFileText(fileRow) {
+  if (!fileRow) return '';
+  const ext = (String(fileRow.orig || '').split('.').pop() || '').toLowerCase();
+  const p = path.join(UPLOAD_DIR, fileRow.stored);
+  try {
+    if (!fs.existsSync(p)) return '';
+    if (ext === 'pdf') {
+      const pdf = require('pdf-parse');
+      const data = await pdf(await fs.promises.readFile(p));
+      return (data.text || '').replace(/\s+\n/g, '\n').trim().slice(0, 7000);
+    }
+    if (ext === 'docx') {
+      const mammoth = require('mammoth');
+      const r = await mammoth.extractRawText({ path: p });
+      return (r.value || '').trim().slice(0, 7000);
+    }
+  } catch (e) { console.error('extractCvFileText:', e.message); }
+  return '';   // .doc и прочее — не распознаём
+}
+
 // Раздаём собранный фронт как статику. express-static-gzip отдаёт предсжатые .br/.gz
 // (их генерит vite-plugin-compression при сборке), если клиент их поддерживает —
 // меньше трафик. Падение на обычный файл, если предсжатого нет.
@@ -1149,17 +1171,26 @@ app.post('/api/admin/careers/:id(\\d+)/analyze', auth, requireRole('admin', 'man
     const { rows } = await db.query(`SELECT * FROM leads WHERE id = $1 AND kind = 'career'`, [id]);
     if (!rows.length) return res.status(404).json({ error: 'Отклик не найден' });
     const l = rows[0];
+    // Достаём текст из приложенного резюме (PDF/DOCX), чтобы ИИ анализировал само CV.
+    let cvText = '';
+    if (l.cv_file_id) {
+      const fr = await db.query(`SELECT stored, orig FROM files WHERE id = $1`, [l.cv_file_id]);
+      cvText = await extractCvFileText(fr.rows[0]);
+    }
+    const cvBlock = cvText
+      ? `текст резюме ниже:\n"""\n${cvText}\n"""`
+      : (l.cv_file_id ? 'приложено файлом (текст не удалось распознать — формат .doc или скан)' : 'не приложено');
     const prompt = `Ты — опытный IT-рекрутер Центра цифрового развития (ЦЦР) Нацбанка Казахстана.
 Проанализируй отклик на вакансию и верни СТРОГО валидный JSON без пояснений в формате:
 {"fit_score": <целое 0-100>, "summary": "<2-3 предложения по сути кандидата>",
  "strengths": ["<сильная сторона>", ...], "risks": ["<риск/пробел>", ...],
  "recommendation": "invite|maybe|reject", "reason": "<короткое обоснование рекомендации>"}
-Оценивай по релевантности вакансии, мотивации и полноте отклика. Данные кандидата:
+Оценивай по релевантности вакансии, опыту/навыкам из резюме, мотивации и полноте отклика. Данные кандидата:
 - Имя: ${l.full_name}
 - Тема/вакансия: ${l.subject || '—'}
 - Контакты: ${l.email || '—'} ${l.phone || ''}
-- Сопроводительное письмо: ${(l.message || '').slice(0, 3000) || '(не заполнено)'}
-- Резюме (CV): ${l.cv_file_id ? 'приложено файлом (текст не распознан автоматически)' : 'не приложено'}`;
+- Сопроводительное письмо: ${(l.message || '').slice(0, 2000) || '(не заполнено)'}
+- Резюме (CV): ${cvBlock}`;
     const text = await callGemini(prompt, 1024);
     const j = parseJsonLoose(text) || {};
     const fit = Math.max(0, Math.min(100, Math.round(Number(j.fit_score) || 0)));
