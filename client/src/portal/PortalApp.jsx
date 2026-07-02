@@ -5,6 +5,7 @@ import ThemeToggle from '../ThemeToggle.jsx';
 import { useLogo } from '../store.js';
 import Mission from './Mission.jsx';
 import Documents from './Documents.jsx';
+import Requests from './Requests.jsx';
 import '../admin/admin.css';
 import './portal.css';
 
@@ -136,7 +137,7 @@ export default function PortalApp() {
         {tab === 'calendar' && <Stub icon="calendar" title="Календарь" note="Праздники, выходные, отпуска сотрудников, корпоративные мероприятия и дни рождения." />}
         {tab === 'news' && <Stub icon="news" title="Новости" note="Объявления по категориям (HR, IT, Финансы, Компания, Важное) с лайками и комментариями." />}
         {tab === 'docs' && <Documents me={me} onAuthLost={onAuthLost} />}
-        {tab === 'requests' && <Stub icon="requests" title="Заявки" note="Отпуск, больничный, командировка, справка, закупка, доступ к системе, пропуск — со статусами согласования." />}
+        {tab === 'requests' && <Requests me={me} onAuthLost={onAuthLost} />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
         {tab === 'depts' && <Departments onAuthLost={onAuthLost} />}
         {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
@@ -517,15 +518,18 @@ function Tasks({ me, onAuthLost }) {
     catch (e) { if (e.status === 401) onAuthLost?.(); }
   };
 
+  const isHead = ['admin', 'manager'].includes(me?.role);   // назначать другим могут руководители/замы
   return (
     <div className="pt-view">
-      <div className="pt-view-h"><h2>Рабочие задачи</h2><span className="pt-hint">Назначенные вам и созданные вами</span></div>
+      <div className="pt-view-h"><h2>Рабочие задачи</h2><span className="pt-hint">{isHead ? 'Назначайте задачи сотрудникам' : 'Назначенные вам и созданные вами'}</span></div>
       <form className="pt-taskform" onSubmit={create}>
-        <input className="adm-input" placeholder="Новая задача…" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <select className="adm-input" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-          <option value="">— исполнитель —</option>
-          {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </select>
+        <input className="adm-input" placeholder={isHead ? 'Новая задача для сотрудника…' : 'Моя задача…'} value={title} onChange={(e) => setTitle(e.target.value)} />
+        {isHead && (
+          <select className="adm-input" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+            <option value="">— исполнитель —</option>
+            {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        )}
         <button className="adm-btn" type="submit">Добавить</button>
       </form>
       <div className="pt-tasks">

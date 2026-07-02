@@ -1418,6 +1418,67 @@ app.delete('/api/portal/docs/:id(\\d+)', auth, async (req, res) => {
   } catch (e) { console.error('DELETE /api/portal/docs:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });
 
+// ── Заявки сотрудников (отпуск/справка/доступ…) со статусами согласования ──────
+const REQUEST_KINDS = {
+  vacation: 'Отпуск', sick: 'Больничный', trip: 'Командировка', certificate: 'Справка',
+  access: 'Доступ к системе', equipment: 'Закупка оборудования', pass: 'Пропуск', other: 'Другое',
+};
+const REQ_STATUSES = ['review', 'approved', 'rejected', 'done'];
+const REQ_STATUS_LABEL = { review: 'На согласовании', approved: 'Одобрено', rejected: 'Отклонено', done: 'Выполнено' };
+const mapReq = (r) => ({ ...r, kind_label: REQUEST_KINDS[r.kind] || r.kind });
+
+app.get('/api/portal/requests', auth, async (req, res) => {
+  const isHead = ['admin', 'manager'].includes(req.admin.role);
+  try {
+    const { rows } = isHead
+      ? await db.query(`SELECT * FROM requests ORDER BY (status = 'review') DESC, id DESC LIMIT 300`)
+      : await db.query(`SELECT * FROM requests WHERE author_id = $1 ORDER BY id DESC LIMIT 200`, [req.admin.id]);
+    res.json(rows.map(mapReq));
+  } catch (e) { console.error('GET /api/portal/requests:', e.message); res.status(500).json({ error: 'Ошибка чтения заявок' }); }
+});
+
+app.post('/api/portal/requests', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Заявки доступны сотрудникам с учётной записью' });
+  const kind = REQUEST_KINDS[req.body?.kind] ? req.body.kind : 'other';
+  const title = clip(req.body?.title, 200) || REQUEST_KINDS[kind];
+  const body = clip(req.body?.body, 3000);
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO requests (kind, title, body, status, author_id, author_name) VALUES ($1,$2,$3,'review',$4,$5) RETURNING *`,
+      [kind, title, body, me, req.admin.u]);
+    res.status(201).json(mapReq(rows[0]));
+  } catch (e) { console.error('POST /api/portal/requests:', e.message); res.status(500).json({ error: 'Не удалось создать заявку' }); }
+});
+
+// Согласование: одобрить/отклонить/выполнено — только руководители/замы (admin/manager)
+app.patch('/api/portal/requests/:id(\\d+)', auth, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.admin.role)) return res.status(403).json({ error: 'Согласовывать заявки могут руководители отделов' });
+  const status = REQ_STATUSES.includes(req.body?.status) ? req.body.status : null;
+  if (!status) return res.status(400).json({ error: 'Некорректный статус' });
+  try {
+    const { rows } = await db.query(
+      `UPDATE requests SET status = $1, decided_by = $2, reviewer_id = $3, decided_at = now() WHERE id = $4 RETURNING *`,
+      [status, req.admin.u, req.admin.id, Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Заявка не найдена' });
+    if (rows[0].author_id && rows[0].author_id !== req.admin.id) {
+      await notify(rows[0].author_id, 'request', null, `Заявка: ${REQ_STATUS_LABEL[status]}`, rows[0].title);
+    }
+    res.json(mapReq(rows[0]));
+  } catch (e) { console.error('PATCH /api/portal/requests:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
+});
+
+app.delete('/api/portal/requests/:id(\\d+)', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT author_id FROM requests WHERE id = $1`, [Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    const canDel = rows[0].author_id === req.admin.id || ['admin', 'manager'].includes(req.admin.role);
+    if (!canDel) return res.status(403).json({ error: 'Можно удалять только свои заявки' });
+    await db.query(`DELETE FROM requests WHERE id = $1`, [Number(req.params.id)]);
+    res.json({ ok: true });
+  } catch (e) { console.error('DELETE /api/portal/requests:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
+});
+
 // ── Рабочие задачи ──
 app.get('/api/portal/tasks', auth, async (req, res) => {
   try {
@@ -1434,6 +1495,12 @@ app.post('/api/portal/tasks', auth, async (req, res) => {
   const body = clip(req.body?.body, 2000);
   if (!title) return res.status(400).json({ error: 'Укажите название задачи' });
   const aid = Number(req.body?.assignee_id);
+  // Назначать задачи ДРУГИМ сотрудникам могут только руководители/замы (admin/manager).
+  // Задачу самому себе может создать любой (личный todo).
+  const assigningOther = Number.isInteger(aid) && aid !== req.admin.id;
+  if (assigningOther && !['admin', 'manager'].includes(req.admin.role)) {
+    return res.status(403).json({ error: 'Назначать задачи сотрудникам могут только руководители отделов и их заместители' });
+  }
   try {
     let assignee_id = null, assignee_name = '';
     if (Number.isInteger(aid)) {

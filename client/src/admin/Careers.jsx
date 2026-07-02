@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getJSON, sendJSON } from '../api.js';
+import { getJSON, sendJSON, apiFetch } from '../api.js';
 
 // Рекомендации ИИ → подпись + цвет
 const REC = { invite: ['Пригласить', '#1f9d57'], maybe: ['Под вопросом', '#c8960c'], reject: ['Не подходит', '#c0455a'] };
@@ -25,6 +25,11 @@ export default function Careers({ onAuthLost }) {
       setItems((prev) => prev.map((x) => (x.id === id ? { ...x, fit_score: r.fit_score, verdict: r.verdict, analyzed_at: r.analyzed_at } : x)));
     } catch (e) { if (e.status === 401) onAuthLost?.(); else alert(e.message || 'ИИ недоступен'); }
     finally { setBusy(null); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('Удалить отклик? Кандидат и его CV будут удалены.')) return;
+    try { const r = await apiFetch(`/api/leads/${id}`, { method: 'DELETE' }); if (r.status === 401) { onAuthLost?.(); return; } setItems((prev) => prev.filter((x) => x.id !== id)); } catch {}
   };
 
   const analyzed = items.filter((c) => typeof c.fit_score === 'number');
@@ -68,6 +73,7 @@ export default function Careers({ onAuthLost }) {
                 <button className="adm-btn" onClick={() => analyze(c.id)} disabled={busy === c.id}>
                   {busy === c.id ? 'Анализ…' : hasAi ? 'Переанализировать' : 'ИИ-анализ кандидата'}
                 </button>
+                <button className="nm-mini del" onClick={() => remove(c.id)}>Удалить</button>
               </div>
 
               {hasAi && (
