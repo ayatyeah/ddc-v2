@@ -188,11 +188,10 @@ export default function News() {
               ? { height: 200, padding: 0, background: '#0a1a3e' }
               : { background: 'linear-gradient(120deg,#13245a,#0a1a3e)' }}>
               {aiActive.image && <img src={aiActive.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-              <span className="ai-tag" style={{ position: 'absolute', left: 20, bottom: 16 }}>AI</span>
             </div>
             <div className="inner">
               <button className="x" onClick={() => setAiActive(null)} aria-label={t(lang, 'news.close')}>×</button>
-              <time>{aiActive.source}{aiActive.date ? ` · ${aiActive.date}` : ''}</time>
+              <div className="modal-src"><span className="ai-tag">AI</span><time>{aiActive.source}{aiActive.date ? ` · ${aiActive.date}` : ''}</time></div>
               <h2>{pickT(aiActive.title, lang)}</h2>
               <p>{pickT(aiActive.summary, lang)}</p>
               {aiActive.url && <a className="btn btn-ghost" href={aiActive.url} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: 'inline-flex' }}>{t(lang, 'news.source')} ↗</a>}

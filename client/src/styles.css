@@ -753,11 +753,13 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 /* модалка новости */
 .modal-ov { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.4); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 24px; animation: fade 0.25s var(--ease); overscroll-behavior: contain; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-.modal { background: var(--card); border-radius: var(--radius); max-width: 640px; width: 100%; max-height: 86vh; overflow: auto; box-shadow: var(--shadow-pop); animation: modalPop 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Заголовок-полоса фиксирован, прокручивается только .inner — надёжно скроллится на любом устройстве */
+.modal { background: var(--card); border-radius: var(--radius); max-width: 640px; width: 100%; max-height: 86vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); animation: modalPop 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes modalPop { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .modal { animation: none; } }
-.modal .bar { height: 7px; }
-.modal .inner { padding: 32px 34px 38px; }
+.modal .bar { height: 7px; flex: none; position: relative; overflow: hidden; }
+.modal .inner { padding: 32px 34px 38px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.modal-src { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .modal time { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
 .modal h2 { font-size: 1.7rem; font-weight: 400; letter-spacing: -0.02em; margin: 8px 0 16px; line-height: 1.2; }
 .modal p { color: var(--ink-soft); font-size: 1.05rem; line-height: 1.65; white-space: pre-wrap; }
