@@ -412,6 +412,7 @@ export function initScene(canvas) {
       });
       dustMat.userData = { baseOp: 0.34 };
       const dustPts = new THREE.Points(dustGeo, dustMat); dustPts.renderOrder = 2; gMap.add(dustPts);
+      gMap.userData.dust = dustPts;   // самый тяжёлый additive-слой — гасим первым при просадке FPS
       mapMats.push(dustMat);
     }
 
@@ -540,6 +541,7 @@ export function initScene(canvas) {
 
   const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, prevT = 0;
   let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps для адаптивного DPR
+  let qBad = 0, qualityLow = false;        // адаптивное качество слоёв (гистерезис против мигания)
   // Вступительная «сборка» карты при загрузке (один раз, по таймеру — не под скролл):
   // контур прорисовывается → города зажигаются по очереди → дуги протягиваются → башни.
   let introStart = -1, introDone = false; const INTRO_DUR = 2.6;
@@ -567,6 +569,18 @@ export function initScene(canvas) {
       if (avg > lowerAt && curDpr > floor) nd = Math.max(floor, curDpr - 0.2);          // просадка -> ниже разрешение
       else if (avg < 0.0166 && curDpr < maxDpr) nd = Math.min(maxDpr, curDpr + 0.15);   // запас -> выше
       if (Math.abs(nd - curDpr) > 0.02) { curDpr = nd; renderer.setPixelRatio(curDpr); renderer.setSize(window.innerWidth, window.innerHeight, false); }
+
+      // Второй уровень адаптации (после DPR): если и на минимальном разрешении FPS всё ещё
+      // низкий — гасим тяжёлые additive-слои (звёздная пыль + половина «пакетов»).
+      // Возвращаем, когда FPS уверенно восстановился. Гистерезис (порог 3 замера) — против мигания.
+      if (avg > 0.028) qBad = Math.min(6, qBad + 1);            // ~<36 fps
+      else if (avg < 0.0182) qBad = Math.max(0, qBad - 1);      // ~>55 fps
+      const wantLow = qBad >= 3;
+      if (wantLow !== qualityLow) {
+        qualityLow = wantLow;
+        if (gMap.userData.dust) gMap.userData.dust.visible = !qualityLow;
+        (gMap.userData.packets || []).forEach((pk, i) => { pk.visible = qualityLow ? (i % 2 === 0) : true; });
+      }
       perfAcc = 0; perfN = 0; perfT = t;
     }
     disp += (progress - disp) * kSmooth;        // плавный бесшовный переход между страницами/скроллом
