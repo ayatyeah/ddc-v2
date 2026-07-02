@@ -6,7 +6,7 @@ import Reveal from './Reveal.jsx';
 
 // Открытые вакансии на странице «Карьера» — управляются из админки.
 // Если вакансий нет, секция ничего не рендерит (страница остаётся аккуратной).
-export default function Vacancies() {
+export default function Vacancies({ onApply }) {
   const lang = useLang();
   const [items, setItems] = useState(null);
   useEffect(() => { getJSON('/api/vacancies').then(setItems).catch(() => setItems([])); }, []);
@@ -32,7 +32,7 @@ export default function Vacancies() {
                   <span>🕘 {v.employment}</span>
                 </div>
                 {v.description && <p className="vac-desc">{v.description}</p>}
-                <a className="btn btn-primary vac-apply" href="#lead-form">{t(lang, 'vac.apply')}</a>
+                <button type="button" className="btn btn-primary vac-apply" onClick={() => onApply?.(v.title)}>{t(lang, 'vac.apply')}</button>
               </article>
             </Reveal>
           ))}

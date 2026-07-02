@@ -76,7 +76,7 @@ export const DICT = {
     'partners.form.title': 'Стать партнёром или поставщиком', 'partners.form.sub': 'Оставьте заявку — рассмотрим предложение о сотрудничестве.', 'partners.form.subject': 'Партнёрство / поставщик', 'partners.form.msg': 'О вашей компании и предложении',
     'careers.form.title': 'Откликнуться на вакансию', 'careers.form.sub': 'Расскажите о себе — и присоединяйтесь к команде национального масштаба.', 'careers.form.subject': 'Отклик на вакансию', 'careers.form.msg': 'Коротко о себе, желаемая позиция, ссылка на резюме/GitHub',
     'careers.cv.pick': 'Прикрепить резюме (PDF, DOC, DOCX · до 5 МБ)', 'careers.cv.hint': 'Файл проверяется на безопасность перед загрузкой.', 'careers.cv.type': 'Разрешены только PDF, DOC или DOCX', 'careers.cv.big': 'Файл больше 5 МБ',
-    'vac.eyebrow': 'Вакансии', 'vac.title': 'Открытые позиции', 'vac.apply': 'Откликнуться',
+    'vac.eyebrow': 'Вакансии', 'vac.title': 'Открытые позиции', 'vac.apply': 'Откликнуться', 'vac.select': 'Выберите вакансию (необязательно)',
   },
   kk: {
     'nav.home': 'Басты бет', 'nav.services': 'Қызметтер', 'nav.about': 'Біз туралы', 'nav.news': 'Жаңалықтар', 'nav.contacts': 'Байланыс',
@@ -153,7 +153,7 @@ export const DICT = {
     'partners.form.title': 'Серіктес немесе жеткізуші болу', 'partners.form.sub': 'Өтінім қалдырыңыз — ынтымақтастық ұсынысын қарастырамыз.', 'partners.form.subject': 'Серіктестік / жеткізуші', 'partners.form.msg': 'Компанияңыз бен ұсынысыңыз туралы',
     'careers.form.title': 'Вакансияға өтініш беру', 'careers.form.sub': 'Өзіңіз туралы айтыңыз — ұлттық ауқымдағы командаға қосылыңыз.', 'careers.form.subject': 'Вакансияға өтініш', 'careers.form.msg': 'Өзіңіз туралы қысқаша, қалаған лауазым, резюме/GitHub сілтемесі',
     'careers.cv.pick': 'Түйіндемені тіркеу (PDF, DOC, DOCX · 5 МБ дейін)', 'careers.cv.hint': 'Файл жүктер алдында қауіпсіздікке тексеріледі.', 'careers.cv.type': 'Тек PDF, DOC немесе DOCX рұқсат етілген', 'careers.cv.big': 'Файл 5 МБ-тан үлкен',
-    'vac.eyebrow': 'Вакансиялар', 'vac.title': 'Ашық лауазымдар', 'vac.apply': 'Өтініш беру',
+    'vac.eyebrow': 'Вакансиялар', 'vac.title': 'Ашық лауазымдар', 'vac.apply': 'Өтініш беру', 'vac.select': 'Вакансияны таңдаңыз (міндетті емес)',
   },
   en: {
     'nav.home': 'Home', 'nav.services': 'Services', 'nav.about': 'About', 'nav.news': 'News', 'nav.contacts': 'Contacts',
@@ -230,7 +230,7 @@ export const DICT = {
     'partners.form.title': 'Become a partner or supplier', 'partners.form.sub': 'Leave a request — we’ll review your proposal.', 'partners.form.subject': 'Partnership / supplier', 'partners.form.msg': 'About your company and proposal',
     'careers.form.title': 'Apply for a role', 'careers.form.sub': 'Tell us about yourself — and join a national-scale team.', 'careers.form.subject': 'Job application', 'careers.form.msg': 'A short intro, desired role, link to CV/GitHub',
     'careers.cv.pick': 'Attach CV (PDF, DOC, DOCX · up to 5 MB)', 'careers.cv.hint': 'The file is security-checked before upload.', 'careers.cv.type': 'Only PDF, DOC or DOCX allowed', 'careers.cv.big': 'File is larger than 5 MB',
-    'vac.eyebrow': 'Openings', 'vac.title': 'Open positions', 'vac.apply': 'Apply',
+    'vac.eyebrow': 'Openings', 'vac.title': 'Open positions', 'vac.apply': 'Apply', 'vac.select': 'Choose a position (optional)',
   },
 };
 

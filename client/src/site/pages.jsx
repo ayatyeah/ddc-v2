@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Hero from './Hero.jsx';
 import BuildingShot from './BuildingShot.jsx';
 import Services from './Services.jsx';
@@ -29,9 +30,12 @@ export function NotFoundPage() {
 // Новые разделы архитектуры — типовой лендинг из конфига siteMap
 // Карьера и Партнёрам — лендинг + своя форма-заявка (в админку падает как лид)
 export function CareersPage() {
+  const [vac, setVac] = useState('');
+  const apply = (title) => { setVac(title); setTimeout(() => document.getElementById('lead-form')?.scrollIntoView({ behavior: 'smooth' }), 30); };
   return (<div className="page-top"><SectionLanding sectionKey="careers" hideCta />
-    <Vacancies />
-    <LeadForm subject="careers.form.subject" titleKey="careers.form.title" subKey="careers.form.sub" msgPlaceholderKey="careers.form.msg" kind="career" withFile /></div>);
+    <Vacancies onApply={apply} />
+    <LeadForm subject="careers.form.subject" titleKey="careers.form.title" subKey="careers.form.sub" msgPlaceholderKey="careers.form.msg"
+      kind="career" withFile pickVacancy vacancyValue={vac} onVacancyChange={setVac} /></div>);
 }
 export function PartnersPage() {
   return (<div className="page-top"><SectionLanding sectionKey="partners" hideCta />

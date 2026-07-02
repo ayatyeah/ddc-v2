@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLang } from '../store.js';
 import { t } from '../i18n.js';
-import { sendJSON } from '../api.js';
+import { sendJSON, getJSON } from '../api.js';
 import Reveal from './Reveal.jsx';
 
 const EMPTY = { full_name: '', email: '', phone: '', message: '' };
@@ -17,14 +17,18 @@ const readCv = (file) => new Promise((res, rej) => {
 /* Универсальная inline-форма заявки → /api/leads. subject — тема (напр. «Партнёрство»
    или «Отклик на вакансию»), чтобы в админке было видно источник. title/sub — заголовки.
    withFile+kind — для карьеры: приём CV (проверка типа/размера на клиенте и сервере). */
-export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey, kind, withFile }) {
+export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey, kind, withFile, pickVacancy, vacancyValue, onVacancyChange }) {
   const lang = useLang();
   const [form, setForm] = useState(EMPTY);
   const [cv, setCv] = useState(null);
+  const [vacs, setVacs] = useState([]);
   const [consent, setConsent] = useState(false);
   const [state, setState] = useState('idle');
   const [err, setErr] = useState('');
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // Список вакансий — чтобы кандидат мог выбрать, на какую откликается.
+  useEffect(() => { if (pickVacancy) getJSON('/api/vacancies').then(setVacs).catch(() => setVacs([])); }, [pickVacancy]);
 
   const onCv = (e) => {
     const f = e.target.files?.[0];
@@ -43,9 +47,10 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
     if (!consent) { setErr(t(lang, 'contact.err.consent')); setState('error'); return; }
     setState('sending'); setErr('');
     try {
+      const vac = (pickVacancy && vacancyValue) ? `: ${vacancyValue}` : '';
       const payload = {
         full_name: form.full_name.trim(), email: form.email.trim(), phone: form.phone.trim(),
-        subject: t(lang, subject), message: form.message.trim(),
+        subject: t(lang, subject) + vac, message: form.message.trim(),
       };
       if (kind) payload.kind = kind;
       if (withFile && cv) payload.cv = await readCv(cv);
@@ -73,6 +78,13 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
           </Reveal>
           <Reveal delay={120}>
             <form className="form" onSubmit={submit} noValidate>
+              {pickVacancy && vacs.length > 0 && (
+                <select className="inp" aria-label={t(lang, 'vac.select')} value={vacancyValue || ''}
+                  onChange={(e) => onVacancyChange?.(e.target.value)}>
+                  <option value="">{t(lang, 'vac.select')}</option>
+                  {vacs.map((v) => <option key={v.id} value={v.title}>{v.title}{v.department ? ` — ${v.department}` : ''}</option>)}
+                </select>
+              )}
               <input className="inp" placeholder={t(lang, 'contact.name')} aria-label={t(lang, 'contact.name')}
                 value={form.full_name} onChange={set('full_name')} required autoComplete="name" />
               <div className="row2">
