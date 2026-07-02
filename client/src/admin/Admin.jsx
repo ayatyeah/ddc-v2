@@ -17,9 +17,10 @@ const Analytics = lazy(() => import('./Analytics.jsx'));
 const Users = lazy(() => import('./Users.jsx'));
 const AiPanel = lazy(() => import('./AiPanel.jsx'));
 const Careers = lazy(() => import('./Careers.jsx'));
+const System = lazy(() => import('./System.jsx'));
 
 const ROLE_LABEL = { admin: 'Администратор', manager: 'Начальник отдела', staff: 'Сотрудник', editor: 'Редактор', viewer: 'Просмотр' };
-const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', careers: 'Отклики', services: 'Услуги', news: 'Новости', history: 'История', users: 'Пользователи' };
+const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', careers: 'Отклики', system: 'Система', services: 'Услуги', news: 'Новости', history: 'История', users: 'Пользователи' };
 
 function Ico({ name, size = 20 }) {
   const p = {
@@ -29,6 +30,7 @@ function Ico({ name, size = 20 }) {
     ai: <><circle cx="12" cy="12" r="3.2" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>,
     analytics: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
     careers: <><path d="M4 7h16v13H4z" /><path d="M9 7V4h6v3M4 12h16" /></>,
+    system: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.2" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></>,
     news: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
     services: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" /></>,
     users: <><circle cx="9" cy="8" r="3" /><path d="M3 20a6 6 0 0 1 12 0M16 6.5a3 3 0 0 1 0 5M21 20a5 5 0 0 0-4-4.9" /></>,
@@ -124,6 +126,7 @@ export default function Admin() {
     { id: 'ai', show: aiAccess },
     { id: 'analytics', show: !isStaff },
     { id: 'careers', show: isAdmin || isManager },
+    { id: 'system', show: isAdmin || isManager },
     { id: 'services', show: isAdmin || role === 'editor' || role === 'viewer' },
     { id: 'news', show: isAdmin || role === 'editor' || role === 'viewer' },
     { id: 'history', show: !isStaff },
@@ -166,6 +169,7 @@ export default function Admin() {
             {tab === 'ai' && aiAccess && <AiPanel onAuthLost={() => setState('login')} onOpenLead={(id) => { setFocusLead(id); setTab('leads'); }} />}
             {tab === 'analytics' && !isStaff && <Analytics onAuthLost={() => setState('login')} />}
             {tab === 'careers' && (isAdmin || isManager) && <Careers onAuthLost={() => setState('login')} />}
+            {tab === 'system' && (isAdmin || isManager) && <System onAuthLost={() => setState('login')} />}
             {tab === 'services' && <ServicesManager onAuthLost={() => setState('login')} canEdit={canEditNews} />}
             {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEditNews} />}
             {tab === 'history' && <History onAuthLost={() => setState('login')} />}

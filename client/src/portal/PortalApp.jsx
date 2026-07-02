@@ -9,8 +9,8 @@ import './portal.css';
 
 // Разделы портала (внутренняя соцсеть/интранет). Порядок = порядок в меню.
 const SECTIONS = [
-  { id: 'mission', label: 'Mission Control', icon: 'mission' },
   { id: 'home', label: 'Главная', icon: 'home' },
+  { id: 'mission', label: 'Mission Control', icon: 'mission' },
   { id: 'profile', label: 'Профиль', icon: 'user' },
   { id: 'people', label: 'Сотрудники', icon: 'people' },
   { id: 'calendar', label: 'Календарь', icon: 'calendar' },
@@ -48,7 +48,7 @@ export default function PortalApp() {
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState('mission');
+  const [tab, setTab] = useState('home');
   // На мобиле при открытом диалоге прячем верхнюю панель (мессенджер-стиль).
   const [convOpen, setConvOpen] = useState(false);
   // Боковое меню (на телефоне выезжает слева по бургеру; на десктопе всегда видно).

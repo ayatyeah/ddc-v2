@@ -1198,6 +1198,15 @@ html[data-a11y='on'] .btn-primary { background: #ffe000 !important; color: #000 
 /* Никаких анимаций/переходов и появлений по скроллу — контент сразу виден */
 html[data-a11y='on'] *, html[data-a11y='on'] *::before, html[data-a11y='on'] *::after { animation: none !important; transition: none !important; }
 html[data-a11y='on'] .reveal { opacity: 1 !important; transform: none !important; filter: none !important; }
+/* Контент героя проявляется анимацией (opacity:0 → 1). В a11y анимации отключены — иначе
+   он остаётся невидимым. Форсируем видимость и снимаем градиентную заливку заголовков
+   (иначе текст с background-clip:text остаётся «прозрачным» → пустая чёрная плашка). */
+html[data-a11y='on'] .hero-inner > * { opacity: 1 !important; transform: none !important; }
+html[data-a11y='on'] .hero h1, html[data-a11y='on'] .hero h1 .grad,
+html[data-a11y='on'] .stat .n, html[data-a11y='on'] .about-text {
+  color: #fff !important; -webkit-text-fill-color: #fff !important;
+  background: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important;
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    Полировка: единые мягкие углы + плавные переходы (точечно, без transition:all)
