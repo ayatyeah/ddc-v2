@@ -4,6 +4,7 @@ import { hideSplash } from '../splash.js';
 import ThemeToggle from '../ThemeToggle.jsx';
 import { useLogo } from '../store.js';
 import Mission from './Mission.jsx';
+import Documents from './Documents.jsx';
 import '../admin/admin.css';
 import './portal.css';
 
@@ -134,7 +135,7 @@ export default function PortalApp() {
         {tab === 'people' && <People onAuthLost={onAuthLost} />}
         {tab === 'calendar' && <Stub icon="calendar" title="Календарь" note="Праздники, выходные, отпуска сотрудников, корпоративные мероприятия и дни рождения." />}
         {tab === 'news' && <Stub icon="news" title="Новости" note="Объявления по категориям (HR, IT, Финансы, Компания, Важное) с лайками и комментариями." />}
-        {tab === 'docs' && <Stub icon="docs" title="Документы" note="Шаблоны, регламенты, инструкции, политика безопасности, брендбук, NDA, договоры." />}
+        {tab === 'docs' && <Documents me={me} onAuthLost={onAuthLost} />}
         {tab === 'requests' && <Stub icon="requests" title="Заявки" note="Отпуск, больничный, командировка, справка, закупка, доступ к системе, пропуск — со статусами согласования." />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
         {tab === 'depts' && <Departments onAuthLost={onAuthLost} />}

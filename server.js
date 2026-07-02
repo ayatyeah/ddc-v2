@@ -42,6 +42,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { buildReportPDF, fontsAvailable } = require('./pdfReport');
+const { buildDocPDF } = require('./docPdf');
 
 const app = express();
 const PROD = process.env.NODE_ENV === 'production';
@@ -1341,6 +1342,82 @@ app.get('/api/portal/mission', auth, async (req, res) => {
   } catch (e) { console.error('GET /api/portal/mission:', e.message); res.status(500).json({ error: 'Ошибка телеметрии' }); }
 });
 
+// ── Документы портала: ИИ-генерация + PDF-превью ──────────────────────────────
+const DOC_TYPES = {
+  memo: 'служебная записка', statement: 'заявление', order: 'приказ',
+  letter: 'официальное деловое письмо', explanatory: 'объяснительная записка', request: 'служебный запрос',
+};
+
+app.post('/api/portal/docs/generate', auth, async (req, res) => {
+  const type = DOC_TYPES[req.body?.type] ? req.body.type : 'memo';
+  const to = clip(req.body?.to, 200), subject = clip(req.body?.subject, 300), details = clip(req.body?.details, 3000);
+  if (!subject && !details) return res.status(400).json({ error: 'Укажите тему или суть документа' });
+  try {
+    const prompt = `Ты — помощник делопроизводителя ЦЦР (Центр цифрового развития Нацбанка Казахстана).
+Составь официальный документ на русском языке в деловом стиле. Тип: ${DOC_TYPES[type]}.
+Верни СТРОГО валидный JSON без пояснений:
+{"title": "<краткий заголовок документа>", "body": "<готовый текст: обращение, основной текст, при необходимости пункты; в конце строки [дата] и [подпись]>"}
+Данные:
+- От кого: ${req.admin.u}
+- Кому (адресат): ${to || '—'}
+- Тема: ${subject || '—'}
+- Суть / что изложить: ${details || subject}`;
+    const text = await callGemini(prompt, 1500);
+    const j = parseJsonLoose(text) || {};
+    const cap = DOC_TYPES[type].charAt(0).toUpperCase() + DOC_TYPES[type].slice(1);
+    res.json({ title: clip(j.title, 200) || cap, body: String(j.body || '').slice(0, 12000) });
+  } catch (e) { console.error('POST /api/portal/docs/generate:', e.message); res.status(500).json({ error: 'ИИ недоступен: ' + (e.message || 'ошибка') }); }
+});
+
+app.get('/api/portal/docs', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT id, title, doc_type, author_id, author_name, created_at FROM documents ORDER BY id DESC LIMIT 300`);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/portal/docs:', e.message); res.status(500).json({ error: 'Ошибка чтения документов' }); }
+});
+
+app.post('/api/portal/docs', auth, async (req, res) => {
+  const title = clip(req.body?.title, 200) || 'Документ';
+  const body = String(req.body?.body || '').slice(0, 20000);
+  const doc_type = clip(req.body?.doc_type, 40);
+  if (!body.trim()) return res.status(400).json({ error: 'Пустой документ' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO documents (title, doc_type, body, author_id, author_name) VALUES ($1,$2,$3,$4,$5)
+       RETURNING id, title, doc_type, author_id, author_name, created_at`,
+      [title, doc_type, body, req.admin.id, req.admin.u]);
+    res.status(201).json(rows[0]);
+  } catch (e) { console.error('POST /api/portal/docs:', e.message); res.status(500).json({ error: 'Не удалось сохранить' }); }
+});
+
+// PDF документа: inline для превью в iframe, ?download=1 — на скачивание
+app.get('/api/portal/docs/:id(\\d+)/pdf', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT * FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Документ не найден' });
+    if (!fontsAvailable()) return res.status(500).json({ error: 'Шрифты для PDF не найдены (assets/fonts)' });
+    const d = rows[0];
+    const pdf = await buildDocPDF({ title: d.title, body: d.body, author: d.author_name, date: new Date(d.created_at).toLocaleDateString('ru-RU') });
+    const dl = req.query.download === '1';
+    const safe = String(d.title || 'Документ').replace(/[\r\n"]+/g, '_').slice(0, 80);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `${dl ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(safe)}.pdf`);
+    res.send(pdf);
+  } catch (e) { console.error('GET /api/portal/docs/pdf:', e.message); res.status(500).json({ error: 'Не удалось сформировать PDF' }); }
+});
+
+app.delete('/api/portal/docs/:id(\\d+)', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT author_id FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    const canDel = rows[0].author_id === req.admin.id || ['admin', 'manager'].includes(req.admin.role);
+    if (!canDel) return res.status(403).json({ error: 'Удалять можно только свои документы' });
+    await db.query(`DELETE FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    res.json({ ok: true });
+  } catch (e) { console.error('DELETE /api/portal/docs:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
+});
+
 // ── Рабочие задачи ──
 app.get('/api/portal/tasks', auth, async (req, res) => {
   try {
@@ -2079,7 +2156,31 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        lang       TEXT NOT NULL DEFAULT '',
        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
      );
-     CREATE INDEX IF NOT EXISTS idx_pageviews_created ON pageviews (created_at DESC);`
+     CREATE INDEX IF NOT EXISTS idx_pageviews_created ON pageviews (created_at DESC);
+     -- Документы портала (ИИ-генерация)
+     CREATE TABLE IF NOT EXISTS documents (
+       id          SERIAL PRIMARY KEY,
+       title       TEXT NOT NULL DEFAULT 'Документ',
+       doc_type    TEXT NOT NULL DEFAULT '',
+       body        TEXT NOT NULL DEFAULT '',
+       author_id   INTEGER,
+       author_name TEXT NOT NULL DEFAULT '',
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     -- Заявки сотрудников (отпуск/справка/доступ и т.п.) со статусами согласования
+     CREATE TABLE IF NOT EXISTS requests (
+       id           SERIAL PRIMARY KEY,
+       kind         TEXT NOT NULL DEFAULT '',
+       title        TEXT NOT NULL DEFAULT '',
+       body         TEXT NOT NULL DEFAULT '',
+       status       TEXT NOT NULL DEFAULT 'created',
+       author_id    INTEGER,
+       author_name  TEXT NOT NULL DEFAULT '',
+       reviewer_id  INTEGER,
+       decided_by   TEXT NOT NULL DEFAULT '',
+       decided_at   TIMESTAMPTZ,
+       created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+     );`
   ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
    .catch((e) => console.error('Авто-миграция:', e.message));

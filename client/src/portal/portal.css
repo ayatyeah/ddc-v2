@@ -177,6 +177,35 @@
 .pt-person-t b { font-size: 14.5px; }
 .pt-person-t small { font-size: 12px; color: var(--ink-faint); }
 
+/* Документы */
+.pt-new-ghost { margin-left: auto; background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+.pt-docs { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.pt-doc-card { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px 6px 6px; }
+.pt-doc-open { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; text-align: left; background: transparent; border: none; padding: 8px; border-radius: 10px; cursor: pointer; color: var(--ink); }
+.pt-doc-open:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.pt-doc-ic { flex: none; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.pt-doc-t { display: flex; flex-direction: column; min-width: 0; }
+.pt-doc-t b { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-doc-t small { font-size: 12px; color: var(--ink-faint); }
+
+.pt-doc-form { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.pt-doc-lab { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-soft); }
+.pt-doc-details { min-height: 120px; resize: vertical; font-family: inherit; }
+.pt-doc-gen-h { font-size: 13px; color: var(--ink-faint); margin-bottom: 4px; }
+.pt-doc-gen { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+.pt-doc-title { font-weight: 600; font-size: 16px; }
+.pt-doc-body { flex: 1; min-height: 300px; resize: vertical; font-family: var(--mono); font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; }
+.pt-doc-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+/* Предпросмотр PDF (iframe) */
+.pt-docview { padding: 0; }
+.pt-doc-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
+.pt-doc-bar-t { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pt-doc-bar-t b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-doc-bar-t small { font-size: 11.5px; color: var(--ink-faint); }
+.pt-doc-dl { flex: none; text-decoration: none; }
+.pt-doc-frame { flex: 1; width: 100%; border: none; background: #525659; }
+
 /* Заглушка раздела */
 .pt-stub { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; color: var(--ink-soft); padding: 40px 24px; }
 .pt-stub-ico { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); margin-bottom: 6px; }
