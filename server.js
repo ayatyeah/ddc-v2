@@ -204,6 +204,7 @@ app.use('/api', (req, res, next) => {
 const limiterOpts = { standardHeaders: true, legacyHeaders: false };
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, ...limiterOpts });
 const formLimiter  = rateLimit({ windowMs: 60 * 1000, max: 10, ...limiterOpts });
+const trackLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, ...limiterOpts });   // веб-аналитика: часто, но с потолком
 
 // ── Авторизация ───────────────────────────────────────────────────────────────
 // Присутствие «онлайн»: обновляем users.last_seen не чаще раза в 45с на пользователя
@@ -355,6 +356,34 @@ app.post('/api/leads', formLimiter, async (req, res) => {
   }
 });
 
+// ── Публичные вакансии (для страницы «Карьера») ───────────────────────────────
+app.get('/api/vacancies', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, title, department, location, employment, description, created_at
+         FROM vacancies WHERE published = TRUE ORDER BY sort_order, id DESC LIMIT 100`);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/vacancies:', e.message); res.status(500).json({ error: 'Ошибка чтения вакансий' }); }
+});
+
+// ── Веб-аналитика: приём просмотра страницы (устройство — по User-Agent) ───────
+function deviceFromUA(ua) {
+  ua = ua || '';
+  if (/iPad|Tablet|PlayBook|Silk|(Android(?!.*Mobile))/i.test(ua)) return 'tablet';
+  if (/Mobi|Android|iPhone|iPod|Windows Phone|IEMobile|BlackBerry|Opera Mini/i.test(ua)) return 'mobile';
+  return 'desktop';
+}
+app.post('/api/track', trackLimiter, async (req, res) => {
+  try {
+    const p = clip(req.body?.path, 300) || '/';
+    if (p.startsWith('/admin') || p.startsWith('/portal')) return res.status(204).end();   // считаем только публичный сайт
+    await db.query(
+      `INSERT INTO pageviews (path, ref, device, lang) VALUES ($1,$2,$3,$4)`,
+      [p, clip(req.body?.ref, 300), deviceFromUA(req.get('user-agent')), clip(req.body?.lang, 8)]);
+    res.status(204).end();
+  } catch { res.status(204).end(); }   // аналитика никогда не должна ломать UX
+});
+
 // ── Публичные новости (только опубликованные) ─────────────────────────────────
 const NEWS_COLS = `id, title_ru, title_kk, title_en, excerpt_ru, excerpt_kk, excerpt_en,
                    body_ru, body_kk, body_en, color, image, image_fit, image_pos, news_date, published,
@@ -393,7 +422,8 @@ app.get('/api/news/:id(\\d+)', async (req, res) => {
 // ── Админ: список клиентов ────────────────────────────────────────────────────
 app.get('/api/leads', auth, async (req, res) => {
   const { status, q } = req.query;
-  const where = [];
+  // Отклики на вакансии (kind='career') сюда НЕ попадают — они в разделе «Отклики».
+  const where = [`COALESCE(l.kind, '') <> 'career'`];
   const params = [];
   // Изоляция сотрудника: staff видит ТОЛЬКО назначенные ему лиды (проверка на бэкенде,
   // а не только скрытием в UI). Остальные роли видят всё.
@@ -437,7 +467,7 @@ app.get('/api/leads', auth, async (req, res) => {
 app.get('/api/stats', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT status, COUNT(*)::int AS count FROM leads GROUP BY status`
+      `SELECT status, COUNT(*)::int AS count FROM leads WHERE COALESCE(kind,'') <> 'career' GROUP BY status`
     );
     const byStatus = Object.fromEntries(ALLOWED_STATUSES.map(s => [s, 0]));
     let total = 0;
@@ -1143,6 +1173,73 @@ app.post('/api/admin/careers/:id(\\d+)/analyze', auth, requireRole('admin', 'man
     console.error('POST /api/admin/careers/analyze:', e.message);
     res.status(500).json({ error: 'ИИ недоступен: ' + (e.message || 'ошибка') });
   }
+});
+
+// ── Админ: управление вакансиями ──────────────────────────────────────────────
+app.get('/api/admin/vacancies', auth, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, title, department, location, employment, description, published, sort_order, created_at
+         FROM vacancies ORDER BY sort_order, id DESC`);
+    res.json(rows);
+  } catch (e) { console.error('GET /api/admin/vacancies:', e.message); res.status(500).json({ error: 'Ошибка чтения' }); }
+});
+app.post('/api/admin/vacancies', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const b = req.body || {};
+  const title = clip(b.title, 200);
+  if (!title) return res.status(400).json({ error: 'Укажите название вакансии' });
+  try {
+    const { rows: mx } = await db.query(`SELECT COALESCE(max(sort_order), -1) + 1 AS n FROM vacancies`);
+    const { rows } = await db.query(
+      `INSERT INTO vacancies (title, department, location, employment, description, published, sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [title, clip(b.department, 120), clip(b.location, 120) || 'Астана', clip(b.employment, 120) || 'Полная занятость',
+       clip(b.description, 4000), b.published !== false, mx[0].n]);
+    logAudit(req, 'vacancy', rows[0].id, 'create', `Создана вакансия «${title}»`);
+    res.status(201).json(rows[0]);
+  } catch (e) { console.error('POST /api/admin/vacancies:', e.message); res.status(500).json({ error: 'Не удалось создать' }); }
+});
+app.patch('/api/admin/vacancies/:id(\\d+)', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const id = Number(req.params.id), b = req.body || {};
+  const set = [], vals = [];
+  for (const [k, max] of [['title', 200], ['department', 120], ['location', 120], ['employment', 120], ['description', 4000]]) {
+    if (k in b) { set.push(`${k} = $${set.length + 1}`); vals.push(clip(b[k], max)); }
+  }
+  if ('published' in b) { set.push(`published = $${set.length + 1}`); vals.push(!!b.published); }
+  if ('sort_order' in b) { set.push(`sort_order = $${set.length + 1}`); vals.push(Number(b.sort_order) || 0); }
+  if (!set.length) return res.status(400).json({ error: 'Нечего обновлять' });
+  vals.push(id);
+  try {
+    const { rows } = await db.query(`UPDATE vacancies SET ${set.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    if (!rows.length) return res.status(404).json({ error: 'Вакансия не найдена' });
+    res.json(rows[0]);
+  } catch (e) { console.error('PATCH /api/admin/vacancies:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
+});
+app.delete('/api/admin/vacancies/:id(\\d+)', auth, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const { rowCount } = await db.query(`DELETE FROM vacancies WHERE id = $1`, [Number(req.params.id)]);
+    if (!rowCount) return res.status(404).json({ error: 'Вакансия не найдена' });
+    logAudit(req, 'vacancy', Number(req.params.id), 'delete', 'Удалена вакансия');
+    res.json({ ok: true });
+  } catch (e) { console.error('DELETE /api/admin/vacancies:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
+});
+
+// ── Админ: сводка веб-аналитики сайта ─────────────────────────────────────────
+app.get('/api/admin/analytics/site', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const days = Math.min(90, Math.max(7, Number(req.query.days) || 14));
+  try {
+    const [total, byDay, topPages, byDevice, byLang] = await Promise.all([
+      db.query(`SELECT count(*)::int AS total,
+                       count(*) FILTER (WHERE created_at > now() - interval '24 hours')::int AS today,
+                       count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS week FROM pageviews`),
+      db.query(`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS d, count(*)::int AS c
+                  FROM pageviews WHERE created_at > now() - ($1 || ' days')::interval GROUP BY 1 ORDER BY 1`, [days]),
+      db.query(`SELECT path, count(*)::int AS c FROM pageviews GROUP BY path ORDER BY c DESC LIMIT 12`),
+      db.query(`SELECT device, count(*)::int AS c FROM pageviews GROUP BY device ORDER BY c DESC`),
+      db.query(`SELECT lang, count(*)::int AS c FROM pageviews WHERE lang <> '' GROUP BY lang ORDER BY c DESC LIMIT 6`),
+    ]);
+    res.json({ total: total.rows[0], byDay: byDay.rows, topPages: topPages.rows, byDevice: byDevice.rows, byLang: byLang.rows, days });
+  } catch (e) { console.error('GET /api/admin/analytics/site:', e.message); res.status(500).json({ error: 'Ошибка аналитики' }); }
 });
 
 // ── Правка / удаление своего сообщения (мессенджер-фичи) ──
@@ -1929,7 +2026,29 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        fit_score  INTEGER,
        verdict    JSONB NOT NULL DEFAULT '{}'::jsonb,
        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-     );`
+     );
+     -- Вакансии для страницы «Карьера» (управляются из админки)
+     CREATE TABLE IF NOT EXISTS vacancies (
+       id          SERIAL PRIMARY KEY,
+       title       TEXT NOT NULL,
+       department  TEXT NOT NULL DEFAULT '',
+       location    TEXT NOT NULL DEFAULT 'Астана',
+       employment  TEXT NOT NULL DEFAULT 'Полная занятость',
+       description TEXT NOT NULL DEFAULT '',
+       published   BOOLEAN NOT NULL DEFAULT TRUE,
+       sort_order  INTEGER NOT NULL DEFAULT 0,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     -- Простая веб-аналитика (просмотры страниц сайта + устройство)
+     CREATE TABLE IF NOT EXISTS pageviews (
+       id         SERIAL PRIMARY KEY,
+       path       TEXT NOT NULL DEFAULT '',
+       ref        TEXT NOT NULL DEFAULT '',
+       device     TEXT NOT NULL DEFAULT 'desktop',
+       lang       TEXT NOT NULL DEFAULT '',
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE INDEX IF NOT EXISTS idx_pageviews_created ON pageviews (created_at DESC);`
   ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
    .catch((e) => console.error('Авто-миграция:', e.message));

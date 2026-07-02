@@ -53,6 +53,16 @@ export default function Site() {
 
   useEffect(() => { hideSplash(); }, []);   // контент сайта смонтирован — убираем загрузочный экран
 
+  // Веб-аналитика: фиксируем просмотр страницы при каждой смене маршрута (устройство определит сервер по UA).
+  useEffect(() => {
+    try {
+      fetch('/api/track', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+        body: JSON.stringify({ path, lang: document.documentElement.lang || '', ref: document.referrer || '' }),
+      }).catch(() => {});
+    } catch { /* аналитика не критична */ }
+  }, [path]);
+
   // Новая страница всегда открывается сверху (мгновенно, без smooth — переход маскирует прыжок).
   useEffect(() => { try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch { window.scrollTo(0, 0); } }, [path]);
 

@@ -12,6 +12,7 @@ import CtaBand from './CtaBand.jsx';
 import NotFound from './NotFound.jsx';
 import SectionLanding from './SectionLanding.jsx';
 import LeadForm from './LeadForm.jsx';
+import Vacancies from './Vacancies.jsx';
 
 export function HomePage() {
   return (<><Hero /><Stats /><div className="page-soft"><News /></div></>);
@@ -29,6 +30,7 @@ export function NotFoundPage() {
 // Карьера и Партнёрам — лендинг + своя форма-заявка (в админку падает как лид)
 export function CareersPage() {
   return (<div className="page-top"><SectionLanding sectionKey="careers" hideCta />
+    <Vacancies />
     <LeadForm subject="careers.form.subject" titleKey="careers.form.title" subKey="careers.form.sub" msgPlaceholderKey="careers.form.msg" kind="career" withFile /></div>);
 }
 export function PartnersPage() {

@@ -59,7 +59,7 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
   const btnLabel = state === 'sending' ? t(lang, 'contact.sending') : state === 'sent' ? t(lang, 'contact.sent') : state === 'error' ? err : t(lang, 'contact.send');
 
   return (
-    <section className="section leadform-sec">
+    <section className="section leadform-sec" id="lead-form">
       <div className="wrap">
         <div className="contact-grid">
           <Reveal>
