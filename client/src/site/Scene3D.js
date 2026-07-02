@@ -42,9 +42,9 @@ export function initScene(canvas) {
   renderer.toneMappingExposure = 1.13;        // чуть больше свечения/«воздуха» в кадре
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xdfe8f5, 0.0022);      // тоньше туман — плоский «иллюстративный» вид
+  scene.fog = new THREE.FogExp2(0xdfe8f5, 0.004);
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = null;                              // без отражений окружения — плоско, как 2D-иллюстрация
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 600);
 
@@ -57,14 +57,10 @@ export function initScene(canvas) {
   spot.position.set(8, 72, 40); spot.target.position.set(0, 12, -9);
   scene.add(spot); scene.add(spot.target);
 
-  // Плоские (unlit) материалы — без бликов/металла/теней: сцена читается как 2D-иллюстрация.
-  const metal = (c = 0xc7d0e0) => new THREE.MeshBasicMaterial({ color: c });
-  const matte = (c) => new THREE.MeshBasicMaterial({ color: c });
-  const emis = (c) => new THREE.MeshBasicMaterial({ color: c });
+  const metal = (c = 0xd8dde6) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.8, roughness: 0.3, envMapIntensity: 1.2 });
+  const matte = (c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.2, roughness: 0.65 });
+  const emis = (c, i = 0.6) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i, roughness: 0.5 });
   const box = (w, h, d, m, r = 0.1) => new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 2, r), m);
-  // Контур по рёбрам — ключ к «векторному 2D»-виду (плоская заливка + линия).
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x14264f, transparent: true, opacity: 0.55 });
-  const addEdges = (mesh, angle = 32) => { try { mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle), edgeMat)); } catch { /* нет geometry */ } };
 
   const TL = new THREE.TextureLoader();
   const facadeTex = (url, rx, ry) => { const t = TL.load(url); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 4; return t; };
@@ -82,23 +78,24 @@ export function initScene(canvas) {
     // Стекло башен светится собственным цветом фасада (emissiveMap = текстура): окна и
     // синева стекла «горят» изнутри, как на ночном референсе, а не выглядят блекло.
     // Лёгкий холодный тон + чуть глаже стекло -> насыщеннее синева и чётче блики.
-    // Плоское «стекло»: две флэт-заливки (тело + чуть светлее верх через градиент фасада как map),
-    // без бликов/отражений — читается как нарисованная башня.
-    const towerMat = (tex) => new THREE.MeshBasicMaterial({ map: tex, color: 0x7f9ad0 });
+    const towerMat = (tex) => new THREE.MeshStandardMaterial({
+      map: tex, color: 0x5c6a86, roughness: 0.22, metalness: 0.42, envMapIntensity: 1.1,   // тёмное стекло, но с подсветкой
+      emissive: 0xbfe6ff, emissiveMap: tex, emissiveIntensity: 0.72,                        // окна светятся ярче (тёплая синева)
+    });
     const tower = (w, d, h, x, tex) => {
       const tg = new THREE.Group();
-      const body = box(w, h, d, towerMat(tex), 0.1); body.position.y = h / 2; tg.add(body); addEdges(body);
-      const finMat = metal(0x9fb0cf);
+      const body = box(w, h, d, towerMat(tex), 0.1); body.position.y = h / 2; tg.add(body);
+      const finMat = metal(0xaab6c8);
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.22, h, 0.22), finMat); fin.position.set(sx * (w / 2), h / 2, sz * (d / 2)); tg.add(fin); }
-      const crown = box(w + 0.4, 1.2, d + 0.4, matte(0xe6ecf6), 0.1); crown.position.y = h + 0.6; tg.add(crown); addEdges(crown);
+      const crown = box(w + 0.4, 1.2, d + 0.4, matte(0xdfe4ec), 0.1); crown.position.y = h + 0.6; tg.add(crown);
       tg.position.x = x; return tg;
     };
     // Башни с уверенным широким силуэтом (h/w ≈ 2.7) — не вытянутые «спички».
     gTowers.add(tower(9.5, 9.5, 26, -7, facadeA));
     gTowers.add(tower(10.5, 10.5, 29, 6.5, facadeB));
     // Синий подиум, посаженный прямо на карту (тонкая плита у поверхности)
-    const podium = box(26, 1.6, 14, matte(0x1c4f8e), 0.2); podium.position.y = 0.8; gTowers.add(podium); addEdges(podium);
-    const podiumTop = box(22, 0.4, 11, emis(0x3a7fd6), 0.2); podiumTop.position.y = 1.7; gTowers.add(podiumTop);
+    const podium = box(26, 1.6, 14, matte(0x1c4f8e), 0.2); podium.position.y = 0.8; gTowers.add(podium);
+    const podiumTop = box(22, 0.4, 11, emis(0x3a7fd6, 0.62), 0.2); podiumTop.position.y = 1.7; gTowers.add(podiumTop);
     const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 3, 10), metal()); mast.position.set(6.5, 30.6, 0); gTowers.add(mast);
     beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0x7ad6ff, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
 
@@ -258,9 +255,11 @@ export function initScene(canvas) {
 
     // Цвет берём из вершинных цветов (физическая карта по географии). Матовая суша + рельеф
     // под светом; синяя неон-граница обрамляет «землю», как на рельефной карте.
-    // Плоская суша: заливка из вершинных цветов (география), без рельефа/бликов/эмиссии —
-    // читается как нарисованная карта. Боковую грань плиты подчёркиваем контуром.
-    const mapMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, transparent: true, opacity: 1 });
+    const mapMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.55,
+      metalness: 0.14, roughness: 0.88, emissive: 0x10254e, emissiveIntensity: 0.3,
+      transparent: true, opacity: 1,
+    });
     mapMat.userData = { baseOp: 0.96 };
     const mapMesh = new THREE.Mesh(extrude, mapMat); mapMesh.position.y = -1.4; gMap.add(mapMesh); mapMats.push(mapMat);
 
@@ -454,7 +453,10 @@ export function initScene(canvas) {
       bevelEnabled: true, bevelThickness: depth * 0.12, bevelSize: depth * 0.08, bevelSegments: 1,
     });
     geo.translate(-cxf, -cyf, 0); geo.scale(s, s, s); geo.rotateX(-Math.PI / 2); geo.translate(0, TEXT_Y, 0);
-    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x2b5fb0, transparent: true, opacity: 0 });  // плоская заливка букв DDC
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x12386e, metalness: 0.55, roughness: 0.32, envMapIntensity: 1.0,
+      emissive: 0x0a2452, emissiveIntensity: 0.45, transparent: true, opacity: 0,
+    });
     bodyMat.userData = { baseOp: 1 };
     const mesh = new THREE.Mesh(geo, bodyMat); mesh.renderOrder = 6; ddcGroup.add(mesh); ddcMeshMats.push(bodyMat);
 
