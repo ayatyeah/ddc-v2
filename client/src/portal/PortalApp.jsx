@@ -9,6 +9,7 @@ import Requests from './Requests.jsx';
 import Calendar from './Calendar.jsx';
 import PortalNews from './PortalNews.jsx';
 import PortalBell from './PortalBell.jsx';
+import VoiceAgent from './VoiceAgent.jsx';
 import '../admin/admin.css';
 import './portal.css';
 
@@ -153,6 +154,9 @@ export default function PortalApp() {
         {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
         {tab === 'chat' && <Chats me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
       </main>
+
+      {/* Голосовой ассистент — плавающая кнопка, доступен из любого раздела */}
+      <VoiceAgent onGo={goTab} me={me} />
     </div>
   );
 }

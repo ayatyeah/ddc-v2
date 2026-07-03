@@ -1953,6 +1953,85 @@ function parseJsonLoose(text) {
   return null;
 }
 
+// ── OpenAI (голосовые команды портала: NLU — разбор фразы в структурную команду) ─────
+const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.5-mini';
+async function callOpenAI(system, user) {
+  if (!OPENAI_KEY) throw new Error('Не задан OPENAI_API_KEY в .env');
+  // Тело минимальное (без temperature/max_tokens) — совместимо с разными версиями моделей.
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_KEY}` },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      response_format: { type: 'json_object' },
+    }),
+  });
+  if (!r.ok) { const tx = await r.text(); throw new Error(`OpenAI ${r.status}: ${tx.slice(0, 300)}`); }
+  const j = await r.json();
+  return j?.choices?.[0]?.message?.content || '';
+}
+
+// Голосовой ассистент: превращает фразу в список действий (исполняет их фронт через уже
+// существующие эндпоинты — там же соблюдаются права роли). Возвращает {say, actions}.
+const ASSIST_SYSTEM = `Ты — голосовой ассистент корпоративного портала DDC. Пользователь диктует команду на русском. Верни СТРОГО JSON вида {"say":"короткое подтверждение на русском","actions":[...]}.
+Доступные действия (поле type):
+- {"type":"navigate","tab":"home|calendar|news|docs|requests|tasks|people|depts|dm|chat|profile|mission"} — открыть раздел портала.
+- {"type":"create_event","title":"...","date":"YYYY-MM-DD","time":"HH:MM или null","kind":"meeting|presentation|other"} — добавить событие в календарь.
+- {"type":"create_task","title":"...","priority":"low|normal|high|urgent","due_date":"YYYY-MM-DD или null"} — создать задачу.
+- {"type":"create_news","title":"...","body":"...","category":"company|hr|it|finance|event"} — опубликовать внутреннюю новость.
+- {"type":"none"} — если команда непонятна (в say объясни, что не понял).
+Сегодня {DATE}, год по умолчанию {YEAR}. Дату без года трактуй как ближайшую будущую. В одной команде может быть несколько действий (например «открой календарь и впиши встречу на 3 июля» = navigate + create_event). Отвечай только JSON, без пояснений и markdown.`;
+
+// Разбор текста команды в действия (gpt-5-mini — «мозг»).
+async function parseCommand(text) {
+  const now = new Date();
+  const sys = ASSIST_SYSTEM.replace('{DATE}', now.toISOString().slice(0, 10)).replace('{YEAR}', String(now.getFullYear()));
+  const raw = await callOpenAI(sys, text);
+  const parsed = parseJsonLoose(raw) || {};
+  return { say: String(parsed.say || '').slice(0, 300), actions: Array.isArray(parsed.actions) ? parsed.actions.slice(0, 6) : [], text };
+}
+
+// Распознавание речи (аудио → текст) через gpt-4o-mini-transcribe — «уши».
+const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe';
+async function transcribeAudio(buf, mime) {
+  if (!OPENAI_KEY) throw new Error('Не задан OPENAI_API_KEY в .env');
+  const ext = /wav/.test(mime) ? 'wav' : /mp4|m4a|mpeg|mpga/.test(mime) ? 'mp4' : /ogg/.test(mime) ? 'ogg' : 'webm';
+  const fd = new FormData();
+  fd.append('file', new Blob([buf], { type: mime || 'audio/webm' }), `audio.${ext}`);
+  fd.append('model', OPENAI_TRANSCRIBE_MODEL);
+  fd.append('language', 'ru');
+  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST', headers: { Authorization: `Bearer ${OPENAI_KEY}` }, body: fd,
+  });
+  if (!r.ok) { const tx = await r.text(); throw new Error(`Transcribe ${r.status}: ${tx.slice(0, 300)}`); }
+  const j = await r.json();
+  return String(j.text || '').trim();
+}
+
+// Команда текстом (фолбэк / ручной ввод).
+app.post('/api/assistant/command', auth, async (req, res) => {
+  const text = clip(req.body?.text, 500);
+  if (!text) return res.status(400).json({ error: 'Пустая команда' });
+  try { res.json(await parseCommand(text)); }
+  catch (e) { console.error('POST /api/assistant/command:', e.message); res.status(502).json({ error: 'Ассистент недоступен: ' + (e.message || 'ошибка') }); }
+});
+
+// Голосовая команда: аудио (base64 data-URL) → транскрипция → разбор в действия.
+app.post('/api/assistant/voice', auth, async (req, res) => {
+  const dataUrl = String(req.body?.audio || '');
+  const m = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl);
+  if (!m) return res.status(400).json({ error: 'Нет аудио' });
+  const mime = m[1], buf = Buffer.from(m[2], 'base64');
+  if (!buf.length || buf.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Некорректное аудио' });
+  try {
+    const text = await transcribeAudio(buf, mime);
+    if (!text) return res.json({ text: '', say: 'Не расслышал. Повторите, пожалуйста.', actions: [] });
+    res.json(await parseCommand(text));
+  } catch (e) { console.error('POST /api/assistant/voice:', e.message); res.status(502).json({ error: 'Ассистент недоступен: ' + (e.message || 'ошибка') }); }
+});
+
 function leadsSignature(rows) {
   const crypto = require('crypto');
   const parts = rows.map((r) => `${r.id}:${r.status}:${r.rating}:${new Date(r.updated_at).getTime()}`);
