@@ -1492,11 +1492,37 @@ html.lenis, html.lenis body { height: auto; }
 }
 
 @media (max-width: 760px) {
-  /* Фон легче для GPU: убираем самый тяжёлый полноэкранный blur и упрощаем планету. */
-  #scroll-aurora { display: none; }                          /* полноэкранный blur — дорого */
-  #scroll-depth { animation: none; }                         /* звёзды статичны — дешевле */
-  #bg-planet { box-shadow: 0 0 50px rgba(70, 130, 230, 0.20); }  /* меньше радиус размытия */
-  #bg-planet::before, #bg-planet::after { display: none; }   /* без орбитальных колец на телефоне */
+  /* ТЕЛЕФОН: раздеваем фон до одной 3D-сцены + неба. Все декоративные слои (аврора,
+     планета, звёзды/глубина, зерно) убираются полностью — каждый из них перекомпоновывался
+     на каждом кадре скролла и давал сильные фризы при быстрой прокрутке. */
+  #scroll-aurora,
+  #bg-planet,
+  #scroll-depth,
+  #scroll-grain { display: none !important; }
+
+  /* Размытые «орбы» в герое (filter: blur(60px)) двигались с параллаксом на каждом кадре
+     скролла — дорогой репейнт большого размытого слоя → фризы. На телефоне убираем совсем.
+     И снимаем параллакс-сдвиг с текста — пусть статичен (дешевле, без композитинга на скролле). */
+  .hero-orbs { display: none !important; }
+  .hero-inner { transform: none !important; }
+
+  /* Мягкая виньетка по краям экрана — обрамляет сцену (по просьбе «добавь края экрана»).
+     Чистый CSS-градиент поверх канваса, без композитинга на скролле (fixed, не двигается). */
+  #scroll-bg::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -2;              /* над сценой (#bg3d = -3), под контентом */
+    pointer-events: none;
+    background:
+      radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.28) 100%),
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0%, transparent 16%, transparent 82%, rgba(0, 0, 0, 0.30) 100%);
+  }
+  [data-theme='light'] #scroll-bg::after {
+    background:
+      radial-gradient(120% 90% at 50% 42%, transparent 58%, rgba(20, 40, 90, 0.12) 100%),
+      linear-gradient(to bottom, rgba(20, 40, 90, 0.10) 0%, transparent 16%, transparent 84%, rgba(20, 40, 90, 0.14) 100%);
+  }
 }
 
 /* ════════════════ UX: 404, CTA-бэнд, скелетоны загрузки ════════════════ */

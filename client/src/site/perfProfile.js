@@ -48,7 +48,10 @@ try {
 // blink/webkit — полное качество; gecko (Firefox) — ниже ради стабильного FPS; телефон —
 // заметно ниже (меньше пикселей = глаже скролл); слабые устройства — ещё ниже. Поверх
 // этого адаптивный DPR в сцене ещё опускает качество при реальных просадках FPS.
-const dprCap = lowPower ? 1.1 : mobile ? 1.35 : engine === 'gecko' ? 1.3 : 1.75;
+// Телефон держим на ВЫСОКОМ разрешении (2×) — «мыло» уходит. Раньше стоял 1.35 + адаптивное
+// понижение, и iOS-троттлинг rAF во время скролла ложно принимался за слабый GPU → DPR падал
+// в пол → размытая картинка. Теперь на мобиле DPR фиксирован (см. Scene3D — адаптив выключен).
+const dprCap = lowPower ? 1.35 : mobile ? 2.0 : engine === 'gecko' ? 1.3 : 1.75;
 const antialias = !(lowPower || mobile || engine === 'gecko');
 
 // Метки на <html> — их используют per-engine/per-browser правила в styles.css
@@ -59,4 +62,4 @@ try {
 
 // offthread выставляется в true из scene.worker.js (рендер в Web Worker): в этом режиме
 // сцена не снижает DPR/качество под fps — главный поток свободен, скролл плавный.
-export const perf = { engine, browser, lowPower, dprCap, antialias, offthread: false };
+export const perf = { engine, browser, lowPower, mobile, dprCap, antialias, offthread: false };

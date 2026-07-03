@@ -10,7 +10,6 @@ import Fog from './Fog.jsx';
 import OrnamentField from './OrnamentField.jsx';
 import CircuitField from './CircuitField.jsx';
 import FogShader from './FogShader.jsx';
-import MobileBackground from './MobileBackground.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
@@ -165,24 +164,24 @@ export default function Site() {
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="bg-planet" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
-      {/* Процедурный туман (шейдер) — только десктоп, чтобы не грузить телефон. Контуры
-          микросхем (SVG/CSS с параллаксом) — на всех. Оба слоя ЗА 3D-сценой. */}
+      {/* ДЕКОРАТИВНЫЕ СЛОИ (туман, контуры микросхем, частицы, облака, орнаменты) — ТОЛЬКО
+          ДЕСКТОП. На телефоне каждый такой слой переспрашивает композитинг на КАЖДОМ кадре
+          скролла (параллакс через --sy) → сильные фризы при быстрой прокрутке. Поэтому на
+          мобиле оставляем одну 3D-сцену и небо — больше ничего. */}
       {!isMobile && !lowPower && !a11y && <FogShader />}
-      {!a11y && <CircuitField />}
-      {/* Десктоп — полная 3D-сцена; телефон — лёгкий 2D-канвас (плавно, без лагов). */}
-      {!a11y && (isMobile ? (
-        <MobileBackground />
-      ) : (
+      {!isMobile && !a11y && <CircuitField />}
+      {/* 3D-сцена DDC — на ВСЕХ устройствах, включая телефон (по просьбе: только сцена, качество высокое). */}
+      {!a11y && (
         <ErrorBoundary fallback={null}>
           <Suspense fallback={null}>
             <Background3D onReady={onReady} />
           </Suspense>
         </ErrorBoundary>
-      ))}
-      {/* Немного мелких частиц на фоне (лёгкий слой). Тяжёлый DataFlow отключён ради плавности. */}
+      )}
+      {/* Мелкие частицы, облака, орнаменты — тоже только десктоп. */}
       {!isMobile && !lowPower && !a11y && <Particles />}
-      {!a11y && <Fog />}
-      {!a11y && <OrnamentField />}
+      {!isMobile && !a11y && <Fog />}
+      {!isMobile && !a11y && <OrnamentField />}
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
       <Brand />

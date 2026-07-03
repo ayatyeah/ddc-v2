@@ -561,9 +561,12 @@ export function initScene(canvas) {
     // На Firefox (gecko) снижаем РАНЬШЕ и до меньшего пола — приоритет высокому/ровному FPS.
     perfAcc += rawDt; perfN++;
     if (t - perfT > 0.7 && perfN > 8) {
-      // В off-thread режиме (рендер в Web Worker) НЕ снижаем DPR/качество: главный поток
-      // свободен, скролл плавный при любом fps рендера — держим чёткую картинку (без «мыла»).
-      if (!perf.offthread) {
+      // Не снижаем DPR/качество, когда:
+      //  • off-thread (Web Worker) — главный поток свободен;
+      //  • ТЕЛЕФОН — там просадки fps дают не GPU, а троттлинг rAF от iOS во время скролла.
+      //    Если реагировать на них понижением DPR, картинка навсегда уходит в «мыло». Держим
+      //    фиксированное высокое разрешение (сцена мелкая, GPU телефона рисует её за ~3 мс).
+      if (!perf.offthread && !perf.mobile) {
         const avg = perfAcc / perfN;                                   // средняя длительность кадра, сек
         const maxDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
         const lowerAt = perf.engine === 'gecko' ? 0.0182 : 0.025;      // gecko: реагируем уже на ~55fps
