@@ -1298,7 +1298,8 @@ app.delete('/api/portal/messages/:id(\\d+)', auth, async (req, res) => {
 });
 
 // ── Mission Control: сводная телеметрия портала ───────────────────────────────
-app.get('/api/portal/mission', auth, async (req, res) => {
+// Mission Control доступен не всем — только админу и начальникам отделов (manager).
+app.get('/api/portal/mission', auth, requireRole('admin', 'manager'), async (req, res) => {
   try {
     const [online, users, msgs, tasks, chats, files, actMsg, actTask, actFile, actAudit] = await Promise.all([
       db.query(`SELECT id, full_name, username, department, last_seen FROM users
@@ -1371,7 +1372,7 @@ app.post('/api/portal/docs/generate', auth, async (req, res) => {
 
 app.get('/api/portal/docs', auth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT id, title, doc_type, author_id, author_name, created_at FROM documents ORDER BY id DESC LIMIT 300`);
+    const { rows } = await db.query(`SELECT id, title, doc_type, category, author_id, author_name, created_at, updated_at FROM documents ORDER BY id DESC LIMIT 300`);
     res.json(rows);
   } catch (e) { console.error('GET /api/portal/docs:', e.message); res.status(500).json({ error: 'Ошибка чтения документов' }); }
 });
@@ -1380,12 +1381,13 @@ app.post('/api/portal/docs', auth, async (req, res) => {
   const title = clip(req.body?.title, 200) || 'Документ';
   const body = String(req.body?.body || '').slice(0, 20000);
   const doc_type = clip(req.body?.doc_type, 40);
+  const category = clip(req.body?.category, 40);
   if (!body.trim()) return res.status(400).json({ error: 'Пустой документ' });
   try {
     const { rows } = await db.query(
-      `INSERT INTO documents (title, doc_type, body, author_id, author_name) VALUES ($1,$2,$3,$4,$5)
-       RETURNING id, title, doc_type, author_id, author_name, created_at`,
-      [title, doc_type, body, req.admin.id, req.admin.u]);
+      `INSERT INTO documents (title, doc_type, category, body, author_id, author_name) VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id, title, doc_type, category, author_id, author_name, created_at, updated_at`,
+      [title, doc_type, category, body, req.admin.id, req.admin.u]);
     res.status(201).json(rows[0]);
   } catch (e) { console.error('POST /api/portal/docs:', e.message); res.status(500).json({ error: 'Не удалось сохранить' }); }
 });
@@ -1480,12 +1482,17 @@ app.delete('/api/portal/requests/:id(\\d+)', auth, async (req, res) => {
 });
 
 // ── Рабочие задачи ──
+const TASK_COLS = 'id, title, body, assignee_id, assignee_name, created_by, status, priority, due_date, created_at, updated_at';
+const TASK_STATUSES = ['open', 'in_progress', 'done'];
+const TASK_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 app.get('/api/portal/tasks', auth, async (req, res) => {
   try {
+    // Приоритет для сортировки: urgent→high→normal→low; не выполненные выше выполненных.
     const { rows } = await db.query(
-      `SELECT id, title, body, assignee_id, assignee_name, created_by, status, created_at
-         FROM tasks WHERE assignee_id = $1 OR created_by = $2
-        ORDER BY (status = 'done'), id DESC LIMIT 200`,
+      `SELECT ${TASK_COLS} FROM tasks WHERE assignee_id = $1 OR created_by = $2
+        ORDER BY (status = 'done'),
+                 CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+                 (due_date IS NULL), due_date, id DESC LIMIT 300`,
       [req.admin.id, req.admin.u]);
     res.json(rows);
   } catch (e) { console.error('GET /api/portal/tasks:', e.message); res.status(500).json({ error: 'Ошибка чтения задач' }); }
@@ -1494,9 +1501,10 @@ app.post('/api/portal/tasks', auth, async (req, res) => {
   const title = clip(req.body?.title, 200);
   const body = clip(req.body?.body, 2000);
   if (!title) return res.status(400).json({ error: 'Укажите название задачи' });
+  const priority = TASK_PRIORITIES.includes(req.body?.priority) ? req.body.priority : 'normal';
+  const due_date = req.body?.due_date ? String(req.body.due_date).slice(0, 10) : null;
   const aid = Number(req.body?.assignee_id);
   // Назначать задачи ДРУГИМ сотрудникам могут только руководители/замы (admin/manager).
-  // Задачу самому себе может создать любой (личный todo).
   const assigningOther = Number.isInteger(aid) && aid !== req.admin.id;
   if (assigningOther && !['admin', 'manager'].includes(req.admin.role)) {
     return res.status(403).json({ error: 'Назначать задачи сотрудникам могут только руководители отделов и их заместители' });
@@ -1508,25 +1516,180 @@ app.post('/api/portal/tasks', auth, async (req, res) => {
       if (u.rows.length) { assignee_id = u.rows[0].id; assignee_name = u.rows[0].full_name || u.rows[0].username; }
     }
     const { rows } = await db.query(
-      `INSERT INTO tasks (title, body, assignee_id, assignee_name, created_by) VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, title, body, assignee_id, assignee_name, created_by, status, created_at`,
-      [title, body, assignee_id, assignee_name, req.admin.u]);
+      `INSERT INTO tasks (title, body, assignee_id, assignee_name, created_by, priority, due_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${TASK_COLS}`,
+      [title, body, assignee_id, assignee_name, req.admin.u, priority, due_date]);
     if (assignee_id && assignee_id !== req.admin.id) await notify(assignee_id, 'task', null, 'Новая задача', title);
     res.status(201).json(rows[0]);
   } catch (e) { console.error('POST /api/portal/tasks:', e.message); res.status(500).json({ error: 'Не удалось создать задачу' }); }
 });
 app.patch('/api/portal/tasks/:id(\\d+)', auth, async (req, res) => {
   const id = Number(req.params.id);
-  const status = req.body?.status === 'done' ? 'done' : 'open';
+  // Редактируем только переданные поля (статус/приоритет/срок/описание/название).
+  const sets = [], vals = [];
+  const push = (col, v) => { sets.push(`${col} = $${sets.length + 1}`); vals.push(v); };
+  if (req.body?.status !== undefined) push('status', TASK_STATUSES.includes(req.body.status) ? req.body.status : 'open');
+  if (req.body?.priority !== undefined) push('priority', TASK_PRIORITIES.includes(req.body.priority) ? req.body.priority : 'normal');
+  if (req.body?.due_date !== undefined) push('due_date', req.body.due_date ? String(req.body.due_date).slice(0, 10) : null);
+  if (req.body?.title !== undefined) push('title', clip(req.body.title, 200));
+  if (req.body?.body !== undefined) push('body', clip(req.body.body, 2000));
+  if (!sets.length) return res.status(400).json({ error: 'Нет изменений' });
+  vals.push(id, req.admin.id, req.admin.u);
   try {
     const { rows } = await db.query(
-      `UPDATE tasks SET status = $1, updated_at = now()
-        WHERE id = $2 AND (assignee_id = $3 OR created_by = $4)
-       RETURNING id, title, body, assignee_id, assignee_name, created_by, status, created_at`,
-      [status, id, req.admin.id, req.admin.u]);
+      `UPDATE tasks SET ${sets.join(', ')}, updated_at = now()
+        WHERE id = $${vals.length - 2} AND (assignee_id = $${vals.length - 1} OR created_by = $${vals.length})
+       RETURNING ${TASK_COLS}`, vals);
     if (!rows.length) return res.status(404).json({ error: 'Задача не найдена или нет прав' });
     res.json(rows[0]);
   } catch (e) { console.error('PATCH /api/portal/tasks:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
+});
+app.delete('/api/portal/tasks/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    // Удалять может создатель задачи или руководитель (admin/manager).
+    const t = await db.query(`SELECT created_by FROM tasks WHERE id = $1`, [id]);
+    if (!t.rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (t.rows[0].created_by !== req.admin.u && !['admin', 'manager'].includes(req.admin.role))
+      return res.status(403).json({ error: 'Нет прав на удаление' });
+    await db.query(`DELETE FROM tasks WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (e) { console.error('DELETE /api/portal/tasks:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
+});
+
+// ── Портал: КАЛЕНДАРЬ ─────────────────────────────────────────────────────────
+// События = хранимые (встречи/презентации/праздники из таблицы events) + вычисляемые
+// на лету дни рождения (users.birth_date) + дедлайны задач (tasks.due_date) + гос.праздники РК.
+const EVENT_KINDS = ['holiday', 'meeting', 'presentation', 'other'];
+// Гос. праздники Казахстана (фиксированные даты ММ-ДД) — генерируются на любой год.
+const KZ_HOLIDAYS = [
+  ['01-01', 'Новый год'], ['01-02', 'Новый год'], ['01-07', 'Православное Рождество'],
+  ['03-08', 'Международный женский день'], ['03-21', 'Наурыз мейрамы'], ['03-22', 'Наурыз мейрамы'],
+  ['03-23', 'Наурыз мейрамы'], ['05-01', 'Праздник единства народа Казахстана'],
+  ['05-07', 'День защитника Отечества'], ['05-09', 'День Победы'], ['07-06', 'День столицы'],
+  ['08-30', 'День Конституции'], ['10-25', 'День Республики'], ['12-16', 'День Независимости'],
+];
+app.get('/api/portal/events', auth, async (req, res) => {
+  // Диапазон запрашиваемого месяца (ISO-даты from/to); по умолчанию текущий месяц ±.
+  const from = (req.query.from && String(req.query.from).slice(0, 10)) || null;
+  const to = (req.query.to && String(req.query.to).slice(0, 10)) || null;
+  try {
+    const out = [];
+    // 1) Хранимые события (встречи/презентации/праздники/другое), видимые всем или своему отделу.
+    const ev = await db.query(
+      `SELECT e.id, e.kind, e.title, e.descr, e.starts_at, e.ends_at, e.all_day, e.department, e.created_by, e.created_by_name
+         FROM events e
+        WHERE ($1::date IS NULL OR e.starts_at >= $1::date)
+          AND ($2::date IS NULL OR e.starts_at < ($2::date + INTERVAL '1 day'))
+        ORDER BY e.starts_at`, [from, to]);
+    for (const e of ev.rows) out.push({ ...e, source: 'event', can_delete: e.created_by === req.admin.id || ['admin', 'manager'].includes(req.admin.role) });
+    // 2) Дни рождения — из дат рождения сотрудников, спроецированные на годы диапазона.
+    const bd = await db.query(`SELECT id, COALESCE(NULLIF(full_name,''), username) AS name, birth_date FROM users WHERE active = TRUE AND birth_date IS NOT NULL`);
+    const years = [];
+    { const y0 = from ? +from.slice(0, 4) : new Date().getFullYear(); const y1 = to ? +to.slice(0, 4) : y0; for (let y = y0; y <= y1; y++) years.push(y); if (!years.length) years.push(new Date().getFullYear()); }
+    for (const u of bd.rows) {
+      const md = String(u.birth_date).slice(5, 10);
+      for (const y of years) {
+        const d = `${y}-${md}`;
+        if ((!from || d >= from) && (!to || d <= to)) out.push({ id: `bd-${u.id}-${y}`, kind: 'birthday', title: `День рождения — ${u.name}`, starts_at: d + 'T00:00:00', all_day: true, source: 'birthday', can_delete: false });
+      }
+    }
+    // 3) Дедлайны задач текущего пользователя.
+    const tk = await db.query(
+      `SELECT id, title, due_date, status FROM tasks
+        WHERE (assignee_id = $1 OR created_by = $2) AND due_date IS NOT NULL
+          AND ($3::date IS NULL OR due_date >= $3::date) AND ($4::date IS NULL OR due_date <= $4::date)`,
+      [req.admin.id, req.admin.u, from, to]);
+    for (const t of tk.rows) out.push({ id: `task-${t.id}`, kind: 'task', title: `Задача: ${t.title}`, starts_at: String(t.due_date).slice(0, 10) + 'T00:00:00', all_day: true, source: 'task', done: t.status === 'done', can_delete: false });
+    // 4) Гос. праздники РК (фиксированные даты) на годы диапазона.
+    for (const y of years) for (const [md, name] of KZ_HOLIDAYS) {
+      const d = `${y}-${md}`;
+      if ((!from || d >= from) && (!to || d <= to)) out.push({ id: `hol-${d}`, kind: 'holiday', title: name, starts_at: d + 'T00:00:00', all_day: true, source: 'holiday', can_delete: false });
+    }
+    res.json(out);
+  } catch (e) { console.error('GET /api/portal/events:', e.message); res.status(500).json({ error: 'Ошибка чтения календаря' }); }
+});
+app.post('/api/portal/events', auth, async (req, res) => {
+  const kind = EVENT_KINDS.includes(req.body?.kind) ? req.body.kind : 'meeting';
+  const title = clip(req.body?.title, 200);
+  const descr = clip(req.body?.descr, 1000);
+  const starts_at = req.body?.starts_at ? new Date(req.body.starts_at) : null;
+  if (!title || !starts_at || isNaN(+starts_at)) return res.status(400).json({ error: 'Укажите название и дату события' });
+  // Праздники в календарь может добавлять только админ; встречи/презентации — любой сотрудник.
+  if (kind === 'holiday' && req.admin.role !== 'admin') return res.status(403).json({ error: 'Праздники добавляет администратор' });
+  const ends_at = req.body?.ends_at ? new Date(req.body.ends_at) : null;
+  const all_day = !!req.body?.all_day;
+  const department = clip(req.body?.department, 120);
+  const name = clip(req.body?.author_name, 120) || req.admin.u;
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO events (kind, title, descr, starts_at, ends_at, all_day, department, created_by, created_by_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING id, kind, title, descr, starts_at, ends_at, all_day, department, created_by, created_by_name`,
+      [kind, title, descr, starts_at, ends_at && !isNaN(+ends_at) ? ends_at : null, all_day, department, req.admin.id, name]);
+    res.status(201).json({ ...rows[0], source: 'event', can_delete: true });
+  } catch (e) { console.error('POST /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось создать событие' }); }
+});
+app.delete('/api/portal/events/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const ev = await db.query(`SELECT created_by FROM events WHERE id = $1`, [id]);
+    if (!ev.rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (ev.rows[0].created_by !== req.admin.id && !['admin', 'manager'].includes(req.admin.role))
+      return res.status(403).json({ error: 'Нет прав' });
+    await db.query(`DELETE FROM events WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (e) { console.error('DELETE /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
+});
+
+// ── Портал: ВНУТРЕННИЕ НОВОСТИ ────────────────────────────────────────────────
+const PNEWS_CATS = ['company', 'hr', 'it', 'finance', 'event'];
+// Право писать новости: админ, начальник отдела (manager) или сотрудник с флагом can_write_news.
+async function canWriteNews(admin) {
+  if (['admin', 'manager'].includes(admin.role)) return true;
+  if (!admin.id) return false;
+  try { const { rows } = await db.query(`SELECT can_write_news FROM users WHERE id = $1`, [admin.id]); return !!(rows[0] && rows[0].can_write_news); }
+  catch { return false; }
+}
+app.get('/api/portal/news', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, title, body, category, pinned, author_id, author_name, created_at
+         FROM portal_news ORDER BY pinned DESC, created_at DESC LIMIT 100`);
+    res.json({ items: rows, canWrite: await canWriteNews(req.admin) });
+  } catch (e) { console.error('GET /api/portal/news:', e.message); res.status(500).json({ error: 'Ошибка чтения новостей' }); }
+});
+app.post('/api/portal/news', auth, async (req, res) => {
+  if (!(await canWriteNews(req.admin))) return res.status(403).json({ error: 'Публиковать новости могут админ, начальники отделов и сотрудники с правом' });
+  const title = clip(req.body?.title, 200);
+  const body = clip(req.body?.body, 6000);
+  if (!title || !body) return res.status(400).json({ error: 'Укажите заголовок и текст' });
+  const category = PNEWS_CATS.includes(req.body?.category) ? req.body.category : 'company';
+  const pinned = !!req.body?.pinned;
+  const author_name = clip(req.body?.author_name, 120) || req.admin.u;
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO portal_news (title, body, category, pinned, author_id, author_name)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, title, body, category, pinned, author_id, author_name, created_at`,
+      [title, body, category, pinned, req.admin.id, author_name]);
+    // Уведомляем всех активных сотрудников о новой новости.
+    try {
+      const us = await db.query(`SELECT id FROM users WHERE active = TRUE AND id <> $1`, [req.admin.id || 0]);
+      for (const u of us.rows) await notify(u.id, 'news', null, 'Новая новость', title);
+    } catch { /* уведомления не критичны */ }
+    res.status(201).json(rows[0]);
+  } catch (e) { console.error('POST /api/portal/news:', e.message); res.status(500).json({ error: 'Не удалось опубликовать' }); }
+});
+app.delete('/api/portal/news/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const n = await db.query(`SELECT author_id FROM portal_news WHERE id = $1`, [id]);
+    if (!n.rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (n.rows[0].author_id !== req.admin.id && req.admin.role !== 'admin')
+      return res.status(403).json({ error: 'Нет прав' });
+    await db.query(`DELETE FROM portal_news WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (e) { console.error('DELETE /api/portal/news:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });
 
 // ── Админ: пользователи (только роль admin) ───────────────────────────────────
@@ -1617,12 +1780,14 @@ app.patch('/api/admin/users/:id(\\d+)', auth, requireRole('admin'), async (req, 
     if (!role) return res.status(400).json({ error: 'Недопустимая роль' });
     set.push(`role = $${set.length + 1}`); vals.push(role);
   }
+  if ('birth_date' in (req.body || {})) { set.push(`birth_date = $${set.length + 1}`); vals.push(req.body.birth_date ? String(req.body.birth_date).slice(0, 10) : null); }
+  if ('can_write_news' in (req.body || {})) { set.push(`can_write_news = $${set.length + 1}`); vals.push(!!req.body.can_write_news); }
   if (!set.length) return res.status(400).json({ error: 'Нечего обновлять' });
   vals.push(id);
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${set.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, username, full_name, department, role, active, created_at`, vals);
+       RETURNING id, username, full_name, department, role, active, birth_date, can_write_news, created_at`, vals);
     if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден' });
     logAudit(req, 'user', id, 'update', `Обновлён пользователь ${rows[0].username}`);
     res.json(rows[0]);
@@ -1658,6 +1823,30 @@ app.post('/api/admin/departments', auth, requireRole('admin'), async (req, res) 
     if (e.code === '23505') return res.status(409).json({ error: 'Такой отдел уже есть' });
     console.error('POST /api/admin/departments:', e.message);
     res.status(500).json({ error: 'Не удалось создать отдел' });
+  }
+});
+
+app.patch('/api/admin/departments/:id(\\d+)', auth, requireRole('admin'), async (req, res) => {
+  const id = Number(req.params.id);
+  const name = clip(req.body?.name, 120);
+  const descr = clip(req.body?.descr, 400);
+  if (!name) return res.status(400).json({ error: 'Укажите название отдела' });
+  try {
+    const cur = await db.query(`SELECT name FROM departments WHERE id = $1`, [id]);
+    if (!cur.rows.length) return res.status(404).json({ error: 'Отдел не найден' });
+    const oldName = cur.rows[0].name;
+    const { rows } = await db.query(
+      `UPDATE departments SET name = $1, descr = $2 WHERE id = $3 RETURNING id, name, descr, sort_order`,
+      [name, descr, id]);
+    // При переименовании синхронизируем строку отдела у сотрудников (связь по имени).
+    if (oldName !== name) await db.query(`UPDATE users SET department = $1 WHERE department = $2`, [name, oldName]);
+    logAudit(req, 'department', id, 'update', `Отдел «${oldName}» → «${name}»`);
+    const cnt = await db.query(`SELECT count(*)::int AS n FROM users WHERE department = $1 AND active = TRUE`, [name]);
+    res.json({ ...rows[0], members: cnt.rows[0].n });
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Такой отдел уже есть' });
+    console.error('PATCH /api/admin/departments:', e.message);
+    res.status(500).json({ error: 'Не удалось изменить отдел' });
   }
 });
 
@@ -2247,7 +2436,44 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        decided_by   TEXT NOT NULL DEFAULT '',
        decided_at   TIMESTAMPTZ,
        created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
-     );`
+     );
+     -- Профиль сотрудника: дата рождения (для дней рождения в календаре) + право писать новости
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE;
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS can_write_news BOOLEAN NOT NULL DEFAULT FALSE;
+     -- Усиление задач: срок, приоритет, описание уже есть (body)
+     ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date DATE;
+     ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';  -- low|normal|high|urgent
+     -- Усиление документов: категория + дата обновления
+     ALTER TABLE documents ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
+     ALTER TABLE documents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+     -- Календарь портала: встречи, презентации, праздники и т.п. (дни рождения и дедлайны задач
+     -- вычисляются на лету из users.birth_date и tasks.due_date, в этой таблице не хранятся)
+     CREATE TABLE IF NOT EXISTS events (
+       id            SERIAL PRIMARY KEY,
+       kind          TEXT NOT NULL DEFAULT 'meeting',   -- holiday|meeting|presentation|other
+       title         TEXT NOT NULL DEFAULT '',
+       descr         TEXT NOT NULL DEFAULT '',
+       starts_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+       ends_at       TIMESTAMPTZ,
+       all_day       BOOLEAN NOT NULL DEFAULT FALSE,
+       department    TEXT NOT NULL DEFAULT '',           -- '' = для всех
+       created_by    INTEGER,
+       created_by_name TEXT NOT NULL DEFAULT '',
+       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE INDEX IF NOT EXISTS idx_events_starts ON events (starts_at);
+     -- Внутренние новости портала (пишут админ / начальники отделов / кому выдано право)
+     CREATE TABLE IF NOT EXISTS portal_news (
+       id          SERIAL PRIMARY KEY,
+       title       TEXT NOT NULL DEFAULT '',
+       body        TEXT NOT NULL DEFAULT '',
+       category    TEXT NOT NULL DEFAULT 'company',      -- company|hr|it|finance|event
+       pinned      BOOLEAN NOT NULL DEFAULT FALSE,
+       author_id   INTEGER,
+       author_name TEXT NOT NULL DEFAULT '',
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE INDEX IF NOT EXISTS idx_portal_news_created ON portal_news (pinned DESC, created_at DESC);`
   ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
    .catch((e) => console.error('Авто-миграция:', e.message));
