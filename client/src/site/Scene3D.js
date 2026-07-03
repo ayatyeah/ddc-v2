@@ -206,13 +206,13 @@ export function initScene(canvas) {
     // ExtrudeGeometry — плита страны. bevelSegments 2 -> мягкая реалистичная кромка (не гранёная).
     const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 2, steps: 1 });
 
-    // Тёмно-синяя «силуэтная» суша (как на референсе): почти однотонный navy с едва
-    //   заметной вариацией — север чуть светлее, восток чуть синее. Свет дают граница,
-    //   узлы и дуги, а сама плита остаётся тёмной — чтобы сеть «светилась» поверх неё.
+    // Синяя кристаллическая суша (референс — гранёный лёд/стекло): насыщенный синий с
+    //   мягкой географической вариацией (север светлее, восток чуть глубже). Огранку даёт
+    //   гексагональная bump-текстура ниже + глянец с отражениями среды.
     extrude.computeBoundingBox();
     {
       const bb = extrude.boundingBox, pos = extrude.attributes.position;
-      const cN = new THREE.Color(0x16294e), cS = new THREE.Color(0x101d3c), cM = new THREE.Color(0x1a2e56), tmp = new THREE.Color();
+      const cN = new THREE.Color(0x4b86e0), cS = new THREE.Color(0x2a58a4), cM = new THREE.Color(0x376ecb), tmp = new THREE.Color();
       const cols = new Float32Array(pos.count * 3);
       const dy = (bb.max.y - bb.min.y) || 1, dx = (bb.max.x - bb.min.x) || 1;
       for (let i = 0; i < pos.count; i++) {
@@ -231,33 +231,47 @@ export function initScene(canvas) {
 
     // Процедурный «рельеф» суши (шум + лёгкий градиент) как roughness/bump-map: под светом
     // поверхность играет светотенью — карта не плоская и «живая». Дёшево (одна 256² канва).
+    // Гексагональная огранка поверхности (референс — гранёный кристалл): рисуем решётку
+    // шестиугольников, каждая грань со своей яркостью, между гранями — тёмные швы. Как
+    // bump-map это даёт объёмные ячейки-фасеты, играющие под светом и отражениями. Дёшево.
     const TS = 512;
     const mcv = document.createElement('canvas'); mcv.width = mcv.height = TS;
     const mc = mcv.getContext('2d');
-    const bgGrad = mc.createLinearGradient(0, 0, TS, TS);
-    bgGrad.addColorStop(0, '#8e8e8e'); bgGrad.addColorStop(1, '#6a6a6a');   // крупная тональная вариация
-    mc.fillStyle = bgGrad; mc.fillRect(0, 0, TS, TS);
-    // крупный «рельеф» — пятна разного размера (холмы/низины)
-    for (let i = 0; i < 340; i++) {
-      const x = (i * 137) % TS, y = (i * 211 + 40) % TS, r = 10 + (i % 11) * 11;
-      const c = i % 2 ? 255 : 0;
-      mc.fillStyle = `rgba(${c},${c},${c},${0.05 + (i % 6) / 80})`;
-      mc.beginPath(); mc.ellipse(x, y, r, r * (0.55 + (i % 3) * 0.2), i, 0, 6.283); mc.fill();
+    mc.fillStyle = '#808080'; mc.fillRect(0, 0, TS, TS);          // нейтральная база bump
+    const HR = 30;                        // радиус гекса, px
+    const hexW = Math.sqrt(3) * HR;       // горизонтальный шаг
+    const hexV = 1.5 * HR;                // вертикальный шаг
+    const hexPath = (cx, cy) => {
+      mc.beginPath();
+      for (let k = 0; k < 6; k++) { const a = Math.PI / 180 * (60 * k - 90); const x = cx + HR * Math.cos(a), y = cy + HR * Math.sin(a); k ? mc.lineTo(x, y) : mc.moveTo(x, y); }
+      mc.closePath();
+    };
+    let hrow = 0;
+    for (let cy = -HR; cy < TS + HR; cy += hexV, hrow++) {
+      const off = (hrow % 2) ? hexW / 2 : 0;
+      for (let cx = -HR + off; cx < TS + HR; cx += hexW) {
+        const seed = ((Math.round(cx) * 73856093) ^ (Math.round(cy) * 19349663)) >>> 0;
+        const b = 120 + (seed % 96);                              // яркость грани 120..215 (высота фасета)
+        hexPath(cx, cy);
+        mc.fillStyle = `rgb(${b},${b},${b})`; mc.fill();
+        mc.lineWidth = 3; mc.strokeStyle = 'rgba(24,24,24,0.6)'; mc.stroke();   // тёмный шов = углубление между гранями
+      }
     }
-    // мелкая зернистость — фактура поверхности (трещины/неровности)
-    for (let i = 0; i < 1500; i++) {
-      const x = (i * 53) % TS, y = (i * 97 + 17) % TS, c = i % 2 ? 245 : 18;
-      mc.fillStyle = `rgba(${c},${c},${c},${0.06 + (i % 4) / 60})`;
-      mc.fillRect(x, y, 2, 2);
+    // лёгкая микрозернистость поверх — фактура стекла (чтобы фасеты не были «пластиковыми»)
+    for (let i = 0; i < 900; i++) {
+      const x = (i * 53) % TS, y = (i * 97 + 17) % TS, c = i % 2 ? 232 : 40;
+      mc.fillStyle = `rgba(${c},${c},${c},0.05)`; mc.fillRect(x, y, 2, 2);
     }
     const mapTex = new THREE.CanvasTexture(mcv);
     mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.09, 0.09); mapTex.anisotropy = 4;
 
-    // Цвет берём из вершинных цветов (физическая карта по географии). Матовая суша + рельеф
-    // под светом; синяя неон-граница обрамляет «землю», как на рельефной карте.
+    // Синий глянцевый кристалл: цвет из вершин (география), огранка из bump, глянец + отражения
+    // среды (scene.environment) дают «ледяной»/стеклянный вид как в референсе. Без transmission —
+    // чтобы не грузить мобилу лишним проходом; глянец имитируем низким roughness + envMap.
     const mapMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, vertexColors: true, roughnessMap: mapTex, bumpMap: mapTex, bumpScale: 0.55,
-      metalness: 0.14, roughness: 0.88, emissive: 0x10254e, emissiveIntensity: 0.3,
+      color: 0xffffff, vertexColors: true, bumpMap: mapTex, bumpScale: 0.65,
+      metalness: 0.5, roughness: 0.28, envMapIntensity: 1.6,
+      emissive: 0x1f52a8, emissiveIntensity: 0.22,
       transparent: true, opacity: 1,
     });
     mapMat.userData = { baseOp: 0.96 };
