@@ -538,7 +538,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .hero-cta { margin-top: 36px; display: flex; gap: 12px; justify-content: flex-start; flex-wrap: wrap; }
 
 /* ══════ Hero двухколоночный (под референс-макет): текст слева, 3D-сцена справа ══════ */
-.hero-split { padding: 118px 0 72px; min-height: 100vh; }
+.hero-split { padding: 132px 0 92px; min-height: 100vh; }
 /* Светлый скрим слева: текст читаем на любом фоне, справа открыта 3D-сцена. Цвет — из --canvas
    (страничный фон), поэтому работает и в светлой, и в тёмной теме. */
 .hero-split::before {
@@ -554,7 +554,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 }
 .hero-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr);
-  align-items: center; gap: 32px; position: relative; z-index: 1;
+  align-items: center; gap: 52px; position: relative; z-index: 1;
 }
 .hero-col { max-width: 620px; }
 .eyebrow-dot { display: inline-flex; align-items: center; gap: 8px; text-transform: uppercase; }
@@ -564,10 +564,10 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
   font-size: clamp(2.35rem, 4.4vw, 4.1rem); margin: 16px 0 0; color: var(--ink); text-shadow: none;
 }
 .hero-h1 .accent { color: var(--blue); }
-.hero-split .hero-sub { margin: 20px 0 0; max-width: 46ch; font-size: clamp(1rem, 1.2vw, 1.16rem); color: var(--ink-soft); line-height: 1.55; text-shadow: none; opacity: 1; }
-.hero-split .hero-cta { margin-top: 30px; }
-.hero-split .hero-loc { margin-top: 22px; }
-.hero-stats { margin-top: 40px; display: grid; grid-template-columns: repeat(4, auto); gap: 30px; justify-content: start; }
+.hero-split .hero-sub { margin: 26px 0 0; max-width: 46ch; font-size: clamp(1rem, 1.2vw, 1.16rem); color: var(--ink-soft); line-height: 1.62; text-shadow: none; opacity: 1; }
+.hero-split .hero-cta { margin-top: 38px; }
+.hero-split .hero-loc { margin-top: 28px; }
+.hero-stats { margin-top: 52px; display: grid; grid-template-columns: repeat(4, auto); gap: 38px; justify-content: start; }
 .hstat-n { font-family: var(--display); font-weight: 700; font-size: clamp(1.5rem, 2.2vw, 2rem); color: var(--blue); letter-spacing: -0.02em; }
 .hstat-l { margin-top: 4px; font-size: 12px; color: var(--ink-faint); line-height: 1.32; max-width: 14ch; }
 
@@ -626,7 +626,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 
 /* ── Секции ──────────────────────────────────────────────────────────────────── */
 .section { padding: clamp(80px, 12vw, 150px) 0; position: relative; }
-.section-head { max-width: 620px; margin-bottom: 56px; }
+.section-head { max-width: 620px; margin-bottom: 66px; }
 .section-head .h2 { margin-top: 14px; }
 .section-head .lede { margin-top: 18px; max-width: 52ch; }
 .center { text-align: center; margin-left: auto; margin-right: auto; }
