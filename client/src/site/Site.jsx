@@ -7,7 +7,9 @@ import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Fog from './Fog.jsx';
-import FogShader from './FogShader.jsx';
+import CircuitField from './CircuitField.jsx';
+import DepthFog from './DepthFog.jsx';
+import HudLayer from './HudLayer.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
@@ -81,6 +83,22 @@ export default function Site() {
     return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
+  // Параллакс мыши: публикуем --mx/--my (−1…1) — слои глубины смещаются на разную величину
+  // (calc(var(--mx) * Npx)), создавая ощущение объёма. Только десктоп (на мобиле мыши нет).
+  useEffect(() => {
+    if (isMobile) return;
+    const root = document.documentElement;
+    let raf = 0, mx = 0, my = 0;
+    const flush = () => { raf = 0; root.style.setProperty('--mx', mx.toFixed(3)); root.style.setProperty('--my', my.toFixed(3)); };
+    const onMove = (e) => {
+      mx = (e.clientX / window.innerWidth - 0.5) * 2;
+      my = (e.clientY / window.innerHeight - 0.5) * 2;
+      if (!raf) raf = requestAnimationFrame(flush);
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => { window.removeEventListener('pointermove', onMove); if (raf) cancelAnimationFrame(raf); root.style.removeProperty('--mx'); root.style.removeProperty('--my'); };
+  }, [isMobile]);
+
   // SEO: обновляем заголовок и meta-описание при смене страницы (SPA-навигация)
   useEffect(() => {
     if (route.title) document.title = route.title;
@@ -117,6 +135,8 @@ export default function Site() {
         sceneRef.current?.setTarget(0.04 + sp * 0.56);
         // Здание смещено вправо на герое (текст слева), возвращается к центру при скролле.
         sceneRef.current?.setHeroBias?.(Math.max(0, 1 - sp / 0.28));
+        // HUD-оверлей гаснет при скролле (виден только на первом экране героя).
+        root.style.setProperty('--hud', Math.max(0, 1 - sp * 4).toFixed(3));
         if (fogEl) fogEl.style.setProperty('--fog', Math.min(0.85, sp * 1.25).toFixed(3));
       };
       const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
@@ -167,12 +187,13 @@ export default function Site() {
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="bg-planet" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />
-      {/* ДЕКОРАТИВНЫЕ СЛОИ (туман, контуры микросхем, частицы, облака, орнаменты) — ТОЛЬКО
-          ДЕСКТОП. На телефоне каждый такой слой переспрашивает композитинг на КАЖДОМ кадре
-          скролла (параллакс через --sy) → сильные фризы при быстрой прокрутке. Поэтому на
-          мобиле оставляем одну 3D-сцену и небо — больше ничего. */}
-      {!isMobile && !lowPower && !a11y && <FogShader />}
-      {/* 3D-сцена DDC — на ВСЕХ устройствах, включая телефон (по просьбе: только сцена, качество высокое). */}
+      {/* ── СЛОИ ГЛУБИНЫ (только десктоп) — назад→вперёд, каждый со своим параллаксом ──
+          фон (#scroll-bg) → PCB-линии (CircuitField) → туман (DepthFog) → [3D-сцена] → HUD.
+          На мобиле всё это композитится на каждом кадре скролла → фризы, поэтому там только
+          сцена + небо. */}
+      {!isMobile && !a11y && <CircuitField />}
+      {!isMobile && !a11y && <DepthFog />}
+      {/* 3D-сцена DDC (карта + здание) — на ВСЕХ устройствах, включая телефон. */}
       {!a11y && (
         <ErrorBoundary fallback={null}>
           <Suspense fallback={null}>
@@ -180,11 +201,10 @@ export default function Site() {
           </Suspense>
         </ErrorBoundary>
       )}
-      {/* Мелкие частицы и облака — только десктоп. Контуры микросхем (CircuitField) и
-          орнаменты (OrnamentField) УБРАНЫ совсем: их SVG/слои композитились на скролле и
-          особенно на зуме браузера (20%) вся страница рендерилась разом → сильные фризы. */}
       {!isMobile && !lowPower && !a11y && <Particles />}
       {!isMobile && !a11y && <Fog />}
+      {/* HUD-оверлей (передний план) — техно-элементы вокруг сцены, только на главной, гаснут при скролле. */}
+      {!isMobile && !a11y && path === '/' && <HudLayer />}
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
       <Brand />

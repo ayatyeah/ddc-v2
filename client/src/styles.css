@@ -80,9 +80,11 @@ button { font-family: inherit; cursor: pointer; }
 
 /* Слой фона, меняющий цвет по скроллу. Сидит позади всего контента. */
 #scroll-bg {
-  position: fixed; inset: 0; z-index: -5;
+  position: fixed; inset: 0; z-index: -7;   /* самый дальний план (за PCB/туманом/сценой) */
   background:
-    radial-gradient(120% 80% at 50% -10%, var(--bg-top, #eaf4ff) 0%, transparent 60%),
+    radial-gradient(82% 68% at 70% 26%, color-mix(in srgb, var(--bg-a, #a9d4f7) 55%, #ffffff) 0%, transparent 52%),  /* свечение у сцены */
+    radial-gradient(120% 85% at 50% 4%, var(--bg-top, #eaf4ff) 0%, transparent 60%),
+    radial-gradient(150% 130% at 50% 46%, transparent 52%, rgba(24, 54, 112, 0.10) 100%),                            /* виньетка = глубина */
     linear-gradient(180deg, var(--bg-a, #ffffff) 0%, var(--bg-b, #f7faff) 100%);
   transition: background 0.6s linear;
 }
@@ -147,15 +149,17 @@ html[data-a11y='on'] #scroll-bg::after { display: none; }  /* в версии д
   width: 100%; height: 100%; display: block; opacity: 0.85;
 }
 
-/* Контуры микросхем на заднем плане (за 3D-сценой) + параллакс по скроллу */
+/* ОГРОМНЫЕ PCB-линии — дальний план (за туманом и сценой). Масштабированы ×1.4 и толще,
+   чтобы читались как крупная плата. Медленный параллакс по скроллу + мыши = глубина. */
 .circuit-field {
-  position: fixed; inset: -6% -6%; z-index: -4; pointer-events: none;
-  color: #2f6fe0; opacity: 0.42;
-  transform: translate3d(0, calc(var(--sy, 0px) * 0.05), 0); will-change: transform;
+  position: fixed; inset: -20% -20%; z-index: -6; pointer-events: none;
+  color: #2f6fe0; opacity: 0.13;
+  transform: translate3d(calc(var(--mx, 0) * 14px), calc(var(--sy, 0px) * 0.03 + var(--my, 0) * 10px), 0) scale(1.4);
+  will-change: transform;
 }
-[data-theme='dark'] .circuit-field { color: #5a9bff; opacity: 0.22; }
+[data-theme='dark'] .circuit-field { color: #5a9bff; opacity: 0.2; }
 .circuit-svg { width: 100%; height: 118%; display: block; }
-.circuit-svg line, .circuit-svg rect, .circuit-svg path { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.circuit-svg line, .circuit-svg rect, .circuit-svg path { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
 .circuit-svg .cf-inner { opacity: 0.55; }
 .circuit-svg .cf-dot, .circuit-svg .cf-pad { fill: currentColor; stroke: none; }
 html[data-a11y='on'] .circuit-field { display: none; }
@@ -1748,3 +1752,61 @@ html[data-a11y='on'] .kz-field { display: none; }
 .portal-form { max-width: 340px; margin: 6px auto 0; text-align: left; }
 .portal-form .btn { justify-content: center; margin-top: 2px; }
 .portal-notice { margin-top: 14px; font-size: 13.5px; color: var(--ink-faint); }
+
+/* ═══════════════ Слои глубины: туман (DepthFog) + HUD (передний план) ═══════════════ */
+
+/* Туман — между PCB-линиями и 3D-сценой. Большие мягкие пятна, параллакс средней скорости. */
+.depth-fog {
+  position: fixed; inset: 0; z-index: -5; pointer-events: none; overflow: hidden;
+  transform: translate3d(calc(var(--mx, 0) * 22px), calc(var(--sy, 0px) * 0.06 + var(--my, 0) * 16px), 0);
+  will-change: transform;
+}
+.df-blob { position: absolute; border-radius: 50%; filter: blur(64px); }
+.df-blob.b1 { width: 48vw; height: 48vw; left: 38%; top: 2%; background: radial-gradient(circle, rgba(150,190,255,0.50), transparent 66%); animation: dfDrift 34s ease-in-out infinite; }
+.df-blob.b2 { width: 34vw; height: 34vw; right: -4%; top: 34%; background: radial-gradient(circle, rgba(110,205,255,0.40), transparent 68%); animation: dfDrift 40s ease-in-out infinite reverse; }
+.df-blob.b3 { width: 42vw; height: 42vw; left: 48%; bottom: -12%; background: radial-gradient(circle, rgba(180,205,255,0.42), transparent 70%); animation: dfDrift 30s ease-in-out infinite; }
+[data-theme='dark'] .df-blob.b1 { background: radial-gradient(circle, rgba(60,120,220,0.30), transparent 68%); }
+[data-theme='dark'] .df-blob.b2 { background: radial-gradient(circle, rgba(50,150,220,0.24), transparent 70%); }
+[data-theme='dark'] .df-blob.b3 { background: radial-gradient(circle, rgba(70,120,210,0.26), transparent 72%); }
+@keyframes dfDrift { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(3vw,-2vh) scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .df-blob { animation: none; } }
+
+/* HUD — техно-оверлей вокруг сцены (передний план). Быстрый параллакс, гаснет при скролле. */
+.hud-layer {
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  color: #2f6fe0; font-family: var(--mono);
+  opacity: var(--hud, 1);   /* --hud гаснет 1→0 при скролле (Site.jsx), чтобы HUD не мешал контенту */
+  transition: opacity 0.15s linear;
+  transform: translate3d(calc(var(--mx, 0) * 30px), calc(var(--my, 0) * 22px), 0);
+  will-change: transform, opacity;
+}
+[data-theme='dark'] .hud-layer { color: #6fb0ff; }
+
+/* Угловые скобки, обрамляющие правую зону со сценой */
+.hud-corner { position: absolute; width: 26px; height: 26px; border: 2px solid currentColor; opacity: 0.45; }
+.hud-corner.tl { left: 50%; top: 15%; border-right: none; border-bottom: none; }
+.hud-corner.tr { right: 5%; top: 15%; border-left: none; border-bottom: none; }
+.hud-corner.bl { left: 50%; bottom: 20%; border-right: none; border-top: none; }
+.hud-corner.br { right: 5%; bottom: 20%; border-left: none; border-top: none; }
+
+/* Чипы: координаты (сверху) и телеметрия (снизу) */
+.hud-chip { position: absolute; font-size: 11px; letter-spacing: 0.06em; color: color-mix(in srgb, currentColor 85%, transparent); }
+.hud-coord { right: 6%; top: 9%; text-align: right; }
+.hud-coord b { display: block; font-weight: 600; font-size: 12px; }
+.hud-coord small { opacity: 0.65; font-size: 10px; }
+.hud-tele { left: 50%; bottom: 12%; display: flex; gap: 16px; }
+.hud-tele span { display: inline-flex; align-items: center; gap: 6px; opacity: 0.8; }
+.hud-tele i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; animation: hudPulse 2.4s ease-in-out infinite; }
+@keyframes hudPulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+/* Сканирующая линия внутри рамки */
+.hud-scan { position: absolute; left: 50%; right: 5%; top: 15%; height: 1px; background: linear-gradient(90deg, transparent, currentColor, transparent); opacity: 0.35; animation: hudScan 6s linear infinite; }
+@keyframes hudScan { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: 0.4; } 90% { opacity: 0.4; } 100% { transform: translateY(52vh); opacity: 0; } }
+
+/* Реткл (крестик наведения) у здания */
+.hud-reticle { position: absolute; right: 30%; top: 34%; width: 46px; height: 46px; opacity: 0.55; }
+.hud-reticle .hr-h { position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: currentColor; }
+.hud-reticle .hr-v { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: currentColor; }
+.hud-reticle b { position: absolute; inset: 30%; border: 1px solid currentColor; border-radius: 50%; animation: hudPulse 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) { .hud-tele i, .hud-scan, .hud-reticle b { animation: none; } }
