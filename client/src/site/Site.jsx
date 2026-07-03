@@ -7,8 +7,6 @@ import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
 import Fog from './Fog.jsx';
-import OrnamentField from './OrnamentField.jsx';
-import CircuitField from './CircuitField.jsx';
 import FogShader from './FogShader.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
@@ -169,7 +167,6 @@ export default function Site() {
           скролла (параллакс через --sy) → сильные фризы при быстрой прокрутке. Поэтому на
           мобиле оставляем одну 3D-сцену и небо — больше ничего. */}
       {!isMobile && !lowPower && !a11y && <FogShader />}
-      {!isMobile && !a11y && <CircuitField />}
       {/* 3D-сцена DDC — на ВСЕХ устройствах, включая телефон (по просьбе: только сцена, качество высокое). */}
       {!a11y && (
         <ErrorBoundary fallback={null}>
@@ -178,10 +175,11 @@ export default function Site() {
           </Suspense>
         </ErrorBoundary>
       )}
-      {/* Мелкие частицы, облака, орнаменты — тоже только десктоп. */}
+      {/* Мелкие частицы и облака — только десктоп. Контуры микросхем (CircuitField) и
+          орнаменты (OrnamentField) УБРАНЫ совсем: их SVG/слои композитились на скролле и
+          особенно на зуме браузера (20%) вся страница рендерилась разом → сильные фризы. */}
       {!isMobile && !lowPower && !a11y && <Particles />}
       {!isMobile && !a11y && <Fog />}
-      {!isMobile && !a11y && <OrnamentField />}
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
       <Brand />
