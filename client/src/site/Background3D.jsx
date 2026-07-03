@@ -13,6 +13,7 @@ export default function Background3D({ onReady }) {
     requestAnimationFrame(() => { if (el) el.style.opacity = ''; });   // плавное проявление (CSS-переход)
     const inst = {
       setTarget(p) { scene.setTarget(p); },
+      setIntro(k) { scene.setIntro?.(k); },
       setYaw(y) { scene.setYaw?.(y); },
       setPage() { scene.setPage?.(); },
       dispose() { scene.dispose(); },
