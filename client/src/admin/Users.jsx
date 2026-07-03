@@ -19,7 +19,7 @@ export default function Users({ onAuthLost, me }) {
   const [items, setItems] = useState([]);
   const [depts, setDepts] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [form, setForm] = useState({ username: '', password: '', full_name: '', department: '', role: 'staff' });
+  const [form, setForm] = useState({ username: '', password: '', full_name: '', department: '', role: 'staff', birth_date: '' });
   const [dept, setDept] = useState({ name: '', descr: '' });
   const [err, setErr] = useState('');
   const [derr, setDerr] = useState('');
@@ -39,10 +39,11 @@ export default function Users({ onAuthLost, me }) {
   useEffect(() => { load(); }, [load]);
 
   const create = async () => {
+    if (!form.birth_date) { setErr('Укажите дату рождения сотрудника'); return; }
     setBusy(true); setErr('');
     try {
       await sendJSON('/api/admin/users', 'POST', form);
-      setForm({ username: '', password: '', full_name: '', department: '', role: 'staff' });
+      setForm({ username: '', password: '', full_name: '', department: '', role: 'staff', birth_date: '' });
       load();
     } catch (e) {
       if (authGuard(e)) return;
@@ -128,6 +129,8 @@ export default function Users({ onAuthLost, me }) {
         </select>
         <input className="adm-input" type="password" placeholder="Пароль (от 4 символов)" value={form.password}
           onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} autoComplete="new-password" />
+        <input className="adm-input" type="date" title="Дата рождения (обязательно)" value={form.birth_date}
+          onChange={(e) => setForm((f) => ({ ...f, birth_date: e.target.value }))} required />
         <select className="adm-input" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
           {ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>

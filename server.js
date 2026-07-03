@@ -1728,8 +1728,13 @@ app.post('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
   const full_name = String(req.body?.full_name || '').trim().slice(0, 120);
   const department = String(req.body?.department || '').trim().slice(0, 120);
   const role = ALLOWED_ROLES.includes(req.body?.role) ? req.body.role : 'staff';
+  const birth_date = req.body?.birth_date ? String(req.body.birth_date).slice(0, 10) : '';
   if (!username || password.length < 4) {
     return res.status(400).json({ error: 'Логин и пароль (от 4 символов) обязательны' });
+  }
+  // Дата рождения обязательна при регистрации (нужна для дней рождения в календаре).
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birth_date)) {
+    return res.status(400).json({ error: 'Укажите дату рождения сотрудника' });
   }
   if (username === ADMIN_USERNAME) {
     return res.status(400).json({ error: 'Это имя занято суперадмином' });
@@ -1737,10 +1742,10 @@ app.post('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
-      `INSERT INTO users (username, password_hash, full_name, department, role)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING id, username, full_name, department, role, active, created_at`,
-      [username, hash, full_name, department, role]
+      `INSERT INTO users (username, password_hash, full_name, department, role, birth_date)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id, username, full_name, department, role, active, birth_date, created_at`,
+      [username, hash, full_name, department, role, birth_date]
     );
     logAudit(req, 'user', rows[0].id, 'create', `Создан пользователь ${username} (${role})`);
     res.status(201).json(rows[0]);
