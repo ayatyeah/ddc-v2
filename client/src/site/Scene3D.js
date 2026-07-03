@@ -275,7 +275,6 @@ export function initScene(canvas) {
       transparent: true, opacity: 1,
     });
     mapMat.userData = { baseOp: 0.96 };
-    gMap.userData.plateMat = mapMat;   // ссылка для проявления карты в конце интро (opacity 0→1)
     const mapMesh = new THREE.Mesh(extrude, mapMat); mapMesh.position.y = -1.4; gMap.add(mapMesh); mapMats.push(mapMat);
 
     // Сплошная неоновая граница страны убрана намеренно — карта более абстрактная.
@@ -509,9 +508,6 @@ export function initScene(canvas) {
   // ── Камера / целевое состояние (задаётся маршрутом) ─────────────────────────
   let progress = 0, tx = 0, ty = 0, px = 0, py = 0;
   let viewYaw = 0, dispYaw = 0;   // целевой/сглаженный угол «ровного» разворота карты (свой для каждой страницы)
-  // Интро-фаза (только главная, верх скролла): 1 = «встречаем 2 башни» и спуск по зданиям,
-  // карта скрыта; 0 = обычный пролёт с картой. Между ними — плавный отъезд к стартовому виду.
-  let introTarget = 0, dispIntro = 0;
   const onPointer = (e) => { tx = (e.clientX / window.innerWidth - 0.5) * 2; ty = (e.clientY / window.innerHeight - 0.5) * 2; };
   if (!reduce && !LIGHT) window.addEventListener('pointermove', onPointer, { passive: true });
 
@@ -608,7 +604,6 @@ export function initScene(canvas) {
     }
     disp += (progress - disp) * kSmooth;        // плавный бесшовный переход между страницами/скроллом
     dispYaw += (viewYaw - dispYaw) * kSmooth;    // плавный доворот карты к углу текущей страницы
-    dispIntro += (introTarget - dispIntro) * kSmooth;   // плавный вход/выход интро-фазы (спуск по башням)
     const p = disp;
 
     // камера: фокус на верхних этажах / крышах (адаптивно)
@@ -633,45 +628,8 @@ export function initScene(canvas) {
     const par = 1 - lift;                        // параллакс гаснет в виде сверху
     // Очень медленный «живой» дрейф камеры (2-3%) — кадр не статичен, но и не «плавает».
     const drift = Math.sin(t * 0.13) * par;
-    // Камера обычного «пролёта» (позиция + точка взгляда) — в переменные, чтобы можно было
-    // подмешать интро-камеру спуска по башням.
-    let cpx = px * 2.0 * par + drift * 0.8;
-    let cpy = eyeY * fit - py * 1.2 * par + Math.sin(t * 0.26) * 0.2;
-    let cpz = camZ * fit;
-    let clx = px * 0.4 * par + drift * 0.3;
-    let cly = lookY;
-    let clz = lookZ;
-
-    // ── ИНТРО (только главная, верх скролла): «встречаем 2 башни» сверху → СПУСК по фасаду
-    //    к основанию → отъезд к стартовому 3/4-виду. Камеру интро смешиваем с камерой пролёта
-    //    по dispIntro (1 = полностью интро, 0 = обычный пролёт). На конце интро (d→1) интро-цель
-    //    совпадает с кадром пролёта при p≈0.05 → стык бесшовный. ──
-    if (dispIntro > 0.001) {
-      const mix = dispIntro;
-      const d = 1 - mix;                 // 0 (верх скролла) → 1 (конец интро)
-      let ex, ey, ez, lx, ly, lz;
-      if (d < 0.58) {
-        const u = smooth(d, 0, 0.58);    // любуемся башнями сверху → спускаемся к основанию
-        ex = 4 * (1 - u);
-        ey = 28 + (11 - 28) * u;         // верхние этажи/шпиль → основание
-        ez = 60 + (46 - 60) * u;         // лёгкое приближение при спуске
-        lx = 0; ly = 24 + (8 - 24) * u;  // взгляд едет вниз по зданию
-        lz = 0;
-      } else {
-        const u = smooth(d, 0.58, 1);    // отъезд от основания к стартовому виду (кадр пролёта p≈0.05)
-        ex = 0;
-        ey = 11 + (cpy - 11) * u;
-        ez = 46 + (cpz - 46) * u;
-        lx = 0; ly = 8 + (cly - 8) * u;
-        lz = clz * u;
-      }
-      ex *= fit; ez *= fit;              // на портретных экранах (мобила) отъезжаем дальше
-      ex += Math.sin(t * 0.28) * 0.3 * mix;   // едва заметный живой дрейф, чтобы интро не было мёртвым
-      cpx += (ex - cpx) * mix; cpy += (ey - cpy) * mix; cpz += (ez - cpz) * mix;
-      clx += (lx - clx) * mix; cly += (ly - cly) * mix; clz += (lz - clz) * mix;
-    }
-    camera.position.set(cpx, cpy, cpz);
-    camera.lookAt(clx, cly, clz);
+    camera.position.set(px * 2.0 * par + drift * 0.8, eyeY * fit - py * 1.2 * par + Math.sin(t * 0.26) * 0.2, camZ * fit);
+    camera.lookAt(px * 0.4 * par + drift * 0.3, lookY, lookZ);
 
     // Здания стоят в полный рост, пока камера поднимается; затем ПРОПАДАЮТ, освобождая
     // основание под плоскую надпись DDC. Карта и линии остаются — главный объект.
@@ -693,16 +651,11 @@ export function initScene(canvas) {
     // цифровую экосистему страны. Карта держит базовую непрозрачность.
     const aerial = smooth(p, 0.30, 0.60);
     const boost = 1 + aerial * 0.8;
-    // Проявление карты: в интро (спуск по башням) карта скрыта, а во второй половине интро
-    // (отъезд к стартовому виду) плавно проявляется. Вне интро — всегда 1.
-    const mapReveal = dispIntro > 0.001 ? smooth(1 - dispIntro, 0.42, 0.92) : 1;
-    if (gMap.userData.plateMat) gMap.userData.plateMat.opacity = (gMap.userData.plateMat.userData?.baseOp ?? 0.96) * mapReveal;
-    const od0 = gMap.userData.outlineDots;
-    if (od0 && introDone) od0.material.opacity = (od0.material.userData?.baseOp ?? 0.9) * mapReveal;
+    // (opacity карты/узлов не анимируется — задана при создании, поэтому в кадре не трогаем)
     const pulse = 0.5 + 0.5 * Math.sin(t * 1.8);
     for (const lm of lineMats) {
-      if (lm.userData?.glow) lm.opacity = Math.min(1, (0.16 + pulse * 0.20) * boost) * mapReveal;
-      else lm.opacity = Math.min(1, (lm.userData?.baseOp ?? 0.85) * boost) * mapReveal;
+      if (lm.userData?.glow) lm.opacity = Math.min(1, (0.16 + pulse * 0.20) * boost);
+      else lm.opacity = Math.min(1, (lm.userData?.baseOp ?? 0.85) * boost);
     }
     // Неоновая граница страны: пульсирует и разгорается к середине скролла.
     if (edgeCoreMat) {
@@ -712,13 +665,13 @@ export function initScene(canvas) {
     for (const pkt of (gMap.userData.packets || [])) {
       const u = pkt.userData; u.t += u.sp * 0.016; if (u.t > 1) u.t -= 1;
       u.curve.getPoint(u.t, pkt.position);
-      pkt.material.opacity = Math.min(1, (0.5 + 0.5 * Math.sin(t * 4 + u.t * 6)) * boost) * mapReveal;
+      pkt.material.opacity = Math.min(1, (0.5 + 0.5 * Math.sin(t * 4 + u.t * 6)) * boost);
     }
     // Лёгкое мерцание городов — у каждого узла своя фаза (живой, но спокойный кадр).
     for (const nd of (gMap.userData.nodes || [])) {
       const tw = 0.82 + 0.18 * Math.sin(t * 1.4 + nd.ph);
-      nd.c.opacity = Math.min(1, 0.95 * tw * boost) * mapReveal;
-      if (nd.h) nd.h.opacity = Math.min(1, 0.34 * (0.6 + 0.55 * tw) * boost) * mapReveal;
+      nd.c.opacity = Math.min(1, 0.95 * tw * boost);
+      if (nd.h) nd.h.opacity = Math.min(1, 0.34 * (0.6 + 0.55 * tw) * boost);
     }
 
     // (звёзды/спутники/облака/планета удалены — в LIGHT-режиме они не рисовались)
@@ -804,7 +757,6 @@ export function initScene(canvas) {
 
   return {
     setTarget(p) { progress = Math.min(1, Math.max(0, p)); if (!running && !document.hidden) start(); },
-    setIntro(k) { introTarget = Math.min(1, Math.max(0, k || 0)); if (!running && !document.hidden) start(); },
     setYaw(y) { viewYaw = y || 0; if (!running && !document.hidden) start(); },
     setPage() { if (!running && !document.hidden) start(); },
     dispose() {

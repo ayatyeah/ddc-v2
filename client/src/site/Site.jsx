@@ -67,14 +67,7 @@ export default function Site() {
   useEffect(() => { try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch { window.scrollTo(0, 0); } }, [path]);
 
   const sceneRef = useRef(null);
-  const onReady = useCallback((inst) => {
-    sceneRef.current = inst;
-    // На главной сцена стартует с интро (только башни, верх скролла); на внутренних — сразу пролёт.
-    const atHome = window.location.pathname === '/';
-    inst.setIntro?.(atHome ? 1 : 0);
-    inst.setTarget(atHome ? 0.05 : route.prog);
-    inst.setYaw?.(route.yaw ?? 0);
-  }, []); // eslint-disable-line
+  const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
 
   // Параллакс слоёв: публикуем scrollY в CSS-переменную --sy (px), а слои двигаем через
   // calc(var(--sy) * factor) в CSS — дальний фон медленнее, текст быстрее → ощущение глубины.
@@ -117,19 +110,11 @@ export default function Site() {
       // scrollHeight (reflow) на каждом кадре скролла. На мобиле это заметно для плавности.
       let maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
       const recalc = () => { maxScroll = Math.max(1, root.scrollHeight - window.innerHeight); };
-      // Скролл главной делится на 2 части:
-      //  • первые INTRO_SEG — интро: «встречаем 2 башни» и спуск по фасаду (карта скрыта);
-      //  • дальше — обычный пролёт (setTarget 0.04→0.60): подъём дрона к виду сверху на карту.
-      const INTRO_SEG = 0.34;
       const apply = () => {
         raf = 0;
         const sp = Math.min(1, Math.max(0, window.scrollY / maxScroll));
-        let introMix, p;
-        if (sp < INTRO_SEG) { introMix = 1 - sp / INTRO_SEG; p = 0.05; }
-        else { introMix = 0; p = 0.05 + ((sp - INTRO_SEG) / (1 - INTRO_SEG)) * (0.60 - 0.05); }
-        sceneRef.current?.setIntro?.(introMix);
-        sceneRef.current?.setTarget(p);
-        if (fogEl) fogEl.style.setProperty('--fog', Math.min(0.85, Math.max(0, p - 0.05) * 2).toFixed(3));
+        sceneRef.current?.setTarget(0.04 + sp * 0.56);
+        if (fogEl) fogEl.style.setProperty('--fog', Math.min(0.85, sp * 1.25).toFixed(3));
       };
       const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
       const onResize = () => { recalc(); onScroll(); };
@@ -142,8 +127,6 @@ export default function Site() {
         if (raf) cancelAnimationFrame(raf);
       };
     }
-    // Внутренние страницы: интро (спуск по башням) не показываем — сразу вид сверху на карту.
-    sceneRef.current?.setIntro?.(0);
     sceneRef.current?.setTarget(route.prog);
     if (fogEl) fogEl.style.setProperty('--fog', '0');
   }, [path, route.prog]);
