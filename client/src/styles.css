@@ -96,6 +96,26 @@ button { font-family: inherit; cursor: pointer; }
     linear-gradient(180deg, var(--bg-a, #060c1a) 0%, var(--bg-b, #03060e) 100%);
 }
 
+/* Кинематографичная виньетка по краям экрана (на ВСЕХ устройствах) — обрамляет 3D-сцену,
+   чтобы она не упиралась в плоские границы экрана. Fixed-градиент поверх канваса: на скролле
+   не двигается и не композитится, стоит бесплатно. z-index -2: над сценой (#bg3d = -3), под контентом. */
+#scroll-bg::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.28) 100%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0%, transparent 16%, transparent 82%, rgba(0, 0, 0, 0.30) 100%);
+}
+[data-theme='light'] #scroll-bg::after {
+  background:
+    radial-gradient(120% 90% at 50% 42%, transparent 58%, rgba(20, 40, 90, 0.12) 100%),
+    linear-gradient(to bottom, rgba(20, 40, 90, 0.10) 0%, transparent 16%, transparent 84%, rgba(20, 40, 90, 0.14) 100%);
+}
+html[data-a11y='on'] #scroll-bg::after { display: none; }  /* в версии для слабовидящих — без затемнений */
+
 /* Слой атмосферной дымки (nebula) — мягкие дрейфующие пятна для глубины */
 #scroll-aurora { display: none; }
 [data-theme='dark'] #scroll-aurora {
@@ -1505,24 +1525,6 @@ html.lenis, html.lenis body { height: auto; }
      И снимаем параллакс-сдвиг с текста — пусть статичен (дешевле, без композитинга на скролле). */
   .hero-orbs { display: none !important; }
   .hero-inner { transform: none !important; }
-
-  /* Мягкая виньетка по краям экрана — обрамляет сцену (по просьбе «добавь края экрана»).
-     Чистый CSS-градиент поверх канваса, без композитинга на скролле (fixed, не двигается). */
-  #scroll-bg::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -2;              /* над сценой (#bg3d = -3), под контентом */
-    pointer-events: none;
-    background:
-      radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.28) 100%),
-      linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0%, transparent 16%, transparent 82%, rgba(0, 0, 0, 0.30) 100%);
-  }
-  [data-theme='light'] #scroll-bg::after {
-    background:
-      radial-gradient(120% 90% at 50% 42%, transparent 58%, rgba(20, 40, 90, 0.12) 100%),
-      linear-gradient(to bottom, rgba(20, 40, 90, 0.10) 0%, transparent 16%, transparent 84%, rgba(20, 40, 90, 0.14) 100%);
-  }
 }
 
 /* ════════════════ UX: 404, CTA-бэнд, скелетоны загрузки ════════════════ */
