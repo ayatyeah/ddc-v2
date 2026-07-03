@@ -312,19 +312,19 @@ export function initScene(canvas) {
 
       // размер узла варьируем: часть городов — крупные «хабы», часть — мелкие точки
       const big = (Math.abs(Math.round(lo * 53 + la * 29)) % 4) === 0;
-      const nodeS = big ? 4.4 : 2.9;
+      const nodeS = big ? 3.3 : 2.1;
       // мягкий ореол под точкой (bloom-стиль свечение) — на мобиле пропускаем (overdraw)
       let haloMat = null;
       if (!mobile) {
         const halo = new THREE.Sprite(nodeMat.clone());
-        halo.position.set(nx, 0.36, nz); halo.scale.set(nodeS * 2.7, nodeS * 2.7, 1); gMap.add(halo);
-        halo.material.opacity = 0.34; halo.material.userData = { baseOp: 0.34 };
+        halo.position.set(nx, 0.36, nz); halo.scale.set(nodeS * 2.2, nodeS * 2.2, 1); gMap.add(halo);
+        halo.material.opacity = 0.15; halo.material.userData = { baseOp: 0.15 };
         mapMats.push(halo.material); haloMat = halo.material;
       }
-      // яркое ядро узла
+      // ядро узла (приглушённое — на светлой теме аддитивные блики были слишком яркими)
       const sp = new THREE.Sprite(nodeMat.clone());
       sp.position.set(nx, 0.4, nz); sp.scale.set(nodeS, nodeS, 1); gMap.add(sp);
-      sp.material.userData = { baseOp: 0.95 };
+      sp.material.userData = { baseOp: 0.55 };
       mapMats.push(sp.material);
       // для «мерцания городов»: запоминаем материалы узла + индивидуальную фазу
       (gMap.userData.nodes = gMap.userData.nodes || []).push({ c: sp.material, h: haloMat, ph: (Math.abs(Math.round(lo * 71 + la * 43)) % 360) * 0.01745 });
@@ -515,6 +515,9 @@ export function initScene(canvas) {
   // 1 = полностью сдвинуто вправо, 0 = по центру. Гаснет при скролле и на внутренних/мобиле.
   let heroBiasT = 0, heroBiasD = 0;
   const HERO_SHIFT = 15;   // единицы мира; подбирается по кадру
+  // При переходе между страницами фон едет к новому состоянию МЕДЛЕННО и мягко (не резко):
+  // до этого времени (сек) используем более плавное сглаживание камеры/сцены.
+  let navEaseUntil = -1;
   const onPointer = (e) => { tx = (e.clientX / window.innerWidth - 0.5) * 2; ty = (e.clientY / window.innerHeight - 0.5) * 2; };
   if (!reduce && !LIGHT) window.addEventListener('pointermove', onPointer, { passive: true });
 
@@ -609,9 +612,12 @@ export function initScene(canvas) {
       }
       perfAcc = 0; perfN = 0; perfT = t;
     }
-    disp += (progress - disp) * kSmooth;        // плавный бесшовный переход между страницами/скроллом
-    dispYaw += (viewYaw - dispYaw) * kSmooth;    // плавный доворот карты к углу текущей страницы
-    heroBiasD += (heroBiasT - heroBiasD) * kSmooth;
+    // При переходе между страницами — заметно мягче (медленнее) сглаживание, чтобы фон не
+    // «прыгал» между состояниями; при обычном скролле — отзывчивое сглаживание.
+    const kNav = t < navEaseUntil ? (1 - Math.exp(-dt * 2.1)) : kSmooth;
+    disp += (progress - disp) * kNav;           // плавный бесшовный переход между страницами/скроллом
+    dispYaw += (viewYaw - dispYaw) * kNav;       // плавный доворот карты к углу текущей страницы
+    heroBiasD += (heroBiasT - heroBiasD) * kNav;
     const p = disp;
 
     // камера: фокус на верхних этажах / крышах (адаптивно)
@@ -682,8 +688,8 @@ export function initScene(canvas) {
     // Лёгкое мерцание городов — у каждого узла своя фаза (живой, но спокойный кадр).
     for (const nd of (gMap.userData.nodes || [])) {
       const tw = 0.82 + 0.18 * Math.sin(t * 1.4 + nd.ph);
-      nd.c.opacity = Math.min(1, 0.95 * tw * boost);
-      if (nd.h) nd.h.opacity = Math.min(1, 0.34 * (0.6 + 0.55 * tw) * boost);
+      nd.c.opacity = Math.min(1, 0.55 * tw * boost);
+      if (nd.h) nd.h.opacity = Math.min(0.6, 0.15 * (0.6 + 0.55 * tw) * boost);
     }
 
     // (звёзды/спутники/облака/планета удалены — в LIGHT-режиме они не рисовались)
@@ -769,6 +775,8 @@ export function initScene(canvas) {
 
   return {
     setTarget(p) { progress = Math.min(1, Math.max(0, p)); if (!running && !document.hidden) start(); },
+    // Включить мягкий замедленный доезд фона (~1.1с) — вызывается при переходе между разделами.
+    navEase() { navEaseUntil = clock.getElapsedTime() + 1.1; if (!running && !document.hidden) start(); },
     setTheme(th) { scene.fog.color.setHex(fogColor(th)); if (!running && !document.hidden) start(); },
     setHeroBias(v) { heroBiasT = Math.min(1, Math.max(0, v || 0)); if (!running && !document.hidden) start(); },
     setYaw(y) { viewYaw = y || 0; if (!running && !document.hidden) start(); },

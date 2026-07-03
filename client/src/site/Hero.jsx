@@ -51,9 +51,6 @@ export default function Hero() {
               <path d="M9 12l2 2 4-4" />
             </svg>
           </div>
-          <button className="hv-explore" onClick={go('/o-nas')} aria-hidden="false">
-            <span className="hve-dot" />{t(lang, 'hero.explore')}
-          </button>
         </div>
       </div>
     </header>

@@ -103,6 +103,7 @@ export default function Site() {
     const root = document.documentElement;
     const fogEl = document.getElementById('fog');
     sceneRef.current?.setPage?.();          // при смене страницы узор планеты (DDC) слегка меняется
+    sceneRef.current?.navEase?.();          // мягкий замедленный доезд фона при переходе между разделами
     sceneRef.current?.setYaw?.(route.yaw ?? 0);   // у каждой страницы свой угол доворота карты
     if (path === '/') {
       let raf = 0;
@@ -149,7 +150,7 @@ export default function Site() {
       for (const key of ['top', 'a', 'b']) {
         for (let i = 0; i < 3; i++) {
           const d = tg[key][i] - cur[key][i];
-          if (Math.abs(d) > 0.6) { cur[key][i] += d * 0.08; done = false; } else cur[key][i] = tg[key][i];
+          if (Math.abs(d) > 0.6) { cur[key][i] += d * 0.05; done = false; } else cur[key][i] = tg[key][i];
         }
       }
       set('--bg-top', cur.top); set('--bg-a', cur.a); set('--bg-b', cur.b);
