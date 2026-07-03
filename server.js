@@ -208,6 +208,9 @@ app.use(expressStaticGzip(STATIC_DIR, {
       // не получит обновление после деплоя. Остальные ассеты хешированы → можно 1 год.
       if (/\.html$/.test(filePath) || /[\\/](sw|registerSW)\.js$/.test(filePath)) {
         res.setHeader('Cache-Control', 'no-cache');
+      } else if (/[\\/]assets[\\/]/.test(filePath)) {
+        // Хешированные ассеты Vite (имя меняется при изменении) — вечный кеш без ревалидации.
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
     },
   },
