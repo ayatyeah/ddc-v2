@@ -14,6 +14,7 @@ export default function Background3D({ onReady }) {
     const inst = {
       setTarget(p) { scene.setTarget(p); },
       setTheme(th) { scene.setTheme?.(th); },
+      setHeroBias(v) { scene.setHeroBias?.(v); },
       setYaw(y) { scene.setYaw?.(y); },
       setPage() { scene.setPage?.(); },
       dispose() { scene.dispose(); },

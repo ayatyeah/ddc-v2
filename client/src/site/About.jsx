@@ -48,6 +48,7 @@ export default function About() {
             </div>
             <div className="text-glass">
               <p className="about-body">{t(lang, 'about.text')}</p>
+              <p className="about-body" style={{ marginTop: 14 }}>{t(lang, 'about.systems')}</p>
               <p className="about-vision"><span className="av-label">{t(lang, 'about.vision')}</span>{t(lang, 'about.visionText')}</p>
               <div className="values">
                 <span className="values-label">{t(lang, 'about.values')}</span>

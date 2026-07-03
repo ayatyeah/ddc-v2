@@ -17,7 +17,7 @@ import LeadForm from './LeadForm.jsx';
 import Vacancies from './Vacancies.jsx';
 
 export function HomePage() {
-  return (<><Hero /><Stats /><Directions /><div className="page-soft"><News /></div></>);
+  return (<><Hero /><Directions /><div className="page-soft"><News /></div></>);
 }
 export function ServicesPage() {
   return (<div className="page-top"><Showcase /><Services /><CtaBand /></div>);

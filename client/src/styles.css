@@ -116,6 +116,13 @@ button { font-family: inherit; cursor: pointer; }
 }
 html[data-a11y='on'] #scroll-bg::after { display: none; }  /* в версии для слабовидящих — без затемнений */
 
+/* Светлая вуаль над 3D-сценой: прозрачна в герое (сцена видна), при скролле заливается
+   цветом страницы (--veil из Site.jsx) — контент-секции чистые, без резкого «края пелены». */
+#page-veil {
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background: var(--canvas); opacity: var(--veil, 0);
+}
+
 /* Слой атмосферной дымки (nebula) — мягкие дрейфующие пятна для глубины */
 #scroll-aurora { display: none; }
 [data-theme='dark'] #scroll-aurora {
@@ -532,6 +539,65 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 }
 .hero-sub { margin: 22px 0 0; max-width: 48ch; font-size: clamp(1.02rem, 1.4vw, 1.22rem); color: var(--ink); opacity: 0.92; line-height: 1.5; text-shadow: 0 1px 16px rgba(4,9,22,0.55); }
 .hero-cta { margin-top: 36px; display: flex; gap: 12px; justify-content: flex-start; flex-wrap: wrap; }
+
+/* ══════ Hero двухколоночный (под референс-макет): текст слева, 3D-сцена справа ══════ */
+.hero-split { padding: 118px 0 72px; min-height: 100vh; }
+/* Светлый скрим слева: текст читаем на любом фоне, справа открыта 3D-сцена. Цвет — из --canvas
+   (страничный фон), поэтому работает и в светлой, и в тёмной теме. */
+.hero-split::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(100deg,
+    var(--canvas) 0%,
+    var(--canvas) 20%,
+    color-mix(in srgb, var(--canvas) 55%, transparent) 42%,
+    color-mix(in srgb, var(--canvas) 18%, transparent) 60%,
+    transparent 76%);
+}
+.hero-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr);
+  align-items: center; gap: 32px; position: relative; z-index: 1;
+}
+.hero-col { max-width: 620px; }
+.eyebrow-dot { display: inline-flex; align-items: center; gap: 8px; text-transform: uppercase; }
+.eyebrow-dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); flex: none; }
+.hero-h1 {
+  font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05;
+  font-size: clamp(2.35rem, 4.4vw, 4.1rem); margin: 16px 0 0; color: var(--ink); text-shadow: none;
+}
+.hero-h1 .accent { color: var(--blue); }
+.hero-split .hero-sub { margin: 20px 0 0; max-width: 46ch; font-size: clamp(1rem, 1.2vw, 1.16rem); color: var(--ink-soft); line-height: 1.55; text-shadow: none; opacity: 1; }
+.hero-split .hero-cta { margin-top: 30px; }
+.hero-split .hero-loc { margin-top: 22px; }
+.hero-stats { margin-top: 40px; display: grid; grid-template-columns: repeat(4, auto); gap: 30px; justify-content: start; }
+.hstat-n { font-family: var(--display); font-weight: 700; font-size: clamp(1.5rem, 2.2vw, 2rem); color: var(--blue); letter-spacing: -0.02em; }
+.hstat-l { margin-top: 4px; font-size: 12px; color: var(--ink-faint); line-height: 1.32; max-width: 14ch; }
+
+/* Правая колонка — за ней 3D-сцена; поверх плавающие виджеты (график, щит, «Исследуйте карту»). */
+.hero-visual { position: relative; align-self: stretch; min-height: 480px; }
+.hv-widget {
+  position: absolute; background: var(--card-glass); backdrop-filter: blur(12px);
+  border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-card); color: var(--blue);
+}
+.hv-chart { top: 4%; right: 1%; width: 132px; height: 86px; padding: 14px; }
+.hvw-bars { display: flex; align-items: flex-end; gap: 7px; height: 100%; }
+.hvw-bars i { flex: 1; height: var(--h); background: linear-gradient(180deg, var(--blue-bright), var(--blue)); border-radius: 3px; opacity: 0.92; }
+.hv-shield { top: 46%; right: 5%; width: 54px; height: 54px; display: grid; place-items: center; }
+.hv-explore {
+  position: absolute; bottom: 3%; right: 5%; display: inline-flex; align-items: center; gap: 10px;
+  background: var(--card-glass); backdrop-filter: blur(12px); border: 1px solid var(--line);
+  border-radius: 980px; padding: 11px 18px 11px 12px; font: inherit; font-size: 13.5px; font-weight: 600;
+  color: var(--ink); box-shadow: var(--shadow-card); cursor: pointer; transition: transform 0.3s var(--ease);
+}
+.hv-explore:hover { transform: translateY(-2px); }
+.hve-dot { width: 24px; height: 24px; border-radius: 50%; flex: none; background: radial-gradient(circle at 35% 35%, var(--blue-bright), var(--blue)); box-shadow: 0 0 0 4px rgba(45,111,224,0.16); }
+
+@media (max-width: 900px) {
+  .hero-split { min-height: 92vh; padding: 96px 0 48px; }
+  .hero-grid { grid-template-columns: 1fr; gap: 8px; }
+  .hero-visual { display: none; }
+  .hero-split::before { background: linear-gradient(180deg, var(--canvas) 0%, var(--canvas) 52%, transparent 100%); }
+  .hero-stats { grid-template-columns: repeat(2, 1fr); gap: 20px 24px; margin-top: 30px; }
+}
 /* Мобильная типографика/ритм: заголовок героя не переполняет узкую панель,
    секции и карточки компактнее — меньше пустого скролла на телефоне. */
 @media (max-width: 600px) {

@@ -511,6 +511,10 @@ export function initScene(canvas) {
   // ── Камера / целевое состояние (задаётся маршрутом) ─────────────────────────
   let progress = 0, tx = 0, ty = 0, px = 0, py = 0;
   let viewYaw = 0, dispYaw = 0;   // целевой/сглаженный угол «ровного» разворота карты (свой для каждой страницы)
+  // Смещение сцены вправо на главной (двухколоночный герой: текст слева, здание справа).
+  // 1 = полностью сдвинуто вправо, 0 = по центру. Гаснет при скролле и на внутренних/мобиле.
+  let heroBiasT = 0, heroBiasD = 0;
+  const HERO_SHIFT = 15;   // единицы мира; подбирается по кадру
   const onPointer = (e) => { tx = (e.clientX / window.innerWidth - 0.5) * 2; ty = (e.clientY / window.innerHeight - 0.5) * 2; };
   if (!reduce && !LIGHT) window.addEventListener('pointermove', onPointer, { passive: true });
 
@@ -607,6 +611,7 @@ export function initScene(canvas) {
     }
     disp += (progress - disp) * kSmooth;        // плавный бесшовный переход между страницами/скроллом
     dispYaw += (viewYaw - dispYaw) * kSmooth;    // плавный доворот карты к углу текущей страницы
+    heroBiasD += (heroBiasT - heroBiasD) * kSmooth;
     const p = disp;
 
     // камера: фокус на верхних этажах / крышах (адаптивно)
@@ -631,8 +636,12 @@ export function initScene(canvas) {
     const par = 1 - lift;                        // параллакс гаснет в виде сверху
     // Очень медленный «живой» дрейф камеры (2-3%) — кадр не статичен, но и не «плавает».
     const drift = Math.sin(t * 0.13) * par;
-    camera.position.set(px * 2.0 * par + drift * 0.8, eyeY * fit - py * 1.2 * par + Math.sin(t * 0.26) * 0.2, camZ * fit);
-    camera.lookAt(px * 0.4 * par + drift * 0.3, lookY, lookZ);
+    // Сдвиг сцены вправо на главном герое: трак камеры влево (позиция и цель на одну величину)
+    // → мир уезжает вправо. Гасим на виде сверху (par) и на мобиле.
+    const hb = (mobile ? 0 : heroBiasD) * par;
+    const panX = hb * HERO_SHIFT;
+    camera.position.set(px * 2.0 * par + drift * 0.8 - panX, eyeY * fit - py * 1.2 * par + Math.sin(t * 0.26) * 0.2, camZ * fit);
+    camera.lookAt(px * 0.4 * par + drift * 0.3 - panX, lookY, lookZ);
 
     // Здания стоят в полный рост, пока камера поднимается; затем ПРОПАДАЮТ, освобождая
     // основание под плоскую надпись DDC. Карта и линии остаются — главный объект.
@@ -761,6 +770,7 @@ export function initScene(canvas) {
   return {
     setTarget(p) { progress = Math.min(1, Math.max(0, p)); if (!running && !document.hidden) start(); },
     setTheme(th) { scene.fog.color.setHex(fogColor(th)); if (!running && !document.hidden) start(); },
+    setHeroBias(v) { heroBiasT = Math.min(1, Math.max(0, v || 0)); if (!running && !document.hidden) start(); },
     setYaw(y) { viewYaw = y || 0; if (!running && !document.hidden) start(); },
     setPage() { if (!running && !document.hidden) start(); },
     dispose() {
