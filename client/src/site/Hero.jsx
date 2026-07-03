@@ -43,15 +43,8 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* Правая колонка — за ней видна 3D-сцена (фикс-фон). Поверх — плавающие виджеты. */}
-        <div className="hero-visual" aria-hidden="true">
-          <div className="hv-widget hv-shield">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7">
-              <path d="M12 3l7 3v5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6l7-3z" />
-              <path d="M9 12l2 2 4-4" />
-            </svg>
-          </div>
-        </div>
+        {/* Правая колонка — за ней видна 3D-сцена (фикс-фон). */}
+        <div className="hero-visual" aria-hidden="true" />
       </div>
     </header>
   );
