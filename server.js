@@ -2021,9 +2021,11 @@ app.post('/api/assistant/command', auth, async (req, res) => {
 // Голосовая команда: аудио (base64 data-URL) → транскрипция → разбор в действия.
 app.post('/api/assistant/voice', auth, async (req, res) => {
   const dataUrl = String(req.body?.audio || '');
-  const m = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl);
-  if (!m) return res.status(400).json({ error: 'Нет аудио' });
-  const mime = m[1], buf = Buffer.from(m[2], 'base64');
+  // Data-URL может содержать параметры (напр. data:audio/webm;codecs=opus;base64,…) — парсим строкой.
+  const idx = dataUrl.indexOf(';base64,');
+  if (!dataUrl.startsWith('data:') || idx < 0) return res.status(400).json({ error: 'Нет аудио' });
+  const mime = dataUrl.slice(5, idx).split(';')[0] || 'audio/webm';
+  const buf = Buffer.from(dataUrl.slice(idx + 8), 'base64');
   if (!buf.length || buf.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Некорректное аудио' });
   try {
     const text = await transcribeAudio(buf, mime);
