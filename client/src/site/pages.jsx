@@ -5,6 +5,7 @@ import Services from './Services.jsx';
 import Showcase from './Showcase.jsx';
 import Projects from './Projects.jsx';
 import Stats from './Stats.jsx';
+import Directions from './Directions.jsx';
 import About from './About.jsx';
 import News from './News.jsx';
 import Contact from './Contact.jsx';
@@ -16,7 +17,7 @@ import LeadForm from './LeadForm.jsx';
 import Vacancies from './Vacancies.jsx';
 
 export function HomePage() {
-  return (<><Hero /><Stats /><div className="page-soft"><News /></div></>);
+  return (<><Hero /><Stats /><Directions /><div className="page-soft"><News /></div></>);
 }
 export function ServicesPage() {
   return (<div className="page-top"><Showcase /><Services /><CtaBand /></div>);
