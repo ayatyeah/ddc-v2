@@ -67,7 +67,7 @@ export default function Site() {
   useEffect(() => { try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch { window.scrollTo(0, 0); } }, [path]);
 
   const sceneRef = useRef(null);
-  const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
+  const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setTheme?.(theme); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
 
   // Параллакс слоёв: публикуем scrollY в CSS-переменную --sy (px), а слои двигаем через
   // calc(var(--sy) * factor) в CSS — дальний фон медленнее, текст быстрее → ощущение глубины.
@@ -134,6 +134,7 @@ export default function Site() {
   // Палитра неба: плавный переход цвета под страницу
   const curRef = useRef(null);
   useEffect(() => {
+    sceneRef.current?.setTheme?.(theme);   // туман 3D-сцены под тему (иначе даль уходит в серое)
     const bg = document.getElementById('scroll-bg'); if (!bg) return;
     const target = () => (theme === 'light' ? route.light : route.dark);
     if (!curRef.current) { const t = target(); curRef.current = { top: hex(t.top), a: hex(t.a), b: hex(t.b) }; }

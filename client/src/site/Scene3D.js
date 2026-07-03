@@ -42,7 +42,10 @@ export function initScene(canvas) {
   renderer.toneMappingExposure = 1.13;        // чуть больше свечения/«воздуха» в кадре
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xdfe8f5, 0.004);
+  // Туман сцены зависит от темы: в светлой — светлая дымка, в тёмной — глубокий navy
+  // (иначе дальняя часть карты/сцены «уходила в серое» на тёмной теме — виден серый фон).
+  const fogColor = (th) => (th === 'light' ? 0xdfe8f5 : 0x0a1930);
+  scene.fog = new THREE.FogExp2(fogColor(document.documentElement.dataset.theme), 0.004);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
@@ -757,6 +760,7 @@ export function initScene(canvas) {
 
   return {
     setTarget(p) { progress = Math.min(1, Math.max(0, p)); if (!running && !document.hidden) start(); },
+    setTheme(th) { scene.fog.color.setHex(fogColor(th)); if (!running && !document.hidden) start(); },
     setYaw(y) { viewYaw = y || 0; if (!running && !document.hidden) start(); },
     setPage() { if (!running && !document.hidden) start(); },
     dispose() {
