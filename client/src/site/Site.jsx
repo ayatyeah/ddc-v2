@@ -116,8 +116,6 @@ export default function Site() {
         sceneRef.current?.setTarget(0.04 + sp * 0.56);
         // Здание смещено вправо на герое (текст слева), возвращается к центру при скролле.
         sceneRef.current?.setHeroBias?.(Math.max(0, 1 - sp / 0.28));
-        // Светлая вуаль над сценой: прозрачна в герое, плавно заливается к контенту (без «края пелены»).
-        root.style.setProperty('--veil', Math.min(1, Math.max(0, (sp - 0.02) / 0.22)).toFixed(3));
         if (fogEl) fogEl.style.setProperty('--fog', Math.min(0.85, sp * 1.25).toFixed(3));
       };
       const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
@@ -133,7 +131,6 @@ export default function Site() {
     }
     sceneRef.current?.setTarget(route.prog);
     sceneRef.current?.setHeroBias?.(0);       // сдвиг вправо только на главной
-    root.style.setProperty('--veil', '0');    // внутренние страницы — сцена как фон (без вуали)
     if (fogEl) fogEl.style.setProperty('--fog', '0');
   }, [path, route.prog]);
 
@@ -166,9 +163,6 @@ export default function Site() {
     <>
       <a href="#main" className="skip-link">К основному содержимому</a>
       <div id="scroll-bg" aria-hidden="true" />
-      {/* Светлая «вуаль»: на самом верху (герой) прозрачна — видна 3D-сцена; при скролле плавно
-          заливается цветом страницы, пряча сцену под контентом (без резкого края «пелены»). */}
-      <div id="page-veil" aria-hidden="true" />
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="bg-planet" aria-hidden="true" />
       <div id="scroll-depth" aria-hidden="true" />

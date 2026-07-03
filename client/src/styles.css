@@ -116,13 +116,6 @@ button { font-family: inherit; cursor: pointer; }
 }
 html[data-a11y='on'] #scroll-bg::after { display: none; }  /* в версии для слабовидящих — без затемнений */
 
-/* Светлая вуаль над 3D-сценой: прозрачна в герое (сцена видна), при скролле заливается
-   цветом страницы (--veil из Site.jsx) — контент-секции чистые, без резкого «края пелены». */
-#page-veil {
-  position: fixed; inset: 0; z-index: -2; pointer-events: none;
-  background: var(--canvas); opacity: var(--veil, 0);
-}
-
 /* Слой атмосферной дымки (nebula) — мягкие дрейфующие пятна для глубины */
 #scroll-aurora { display: none; }
 [data-theme='dark'] #scroll-aurora {
@@ -546,12 +539,14 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
    (страничный фон), поэтому работает и в светлой, и в тёмной теме. */
 .hero-split::before {
   content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background: linear-gradient(100deg,
+  /* Радиальная подложка под текст: плотная слева, мягко растворяется во все стороны (и вниз),
+     поэтому у неё нет жёсткого края, а 3D-сцена справа остаётся видимой. */
+  background: radial-gradient(125% 115% at 2% 38%,
     var(--canvas) 0%,
-    var(--canvas) 20%,
-    color-mix(in srgb, var(--canvas) 55%, transparent) 42%,
-    color-mix(in srgb, var(--canvas) 18%, transparent) 60%,
-    transparent 76%);
+    var(--canvas) 26%,
+    color-mix(in srgb, var(--canvas) 55%, transparent) 46%,
+    color-mix(in srgb, var(--canvas) 16%, transparent) 62%,
+    transparent 78%);
 }
 .hero-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr);
