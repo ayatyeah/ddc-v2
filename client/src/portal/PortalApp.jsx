@@ -6,6 +6,9 @@ import { useLogo } from '../store.js';
 import Mission from './Mission.jsx';
 import Documents from './Documents.jsx';
 import Requests from './Requests.jsx';
+import Calendar from './Calendar.jsx';
+import PortalNews from './PortalNews.jsx';
+import PortalBell from './PortalBell.jsx';
 import '../admin/admin.css';
 import './portal.css';
 
@@ -57,6 +60,9 @@ export default function PortalApp() {
   const [menuOpen, setMenuOpen] = useState(false);
   const goTab = (id) => { setConvOpen(false); setMenuOpen(false); setTab(id); };
   const logo = useLogo();   // чёрный логотип на светлой теме, белый на тёмной
+  // Mission Control — только для админа и начальников отделов (остальным раздел не виден).
+  const isHead = ['admin', 'manager'].includes(me?.role);
+  const sections = SECTIONS.filter((s) => s.id !== 'mission' || isHead);
 
   useEffect(() => {
     hideSplash();
@@ -109,13 +115,17 @@ export default function PortalApp() {
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d={menuOpen ? 'M6 6l12 12M18 6L6 18' : 'M3 6h18M3 12h18M3 18h18'} /></svg>
         </button>
         <span className="pt-topbar-t">{labelOf(tab)}</span>
+        <PortalBell onGo={goTab} onAuthLost={onAuthLost} />
       </header>
       <div className="pt-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
 
       <aside className="pt-rail">
-        <div className="pt-brand"><img src={logo} alt="DDC" /></div>
+        <div className="pt-rail-top">
+          <div className="pt-brand"><img src={logo} alt="DDC" /></div>
+          <PortalBell onGo={goTab} onAuthLost={onAuthLost} />
+        </div>
         <nav className="pt-nav">
-          {SECTIONS.map((s) => (
+          {sections.map((s) => (
             <button key={s.id} className={`pt-tab ${tab === s.id ? 'active' : ''}`} onClick={() => goTab(s.id)}>
               <PtIco name={s.icon} /><span className="pt-tab-l">{s.label}</span>
             </button>
@@ -130,16 +140,16 @@ export default function PortalApp() {
       </aside>
 
       <main className="pt-main">
-        {tab === 'mission' && <Mission onAuthLost={onAuthLost} />}
+        {tab === 'mission' && (isHead ? <Mission onAuthLost={onAuthLost} /> : <Home me={me} onGo={goTab} />)}
         {tab === 'home' && <Home me={me} onGo={goTab} />}
         {tab === 'profile' && <Profile me={me} onAuthLost={onAuthLost} />}
         {tab === 'people' && <People onAuthLost={onAuthLost} />}
-        {tab === 'calendar' && <Stub icon="calendar" title="Календарь" note="Праздники, выходные, отпуска сотрудников, корпоративные мероприятия и дни рождения." />}
-        {tab === 'news' && <Stub icon="news" title="Новости" note="Объявления по категориям (HR, IT, Финансы, Компания, Важное) с лайками и комментариями." />}
+        {tab === 'calendar' && <Calendar me={me} onAuthLost={onAuthLost} />}
+        {tab === 'news' && <PortalNews me={me} onAuthLost={onAuthLost} />}
         {tab === 'docs' && <Documents me={me} onAuthLost={onAuthLost} />}
         {tab === 'requests' && <Requests me={me} onAuthLost={onAuthLost} />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
-        {tab === 'depts' && <Departments onAuthLost={onAuthLost} />}
+        {tab === 'depts' && <Departments me={me} onAuthLost={onAuthLost} />}
         {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
         {tab === 'chat' && <Chats me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
       </main>
@@ -497,50 +507,92 @@ function Dm({ me, onAuthLost, onConv }) {
 }
 
 /* ── Задачи ── */
+const PRIO = { urgent: { l: 'Срочно', c: '#c0455a' }, high: { l: 'Высокий', c: '#b07d12' }, normal: { l: 'Обычный', c: '#2f6fe0' }, low: { l: 'Низкий', c: '#5b6472' } };
+const TSTATUS = { open: 'Открыта', in_progress: 'В работе', done: 'Готово' };
+const dateStr = (d) => (d ? String(d).slice(0, 10) : '');
+const fmtDay = (d) => { try { return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); } catch { return ''; } };
 function Tasks({ me, onAuthLost }) {
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
-  const [title, setTitle] = useState('');
-  const [assignee, setAssignee] = useState('');
+  const [filter, setFilter] = useState('active');   // active | all | done | overdue
+  const [form, setForm] = useState({ title: '', body: '', assignee: '', priority: 'normal', due_date: '' });
+  const [expanded, setExpanded] = useState(null);
   const load = useCallback(async () => {
     try { setTasks(await getJSON('/api/portal/tasks')); } catch (e) { if (e.status === 401) onAuthLost?.(); }
   }, [onAuthLost]);
   useEffect(() => { load(); getJSON('/api/portal/users').then(setUsers).catch(() => {}); }, [load]);
 
+  const isHead = ['admin', 'manager'].includes(me?.role);   // назначать другим могут руководители/замы
   const create = async (e) => {
     e?.preventDefault?.();
-    if (!title.trim()) return;
-    try { await sendJSON('/api/portal/tasks', 'POST', { title: title.trim(), assignee_id: assignee ? Number(assignee) : undefined }); setTitle(''); setAssignee(''); load(); }
-    catch (e2) { if (e2.status === 401) onAuthLost?.(); }
+    if (!form.title.trim()) return;
+    try {
+      await sendJSON('/api/portal/tasks', 'POST', {
+        title: form.title.trim(), body: form.body.trim(), priority: form.priority,
+        due_date: form.due_date || undefined, assignee_id: form.assignee ? Number(form.assignee) : undefined,
+      });
+      setForm({ title: '', body: '', assignee: '', priority: 'normal', due_date: '' }); load();
+    } catch (e2) { if (e2.status === 401) onAuthLost?.(); else alert(e2.message || 'Не удалось'); }
   };
-  const toggle = async (tk) => {
-    try { await sendJSON(`/api/portal/tasks/${tk.id}`, 'PATCH', { status: tk.status === 'done' ? 'open' : 'done' }); load(); }
-    catch (e) { if (e.status === 401) onAuthLost?.(); }
+  const patch = async (tk, body) => {
+    try { await sendJSON(`/api/portal/tasks/${tk.id}`, 'PATCH', body); load(); } catch (e) { if (e.status === 401) onAuthLost?.(); }
   };
+  const del = async (tk) => { if (!confirm('Удалить задачу?')) return; try { await sendJSON(`/api/portal/tasks/${tk.id}`, 'DELETE'); load(); } catch (e) { if (e.status === 401) onAuthLost?.(); } };
+  const cycle = (tk) => patch(tk, { status: tk.status === 'open' ? 'in_progress' : tk.status === 'in_progress' ? 'done' : 'open' });
 
-  const isHead = ['admin', 'manager'].includes(me?.role);   // назначать другим могут руководители/замы
+  const today = dateStr(new Date().toISOString());
+  const overdue = (tk) => tk.due_date && tk.status !== 'done' && dateStr(tk.due_date) < today;
+  const shown = tasks.filter((tk) =>
+    filter === 'all' ? true : filter === 'done' ? tk.status === 'done'
+      : filter === 'overdue' ? overdue(tk) : tk.status !== 'done');
+  const counts = { active: tasks.filter((t) => t.status !== 'done').length, overdue: tasks.filter(overdue).length };
+
   return (
-    <div className="pt-view">
+    <div className="pt-view pt-tasks-v">
       <div className="pt-view-h"><h2>Рабочие задачи</h2><span className="pt-hint">{isHead ? 'Назначайте задачи сотрудникам' : 'Назначенные вам и созданные вами'}</span></div>
-      <form className="pt-taskform" onSubmit={create}>
-        <input className="adm-input" placeholder={isHead ? 'Новая задача для сотрудника…' : 'Моя задача…'} value={title} onChange={(e) => setTitle(e.target.value)} />
+
+      <form className="pt-taskform grid" onSubmit={create}>
+        <input className="adm-input tf-title" placeholder={isHead ? 'Новая задача для сотрудника…' : 'Моя задача…'} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        <select className="adm-input" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} title="Приоритет">
+          {Object.entries(PRIO).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}
+        </select>
+        <input className="adm-input" type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} title="Срок" />
         {isHead && (
-          <select className="adm-input" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+          <select className="adm-input" value={form.assignee} onChange={(e) => setForm({ ...form, assignee: e.target.value })}>
             <option value="">— исполнитель —</option>
             {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         )}
+        <input className="adm-input tf-desc" placeholder="Описание (необязательно)…" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
         <button className="adm-btn" type="submit">Добавить</button>
       </form>
+
+      <div className="cal-filters">
+        {[['active', `Активные${counts.active ? ` (${counts.active})` : ''}`], ['overdue', `Просроченные${counts.overdue ? ` (${counts.overdue})` : ''}`], ['done', 'Выполненные'], ['all', 'Все']].map(([k, l]) => (
+          <button key={k} className={`cal-fchip ${filter === k ? 'on' : ''}`} style={{ '--c': k === 'overdue' ? '#c0455a' : '#2f6fe0' }} onClick={() => setFilter(k)}><span className="cal-dot" /> {l}</button>
+        ))}
+      </div>
+
       <div className="pt-tasks">
-        {tasks.length === 0 && <div className="pt-empty">Задач пока нет.</div>}
-        {tasks.map((tk) => (
-          <div key={tk.id} className={`pt-task ${tk.status === 'done' ? 'done' : ''}`}>
-            <button className="pt-check" onClick={() => toggle(tk)} aria-label="Готово">{tk.status === 'done' ? '✓' : ''}</button>
-            <div className="pt-task-b">
-              <div className="pt-task-t">{tk.title}</div>
-              <div className="pt-task-m">{tk.assignee_name ? `→ ${tk.assignee_name}` : 'без исполнителя'} · от {tk.created_by}</div>
+        {shown.length === 0 && <div className="pt-empty">Задач нет.</div>}
+        {shown.map((tk) => (
+          <div key={tk.id} className={`pt-task rich ${tk.status === 'done' ? 'done' : ''}`}>
+            <button className={`pt-check st-${tk.status}`} onClick={() => cycle(tk)} title={TSTATUS[tk.status]} aria-label={TSTATUS[tk.status]}>
+              {tk.status === 'done' ? '✓' : tk.status === 'in_progress' ? '◐' : ''}
+            </button>
+            <div className="pt-task-b" onClick={() => tk.body && setExpanded(expanded === tk.id ? null : tk.id)} style={{ cursor: tk.body ? 'pointer' : 'default' }}>
+              <div className="pt-task-t">
+                {tk.title}
+                <span className="pt-prio" style={{ '--c': PRIO[tk.priority]?.c || '#888' }}>{PRIO[tk.priority]?.l}</span>
+                {tk.due_date && <span className={`pt-due ${overdue(tk) ? 'over' : ''}`}>⏱ {fmtDay(tk.due_date)}</span>}
+              </div>
+              <div className="pt-task-m">
+                <span className={`pt-st st-${tk.status}`}>{TSTATUS[tk.status]}</span>
+                {' · '}{tk.assignee_name ? `→ ${tk.assignee_name}` : 'без исполнителя'} · от {tk.created_by}
+              </div>
+              {expanded === tk.id && tk.body && <div className="pt-task-d">{tk.body}</div>}
             </div>
+            {(tk.created_by === me?.username || isHead) && <button className="cal-del" onClick={() => del(tk)} aria-label="Удалить">×</button>}
           </div>
         ))}
       </div>
@@ -549,16 +601,30 @@ function Tasks({ me, onAuthLost }) {
 }
 
 /* ── Отделы ── */
-function Departments({ onAuthLost }) {
+function Departments({ me, onAuthLost }) {
   const [depts, setDepts] = useState([]);
-  useEffect(() => { getJSON('/api/portal/departments').then((d) => setDepts(d.departments || [])).catch((e) => { if (e.status === 401) onAuthLost?.(); }); }, [onAuthLost]);
+  const [edit, setEdit] = useState(null);   // {id,name,desc} редактируемого отдела
+  const isAdmin = me?.role === 'admin';
+  const load = useCallback(() => { getJSON('/api/portal/departments').then((d) => setDepts(d.departments || [])).catch((e) => { if (e.status === 401) onAuthLost?.(); }); }, [onAuthLost]);
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (e) => {
+    e?.preventDefault?.();
+    if (!edit.name.trim()) return;
+    try { await sendJSON(`/api/admin/departments/${edit.id}`, 'PATCH', { name: edit.name.trim(), descr: edit.desc }); setEdit(null); load(); }
+    catch (e2) { if (e2.status === 401) onAuthLost?.(); else alert(e2.message || 'Не удалось'); }
+  };
+
   return (
     <div className="pt-view">
       <div className="pt-view-h"><h2>Отделы DDC</h2><span className="pt-hint">Структура и сотрудники</span></div>
       <div className="pt-depts">
         {depts.map((d, i) => (
-          <div className="pt-dept" key={i}>
-            <h3>{d.name}</h3>
+          <div className="pt-dept" key={d.id ?? i}>
+            <div className="pt-dept-top">
+              <h3>{d.name}</h3>
+              {isAdmin && d.id != null && <button className="pt-dept-edit" onClick={() => setEdit({ id: d.id, name: d.name, desc: d.desc || '' })} title="Изменить отдел">Изменить</button>}
+            </div>
             <p>{d.desc}</p>
             <div className="pt-dept-m">
               {(d.members || []).length === 0 ? <span className="pt-empty sm">Нет сотрудников</span>
@@ -567,6 +633,22 @@ function Departments({ onAuthLost }) {
           </div>
         ))}
       </div>
+
+      {edit && (
+        <div className="pt-modal-bg" onClick={() => setEdit(null)}>
+          <form className="pt-modal" onClick={(e) => e.stopPropagation()} onSubmit={save}>
+            <h3>Изменить отдел</h3>
+            <div className="adm-field"><label>Название</label>
+              <input className="adm-input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} autoFocus /></div>
+            <div className="adm-field"><label>Описание</label>
+              <textarea className="adm-input" rows={3} value={edit.desc} onChange={(e) => setEdit({ ...edit, desc: e.target.value })} /></div>
+            <div className="pt-modal-foot">
+              <button type="button" className="adm-btn ghost" onClick={() => setEdit(null)}>Отмена</button>
+              <button type="submit" className="adm-btn">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

@@ -388,3 +388,114 @@
   .mc-kpis { grid-template-columns: repeat(2, 1fr); }
   .mc-stat-v { font-size: 1.7rem; }
 }
+
+/* ═══════════════ Новые разделы: календарь, новости, задачи, уведомления ═══════════════ */
+
+/* Верх рейла: логотип + колокольчик */
+.pt-rail-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.pt-rail-top .pt-brand { margin-bottom: 0; }
+
+/* Колокольчик уведомлений */
+.pt-bell { position: relative; }
+.pt-bell-btn { position: relative; width: 40px; height: 40px; border-radius: 11px; border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.06); color: #aab3c4; display: grid; place-items: center; cursor: pointer; }
+.pt-bell-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+[data-theme='light'] .pt-bell-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.10); color: var(--ink-soft); }
+.pt-bell-badge { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #e5484d; color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.pt-bell-pop { position: absolute; top: 46px; left: 0; z-index: 60; width: 300px; max-height: 60vh; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-pop); padding: 6px; }
+.pt-bell-h { font-weight: 600; font-size: 13px; color: var(--ink-soft); padding: 8px 10px 6px; }
+.pt-bell-item { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 10px; padding: 9px 10px; cursor: pointer; color: var(--ink); }
+.pt-bell-item:hover { background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.pt-bell-item.unread { background: color-mix(in srgb, var(--blue) 8%, transparent); }
+.pt-bell-t { font-size: 13.5px; font-weight: 600; }
+.pt-bell-b { font-size: 12px; color: var(--ink-soft); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-bell-w { font-size: 11px; color: var(--ink-faint); margin-top: 3px; font-family: var(--mono); }
+
+/* Общие: кнопки/модалки */
+.adm-btn.sm { padding: 7px 13px; font-size: 13px; }
+.adm-btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--ink); box-shadow: none; }
+.pt-view-act { margin-left: auto; }
+.pt-modal-bg { position: fixed; inset: 0; z-index: 120; background: rgba(6,10,20,0.55); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 20px; }
+.pt-modal { width: min(460px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-pop); padding: 22px; max-height: 90vh; overflow-y: auto; }
+.pt-modal.wide { width: min(600px, 100%); }
+.pt-modal h3 { font-size: 1.15rem; margin-bottom: 14px; }
+.pt-modal-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+/* Фильтр-чипы (общие для календаря/новостей/задач) */
+.cal-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.cal-fchip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 980px; border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.cal-fchip .cal-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c, #888); }
+.cal-fchip.on { color: var(--ink); border-color: var(--c, var(--blue)); background: color-mix(in srgb, var(--c, var(--blue)) 12%, transparent); }
+
+/* Календарь */
+.cal-wrap { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
+.cal-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.cal-nav { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 18px; cursor: pointer; }
+.cal-title { font-weight: 600; font-size: 1.05rem; min-width: 160px; }
+.cal-today { margin-left: auto; padding: 6px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 13px; cursor: pointer; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-head { margin-bottom: 4px; }
+.cal-wd { text-align: center; font-size: 11px; color: var(--ink-faint); font-weight: 600; padding: 4px 0; }
+.cal-cell { position: relative; min-height: 64px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; transition: border-color 0.12s, background 0.12s; }
+.cal-cell:hover { border-color: var(--blue); }
+.cal-cell.empty { border: none; background: transparent; cursor: default; min-height: 0; }
+.cal-cell.today { border-color: var(--blue); }
+.cal-cell.sel { background: color-mix(in srgb, var(--blue) 12%, transparent); border-color: var(--blue); }
+.cal-num { font-size: 13px; font-weight: 600; color: var(--ink); }
+.cal-cell.today .cal-num { color: var(--blue); }
+.cal-dots { display: flex; flex-wrap: wrap; gap: 3px; }
+.cal-ev-dot { width: 6px; height: 6px; border-radius: 50%; }
+.cal-side { border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 14px; position: sticky; top: 16px; }
+.cal-side-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cal-list { display: flex; flex-direction: column; gap: 8px; }
+.cal-item { position: relative; display: flex; gap: 9px; padding: 9px 9px 9px 0; border-radius: 10px; background: color-mix(in srgb, var(--c, #888) 8%, transparent); }
+.cal-item-bar { width: 3px; border-radius: 3px; background: var(--c, #888); flex: none; }
+.cal-item.done .cal-item-t { text-decoration: line-through; opacity: 0.6; }
+.cal-item-t { font-size: 13.5px; font-weight: 600; }
+.cal-item-m { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+.cal-item-d { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+.cal-del { flex: none; align-self: flex-start; width: 22px; height: 22px; border: none; background: transparent; color: var(--ink-faint); font-size: 18px; line-height: 1; cursor: pointer; border-radius: 6px; }
+.cal-del:hover { color: #e5484d; background: color-mix(in srgb, #e5484d 12%, transparent); }
+.cal-form-row { display: flex; gap: 10px; }
+.cal-form-row .adm-field { flex: 1; }
+.cal-allday { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); margin: 4px 0 8px; cursor: pointer; }
+
+/* Новости */
+.news-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.news-card { position: relative; border: 1px solid var(--line); border-left: 3px solid var(--c, var(--blue)); border-radius: 14px; background: var(--card); padding: 16px 18px; box-shadow: var(--shadow-card); }
+.news-card.pinned { background: color-mix(in srgb, var(--c, var(--blue)) 5%, var(--card)); }
+.news-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.news-cat { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--c, var(--blue)); }
+.news-pin { font-size: 11px; color: var(--ink-faint); }
+.news-date { font-size: 11px; color: var(--ink-faint); margin-left: auto; font-family: var(--mono); }
+.news-title { font-size: 1.1rem; letter-spacing: -0.01em; margin-bottom: 6px; }
+.news-body { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; white-space: pre-wrap; }
+.news-author { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; color: var(--ink-soft); }
+
+/* Задачи (усиленные) */
+.pt-taskform.grid { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center; }
+.pt-taskform.grid .tf-title { grid-column: 1 / 2; }
+.pt-taskform.grid .tf-desc { grid-column: 1 / -1; }
+.pt-task.rich { align-items: flex-start; }
+.pt-check.st-in_progress { color: #b07d12; border-color: #b07d12; }
+.pt-check.st-done { background: #0a8a5a; border-color: #0a8a5a; color: #fff; }
+.pt-prio { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 980px; font-size: 10.5px; font-weight: 700; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); vertical-align: middle; }
+.pt-due { display: inline-block; margin-left: 8px; font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono); }
+.pt-due.over { color: #e5484d; font-weight: 700; }
+.pt-st { font-weight: 600; }
+.pt-st.st-open { color: var(--ink-soft); }
+.pt-st.st-in_progress { color: #b07d12; }
+.pt-st.st-done { color: #0a8a5a; }
+.pt-task-d { font-size: 13px; color: var(--ink-soft); margin-top: 6px; line-height: 1.45; white-space: pre-wrap; }
+
+/* Отделы: кнопка «Изменить» (админ) */
+.pt-dept-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pt-dept-edit { padding: 5px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--blue); font: inherit; font-size: 12.5px; cursor: pointer; }
+.pt-dept-edit:hover { background: color-mix(in srgb, var(--blue) 10%, transparent); }
+
+@media (max-width: 900px) {
+  .cal-wrap { grid-template-columns: 1fr; }
+  .cal-side { position: static; }
+  .pt-taskform.grid { grid-template-columns: 1fr 1fr; }
+  .pt-taskform.grid .tf-title { grid-column: 1 / -1; }
+  .pt-rail-top .pt-bell { display: none; }
+}

@@ -10,14 +10,24 @@ const DOC_TYPES = [
   { id: 'request', label: 'Служебный запрос' },
 ];
 const typeLabel = (id) => DOC_TYPES.find((t) => t.id === id)?.label || id || 'Документ';
+const DOC_CATS = [
+  { id: 'general', label: 'Общие', color: '#5b6472' },
+  { id: 'hr', label: 'Кадровые', color: '#0a8a5a' },
+  { id: 'finance', label: 'Финансовые', color: '#b07d12' },
+  { id: 'legal', label: 'Юридические', color: '#5a3fd6' },
+  { id: 'it', label: 'ИТ', color: '#2f6fe0' },
+];
+const catLabel = (id) => DOC_CATS.find((c) => c.id === id)?.label || 'Общие';
+const catColor = (id) => DOC_CATS.find((c) => c.id === id)?.color || '#5b6472';
 const fmtDate = (v) => { try { return new Date(v).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
-const EMPTY = { type: 'memo', to: '', subject: '', details: '' };
+const EMPTY = { type: 'memo', category: 'general', to: '', subject: '', details: '' };
 
 // Раздел «Документы»: ИИ-генерация документов + предпросмотр PDF прямо на странице.
 export default function Documents({ me, onAuthLost }) {
   const [view, setView] = useState('list');   // list | create | preview
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
+  const [catFilter, setCatFilter] = useState('all');
   const [active, setActive] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [gen, setGen] = useState(null);        // { title, body } — сгенерированный черновик
@@ -38,7 +48,7 @@ export default function Documents({ me, onAuthLost }) {
     if (!gen) return;
     setBusy(true); setErr('');
     try {
-      const d = await sendJSON('/api/portal/docs', 'POST', { title: gen.title, doc_type: form.type, body: gen.body });
+      const d = await sendJSON('/api/portal/docs', 'POST', { title: gen.title, doc_type: form.type, category: form.category, body: gen.body });
       setGen(null); setForm(EMPTY); load(); setActive(d); setView('preview');
     } catch (e) { if (e.status === 401) onAuthLost?.(); else setErr(e.message || 'Не удалось сохранить'); }
     finally { setBusy(false); }
@@ -50,7 +60,9 @@ export default function Documents({ me, onAuthLost }) {
   };
 
   const ql = q.trim().toLowerCase();
-  const list = ql ? items.filter((d) => [d.title, typeLabel(d.doc_type), d.author_name].some((x) => (x || '').toLowerCase().includes(ql))) : items;
+  const list = items
+    .filter((d) => catFilter === 'all' || (d.category || 'general') === catFilter)
+    .filter((d) => !ql || [d.title, typeLabel(d.doc_type), catLabel(d.category), d.author_name].some((x) => (x || '').toLowerCase().includes(ql)));
 
   // ── Предпросмотр PDF ──
   if (view === 'preview' && active) {
@@ -77,11 +89,18 @@ export default function Documents({ me, onAuthLost }) {
         </div>
         {!gen ? (
           <div className="pt-doc-form">
-            <label className="pt-doc-lab">Тип документа
-              <select className="adm-input" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-                {DOC_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
-            </label>
+            <div className="cal-form-row">
+              <label className="pt-doc-lab" style={{ flex: 1 }}>Тип документа
+                <select className="adm-input" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
+                  {DOC_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              </label>
+              <label className="pt-doc-lab" style={{ flex: 1 }}>Категория
+                <select className="adm-input" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
+                  {DOC_CATS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </label>
+            </div>
             <input className="adm-input" placeholder="Кому / адресат (напр. Директору департамента ИС)" value={form.to} onChange={(e) => setForm((f) => ({ ...f, to: e.target.value }))} />
             <input className="adm-input" placeholder="Тема документа" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} />
             <textarea className="adm-input pt-doc-details" placeholder="Суть: что нужно изложить (ИИ развернёт в официальный текст)" value={form.details} onChange={(e) => setForm((f) => ({ ...f, details: e.target.value }))} />
@@ -112,14 +131,20 @@ export default function Documents({ me, onAuthLost }) {
         <button className="pt-new" onClick={() => { setView('create'); setGen(null); setForm(EMPTY); setErr(''); }}>+ Создать</button>
       </div>
       <input className="adm-input pt-search" placeholder="Поиск документа…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="cal-filters">
+        <button className={`cal-fchip ${catFilter === 'all' ? 'on' : ''}`} style={{ '--c': '#5b6472' }} onClick={() => setCatFilter('all')}><span className="cal-dot" /> Все</button>
+        {DOC_CATS.map((c) => (
+          <button key={c.id} className={`cal-fchip ${catFilter === c.id ? 'on' : ''}`} style={{ '--c': c.color }} onClick={() => setCatFilter(c.id)}><span className="cal-dot" /> {c.label}</button>
+        ))}
+      </div>
       <div className="pt-docs">
         {list.map((d) => (
           <div className="pt-doc-card" key={d.id}>
             <button className="pt-doc-open" onClick={() => { setActive(d); setView('preview'); }}>
-              <span className="pt-doc-ic">
+              <span className="pt-doc-ic" style={{ color: catColor(d.category) }}>
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M9 13h6M9 17h6" /></svg>
               </span>
-              <span className="pt-doc-t"><b>{d.title}</b><small>{typeLabel(d.doc_type)} · {d.author_name} · {fmtDate(d.created_at)}</small></span>
+              <span className="pt-doc-t"><b>{d.title}</b><small>{catLabel(d.category)} · {typeLabel(d.doc_type)} · {d.author_name} · {fmtDate(d.created_at)}</small></span>
             </button>
             {(d.author_id === me?.id || ['admin', 'manager'].includes(me?.role)) && (
               <button className="nm-mini del" onClick={(e) => del(d, e)}>Удалить</button>

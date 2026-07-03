@@ -989,10 +989,10 @@ app.get('/api/portal/users', auth, async (req, res) => {
 // Отделы DDC + их участники (список отделов — из таблицы departments)
 app.get('/api/portal/departments', auth, async (req, res) => {
   try {
-    const { rows: depts } = await db.query(`SELECT name, descr FROM departments ORDER BY sort_order, id`);
+    const { rows: depts } = await db.query(`SELECT id, name, descr FROM departments ORDER BY sort_order, id`);
     const { rows: users } = await db.query(`SELECT full_name, username, department, role FROM users WHERE active = TRUE`);
     const departments = depts.map((d) => ({
-      name: d.name, desc: d.descr,
+      id: d.id, name: d.name, desc: d.descr,
       members: users.filter((u) => (u.department || '') === d.name).map((u) => ({ name: u.full_name || u.username, role: u.role })),
     }));
     res.json({ departments, total: users.length });
