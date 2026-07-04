@@ -1809,3 +1809,19 @@ html[data-a11y='on'] .kz-field { display: none; }
 .hud-reticle b { position: absolute; inset: 30%; border: 1px solid currentColor; border-radius: 50%; animation: hudPulse 2.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) { .hud-tele i, .hud-scan, .hud-reticle b { animation: none; } }
+
+/* ═══════════ Плавные переходы между страницами (View Transitions API) ═══════════ */
+/* Мягкий кроссфейд старого и нового содержимого. Поддержка: Chrome/Edge, Firefox, Safari 18+. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.34s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Где VT работает — выключаем старую entrance-анимацию (иначе двойной эффект: кроссфейд + въезд). */
+@supports (view-transition-name: none) {
+  .page-tx { animation: none; }
+  .page-tx > * { animation: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}
