@@ -564,8 +564,10 @@ export function initScene(canvas) {
   scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
 
   const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, prevT = 0;
-  let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps для адаптивного DPR
-  let qBad = 0, qualityLow = false;        // адаптивное качество слоёв (гистерезис против мигания)
+  let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps
+  // Адаптивный губернатор качества: 0 = полное, 1 = без параллакса мыши, 2 = без DOM-слоёв глубины,
+  // 3 = + облегчённые материалы/additive-слои. Разрешение (DPR) НЕ трогаем — без «мыла».
+  let perfTier = 0, tierHold = 0, badWin = 0, goodWin = 0;
   // Вступительная «сборка» карты при загрузке (один раз, по таймеру — не под скролл):
   // контур прорисовывается → города зажигаются по очереди → дуги протягиваются → башни.
   let introStart = -1, introDone = false; const INTRO_DUR = 2.6;
@@ -585,17 +587,28 @@ export function initScene(canvas) {
     // На Firefox (gecko) снижаем РАНЬШЕ и до меньшего пола — приоритет высокому/ровному FPS.
     perfAcc += rawDt; perfN++;
     if (t - perfT > 0.7 && perfN > 8) {
-      // DPR НЕ трогаем — держим полное разрешение (крипко, без «мыла») на ВСЕХ устройствах.
-      // Под нагрузкой снимаем нагрузку не размытием, а гашением тяжёлых additive-слоёв (пыль/пакеты).
+      // Губернатор: меряем реальный FPS на устройстве. Плохо → ступень вниз (снимаем нагрузку,
+      // сохраняя сцену); хорошо и стабильно → ступень вверх (возвращаем красоту). DPR не трогаем.
       if (!perf.offthread) {
         const avg = perfAcc / perfN;                             // средняя длительность кадра, сек
-        if (avg > 0.028) qBad = Math.min(6, qBad + 1);           // ~<36 fps
-        else if (avg < 0.0182) qBad = Math.max(0, qBad - 1);     // ~>55 fps
-        const wantLow = qBad >= 3;
-        if (wantLow !== qualityLow) {
-          qualityLow = wantLow;
-          if (gMap.userData.dust) gMap.userData.dust.visible = !qualityLow;
-          (gMap.userData.packets || []).forEach((pk, i) => { pk.visible = qualityLow ? (i % 2 === 0) : true; });
+        if (tierHold > 0) tierHold--;
+        if (avg > 0.026) { badWin++; goodWin = 0; }              // < ~38 fps
+        else if (avg < 0.0185) { goodWin++; badWin = 0; }        // > ~54 fps
+        else { badWin = 0; goodWin = 0; }
+        let want = perfTier;
+        if (badWin >= 2 && perfTier < 3) { want = perfTier + 1; badWin = 0; }   // устойчивая просадка → облегчаем
+        else if (goodWin >= 3 && perfTier > 0 && tierHold === 0) { want = perfTier - 1; goodWin = 0; }  // стабильно быстро → восстанавливаем
+        if (want !== perfTier) {
+          const degraded = want > perfTier;      // больше номер = сильнее облегчение
+          perfTier = want;
+          if (degraded) tierHold = 4;            // после ухудшения ждём ~3с перед попыткой восстановления
+          try { document.documentElement.dataset.perfTier = String(perfTier); } catch { /* SSR */ }
+          const heavy = perfTier >= 3;
+          if (gMap.userData.dust) gMap.userData.dust.visible = !heavy;
+          (gMap.userData.packets || []).forEach((pk, i) => { pk.visible = heavy ? (i % 3 === 0) : true; });
+          const pm = gMap.userData.plateMat;                     // плита карты — самая большая площадь = главный fill-rate
+          // envMapIntensity/bumpScale — это uniforms: меняются без перекомпиляции шейдера (без хитча).
+          if (pm) { pm.envMapIntensity = heavy ? 0.4 : 1.6; pm.bumpScale = heavy ? 0 : 0.65; }
         }
       }
       perfAcc = 0; perfN = 0; perfT = t;

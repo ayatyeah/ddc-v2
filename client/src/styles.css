@@ -1825,3 +1825,9 @@ html[data-a11y='on'] .kz-field { display: none; }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
+
+/* Адаптивный губернатор качества (data-perf-tier ставит Scene3D по реальному FPS): при заметной
+   просадке сцена остаётся, но снимаются окружающие DOM-слои глубины (без «мыла», без потери сцены). */
+[data-perf-tier="2"] .circuit-field, [data-perf-tier="3"] .circuit-field,
+[data-perf-tier="2"] .depth-fog,     [data-perf-tier="3"] .depth-fog,
+[data-perf-tier="2"] .hud-layer,     [data-perf-tier="3"] .hud-layer { display: none !important; }

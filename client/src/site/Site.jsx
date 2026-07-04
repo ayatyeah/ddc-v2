@@ -81,7 +81,9 @@ export default function Site() {
     if (isMobile || lowPower) return;   // параллакс мыши — только на достаточно мощных устройствах
     const root = document.documentElement;
     let raf = 0, mx = 0, my = 0;
-    const flush = () => { raf = 0; root.style.setProperty('--mx', mx.toFixed(3)); root.style.setProperty('--my', my.toFixed(3)); };
+    // При просадке FPS (perf-tier ≥ 1, ставит Scene3D) обнуляем параллакс мыши — это первое,
+    // что снимаем: постоянный композитинг больших слоёв на каждом движении курсора дорог.
+    const flush = () => { raf = 0; const k = (+(root.dataset.perfTier || 0) >= 1) ? 0 : 1; root.style.setProperty('--mx', (mx * k).toFixed(3)); root.style.setProperty('--my', (my * k).toFixed(3)); };
     const onMove = (e) => {
       mx = (e.clientX / window.innerWidth - 0.5) * 2;
       my = (e.clientY / window.innerHeight - 0.5) * 2;
