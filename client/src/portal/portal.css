@@ -530,3 +530,8 @@
 .va-typed { display: flex; gap: 6px; padding: 0 14px 14px; }
 .va-typed .adm-input { flex: 1; }
 @media (prefers-reduced-motion: reduce) { .va-mic.on { animation: none; } }
+
+/* Голосовой агент: результат действий, реакция на голос, «живая» кнопка */
+.va-msg.done { align-self: flex-start; background: color-mix(in srgb, #0a8a5a 14%, transparent); color: #0a8a5a; font-size: 12.5px; white-space: pre-line; border-bottom-left-radius: 4px; font-weight: 500; }
+.va-mic.on { transform: scale(calc(1 + var(--lvl, 0) * 0.04)); }
+.va-fab.live { animation: vaPulse 1.3s ease-in-out infinite; }

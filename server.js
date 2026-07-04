@@ -1962,6 +1962,7 @@ async function callOpenAI(system, user) {
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_KEY}` },
+    signal: AbortSignal.timeout(20000),   // не даём зависнуть запросу
     body: JSON.stringify({
       model: OPENAI_MODEL,
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
@@ -1975,19 +1976,27 @@ async function callOpenAI(system, user) {
 
 // Голосовой ассистент: превращает фразу в список действий (исполняет их фронт через уже
 // существующие эндпоинты — там же соблюдаются права роли). Возвращает {say, actions}.
-const ASSIST_SYSTEM = `Ты — голосовой ассистент корпоративного портала DDC. Пользователь диктует команду на русском. Верни СТРОГО JSON вида {"say":"короткое подтверждение на русском","actions":[...]}.
+const ASSIST_SYSTEM = `Ты — голосовой ассистент корпоративного портала DDC. Пользователь диктует команду на русском (может с распознанными ошибками — пойми смысл). Верни СТРОГО JSON: {"say":"короткое дружелюбное подтверждение на русском","actions":[...]}.
 Доступные действия (поле type):
 - {"type":"navigate","tab":"home|calendar|news|docs|requests|tasks|people|depts|dm|chat|profile|mission"} — открыть раздел портала.
-- {"type":"create_event","title":"...","date":"YYYY-MM-DD","time":"HH:MM или null","kind":"meeting|presentation|other"} — добавить событие в календарь.
-- {"type":"create_task","title":"...","priority":"low|normal|high|urgent","due_date":"YYYY-MM-DD или null"} — создать задачу.
-- {"type":"create_news","title":"...","body":"...","category":"company|hr|it|finance|event"} — опубликовать внутреннюю новость.
-- {"type":"none"} — если команда непонятна (в say объясни, что не понял).
-Сегодня {DATE}, год по умолчанию {YEAR}. Дату без года трактуй как ближайшую будущую. В одной команде может быть несколько действий (например «открой календарь и впиши встречу на 3 июля» = navigate + create_event). Отвечай только JSON, без пояснений и markdown.`;
+- {"type":"create_event","title":"...","date":"YYYY-MM-DD","time":"HH:MM или null","kind":"meeting|presentation|other"} — событие в календарь.
+- {"type":"create_task","title":"...","priority":"low|normal|high|urgent","due_date":"YYYY-MM-DD или null"} — задача.
+- {"type":"create_news","title":"...","body":"...","category":"company|hr|it|finance|event"} — внутренняя новость.
+- {"type":"create_request","kind":"vacation|sick|trip|certificate|access|equipment|pass|other","title":"...","body":"..."} — заявка (отпуск/справка/командировка/доступ и т.п.).
+- {"type":"none"} — если команда непонятна (в say вежливо уточни).
+Разделы (синонимы): «календарь/встречи»→calendar, «задачи/дела»→tasks, «новости/объявления»→news, «документы»→docs, «заявки»→requests, «сотрудники/люди/коллеги»→people, «отделы»→depts, «сообщения/личка»→dm, «чаты»→chat, «профиль»→profile, «дашборд/mission»→mission.
+Сегодня {DATE} ({WEEKDAY}), год {YEAR}. Относительные даты считай от сегодня: «сегодня»,«завтра»,«послезавтра»,«в понедельник/вторник…»(ближайший будущий),«через неделю». Время: «в 3 часа дня»→15:00, «в 9 утра»→09:00, «в полдень»→12:00. Дату без года — ближайшую будущую.
+В одной фразе может быть НЕСКОЛЬКО действий («открой календарь и впиши встречу на завтра в 10» = navigate+create_event). Приоритет по словам «срочно/важно»→urgent/high.
+ДЕЙСТВУЙ по имеющимся данным, не переспрашивай по мелочам — недостающее подставь разумно (напр. заголовок из сути, отсутствующее время = весь день). Возвращай action, а не вопрос. {"type":"none"} только если совсем непонятно, ЧТО сделать. Отвечай ТОЛЬКО JSON, без markdown и пояснений.`;
 
 // Разбор текста команды в действия (gpt-5-mini — «мозг»).
+const WEEKDAYS_RU = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 async function parseCommand(text) {
   const now = new Date();
-  const sys = ASSIST_SYSTEM.replace('{DATE}', now.toISOString().slice(0, 10)).replace('{YEAR}', String(now.getFullYear()));
+  const sys = ASSIST_SYSTEM
+    .replace('{DATE}', now.toISOString().slice(0, 10))
+    .replace('{WEEKDAY}', WEEKDAYS_RU[now.getDay()])
+    .replace('{YEAR}', String(now.getFullYear()));
   const raw = await callOpenAI(sys, text);
   const parsed = parseJsonLoose(raw) || {};
   return { say: String(parsed.say || '').slice(0, 300), actions: Array.isArray(parsed.actions) ? parsed.actions.slice(0, 6) : [], text };
@@ -2004,6 +2013,7 @@ async function transcribeAudio(buf, mime) {
   fd.append('language', 'ru');
   const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST', headers: { Authorization: `Bearer ${OPENAI_KEY}` }, body: fd,
+    signal: AbortSignal.timeout(20000),   // не даём зависнуть распознаванию
   });
   if (!r.ok) { const tx = await r.text(); throw new Error(`Transcribe ${r.status}: ${tx.slice(0, 300)}`); }
   const j = await r.json();
