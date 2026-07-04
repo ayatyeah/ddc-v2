@@ -86,7 +86,7 @@ export default function Site() {
   // Параллакс мыши: публикуем --mx/--my (−1…1) — слои глубины смещаются на разную величину
   // (calc(var(--mx) * Npx)), создавая ощущение объёма. Только десктоп (на мобиле мыши нет).
   useEffect(() => {
-    if (isMobile) return;
+    if (isMobile || lowPower) return;   // параллакс мыши — только на достаточно мощных устройствах
     const root = document.documentElement;
     let raf = 0, mx = 0, my = 0;
     const flush = () => { raf = 0; root.style.setProperty('--mx', mx.toFixed(3)); root.style.setProperty('--my', my.toFixed(3)); };
@@ -97,7 +97,7 @@ export default function Site() {
     };
     window.addEventListener('pointermove', onMove, { passive: true });
     return () => { window.removeEventListener('pointermove', onMove); if (raf) cancelAnimationFrame(raf); root.style.removeProperty('--mx'); root.style.removeProperty('--my'); };
-  }, [isMobile]);
+  }, [isMobile, lowPower]);
 
   // SEO: обновляем заголовок и meta-описание при смене страницы (SPA-навигация)
   useEffect(() => {
@@ -191,8 +191,8 @@ export default function Site() {
           фон (#scroll-bg) → PCB-линии (CircuitField) → туман (DepthFog) → [3D-сцена] → HUD.
           На мобиле всё это композитится на каждом кадре скролла → фризы, поэтому там только
           сцена + небо. */}
-      {!isMobile && !a11y && <CircuitField />}
-      {!isMobile && !a11y && <DepthFog />}
+      {!isMobile && !lowPower && !a11y && <CircuitField />}
+      {!isMobile && !lowPower && !a11y && <DepthFog />}
       {/* 3D-сцена DDC (карта + здание) — на ВСЕХ устройствах, включая телефон. */}
       {!a11y && (
         <ErrorBoundary fallback={null}>
@@ -204,7 +204,7 @@ export default function Site() {
       {!isMobile && !lowPower && !a11y && <Particles />}
       {!isMobile && !a11y && <Fog />}
       {/* HUD-оверлей (передний план) — техно-элементы вокруг сцены, только на главной, гаснут при скролле. */}
-      {!isMobile && !a11y && path === '/' && <HudLayer />}
+      {!isMobile && !lowPower && !a11y && path === '/' && <HudLayer />}
       <div id="scroll-grain" aria-hidden="true" />
       <Nav />
       <Brand />

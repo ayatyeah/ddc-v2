@@ -1761,15 +1761,14 @@ html[data-a11y='on'] .kz-field { display: none; }
   transform: translate3d(calc(var(--mx, 0) * 22px), calc(var(--sy, 0px) * 0.06 + var(--my, 0) * 16px), 0);
   will-change: transform;
 }
-.df-blob { position: absolute; border-radius: 50%; filter: blur(64px); }
-.df-blob.b1 { width: 48vw; height: 48vw; left: 38%; top: 2%; background: radial-gradient(circle, rgba(150,190,255,0.50), transparent 66%); animation: dfDrift 34s ease-in-out infinite; }
-.df-blob.b2 { width: 34vw; height: 34vw; right: -4%; top: 34%; background: radial-gradient(circle, rgba(110,205,255,0.40), transparent 68%); animation: dfDrift 40s ease-in-out infinite reverse; }
-.df-blob.b3 { width: 42vw; height: 42vw; left: 48%; bottom: -12%; background: radial-gradient(circle, rgba(180,205,255,0.42), transparent 70%); animation: dfDrift 30s ease-in-out infinite; }
+/* Туман — СТАТИЧНЫЕ размытые пятна (без анимации scale, которая заставляла GPU пере-размывать
+   слой каждый кадр). Blur снижен, третье пятно убрано → композитится один раз, дальше почти free. */
+.df-blob { position: absolute; border-radius: 50%; filter: blur(40px); }
+.df-blob.b1 { width: 44vw; height: 44vw; left: 38%; top: 2%; background: radial-gradient(circle, rgba(150,190,255,0.46), transparent 66%); }
+.df-blob.b2 { width: 32vw; height: 32vw; right: -4%; top: 34%; background: radial-gradient(circle, rgba(110,205,255,0.36), transparent 68%); }
+.df-blob.b3 { display: none; }
 [data-theme='dark'] .df-blob.b1 { background: radial-gradient(circle, rgba(60,120,220,0.30), transparent 68%); }
 [data-theme='dark'] .df-blob.b2 { background: radial-gradient(circle, rgba(50,150,220,0.24), transparent 70%); }
-[data-theme='dark'] .df-blob.b3 { background: radial-gradient(circle, rgba(70,120,210,0.26), transparent 72%); }
-@keyframes dfDrift { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(3vw,-2vh) scale(1.08); } }
-@media (prefers-reduced-motion: reduce) { .df-blob { animation: none; } }
 
 /* HUD — техно-оверлей вокруг сцены (передний план). Быстрый параллакс, гаснет при скролле. */
 .hud-layer {
