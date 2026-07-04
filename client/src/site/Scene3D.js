@@ -63,7 +63,7 @@ export function initScene(canvas) {
   const metal = (c = 0xd8dde6) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.8, roughness: 0.3, envMapIntensity: 1.2 });
   const matte = (c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.2, roughness: 0.65 });
   const emis = (c, i = 0.6) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i, roughness: 0.5 });
-  const box = (w, h, d, m, r = 0.1) => new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 2, r), m);
+  const box = (w, h, d, m, r = 0.1) => new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 1, r), m);   // 1 сегмент скругления — незаметно, но меньше полигонов
 
   const TL = new THREE.TextureLoader();
   const facadeTex = (url, rx, ry) => { const t = TL.load(url); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 4; return t; };
@@ -99,8 +99,8 @@ export function initScene(canvas) {
     // Синий подиум, посаженный прямо на карту (тонкая плита у поверхности)
     const podium = box(26, 1.6, 14, matte(0x1c4f8e), 0.2); podium.position.y = 0.8; gTowers.add(podium);
     const podiumTop = box(22, 0.4, 11, emis(0x3a7fd6, 0.62), 0.2); podiumTop.position.y = 1.7; gTowers.add(podiumTop);
-    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 3, 10), metal()); mast.position.set(6.5, 30.6, 0); gTowers.add(mast);
-    beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), emis(0x7ad6ff, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 3, 8), metal()); mast.position.set(6.5, 30.6, 0); gTowers.add(mast);
+    beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), emis(0x7ad6ff, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
 
     // Мягкое голубое свечение у основания — «штаб-квартира светится на карте».
     // На мобиле пропускаем (большой additive-план = тяжёлый overdraw → фризы).
@@ -207,7 +207,7 @@ export function initScene(canvas) {
     shape.closePath();
 
     // ExtrudeGeometry — плита страны. bevelSegments 2 -> мягкая реалистичная кромка (не гранёная).
-    const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 2, steps: 1 });
+    const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 1, steps: 1 });
 
     // Синяя кристаллическая суша (референс — гранёный лёд/стекло): насыщенный синий с
     //   мягкой географической вариацией (север светлее, восток чуть глубже). Огранку даёт
@@ -585,24 +585,12 @@ export function initScene(canvas) {
     // На Firefox (gecko) снижаем РАНЬШЕ и до меньшего пола — приоритет высокому/ровному FPS.
     perfAcc += rawDt; perfN++;
     if (t - perfT > 0.7 && perfN > 8) {
-      // Не снижаем DPR/качество, когда:
-      //  • off-thread (Web Worker) — главный поток свободен;
-      //  • ТЕЛЕФОН — там просадки fps дают не GPU, а троттлинг rAF от iOS во время скролла.
-      //    Если реагировать на них понижением DPR, картинка навсегда уходит в «мыло». Держим
-      //    фиксированное высокое разрешение (сцена мелкая, GPU телефона рисует её за ~3 мс).
-      if (!perf.offthread && !perf.mobile) {
-        const avg = perfAcc / perfN;                                   // средняя длительность кадра, сек
-        const maxDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
-        const lowerAt = perf.engine === 'gecko' ? 0.0182 : 0.025;      // gecko: реагируем уже на ~55fps
-        const floor = perf.engine === 'gecko' ? 0.85 : 1.0;
-        let nd = curDpr;
-        if (avg > lowerAt && curDpr > floor) nd = Math.max(floor, curDpr - 0.2);          // просадка -> ниже разрешение
-        else if (avg < 0.0166 && curDpr < maxDpr) nd = Math.min(maxDpr, curDpr + 0.15);   // запас -> выше
-        if (Math.abs(nd - curDpr) > 0.02) { curDpr = nd; renderer.setPixelRatio(curDpr); renderer.setSize(window.innerWidth, window.innerHeight, false); }
-
-        // Второй уровень: если и на минимальном DPR fps низкий — гасим тяжёлые additive-слои.
-        if (avg > 0.028) qBad = Math.min(6, qBad + 1);            // ~<36 fps
-        else if (avg < 0.0182) qBad = Math.max(0, qBad - 1);      // ~>55 fps
+      // DPR НЕ трогаем — держим полное разрешение (крипко, без «мыла») на ВСЕХ устройствах.
+      // Под нагрузкой снимаем нагрузку не размытием, а гашением тяжёлых additive-слоёв (пыль/пакеты).
+      if (!perf.offthread) {
+        const avg = perfAcc / perfN;                             // средняя длительность кадра, сек
+        if (avg > 0.028) qBad = Math.min(6, qBad + 1);           // ~<36 fps
+        else if (avg < 0.0182) qBad = Math.max(0, qBad - 1);     // ~>55 fps
         const wantLow = qBad >= 3;
         if (wantLow !== qualityLow) {
           qualityLow = wantLow;
@@ -769,8 +757,14 @@ export function initScene(canvas) {
     }
   }
   function stop() { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-  const onVisibility = () => { document.hidden ? stop() : start(); };
+  // Не рендерим, когда страница не видна (вкладка скрыта) ИЛИ окно потеряло фокус (свернули/
+  // переключились на другое приложение) — фон фиксированный, поэтому «вне экрана» = «вне фокуса».
+  const onVisibility = () => { (document.hidden ? stop() : start()); };
+  const onBlur = () => stop();
+  const onFocus = () => { if (!document.hidden) start(); };
   document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('blur', onBlur);
+  window.addEventListener('focus', onFocus);
   start();
 
   return {
@@ -784,6 +778,7 @@ export function initScene(canvas) {
     dispose() {
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur); window.removeEventListener('focus', onFocus);
       window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
       window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);
       window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);

@@ -44,22 +44,45 @@ try {
     || /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || '');
 } catch { /* оставляем дефолт desktop */ }
 
-// Потолок разрешения рендера WebGL и MSAA по движку/устройству.
-// blink/webkit — полное качество; gecko (Firefox) — ниже ради стабильного FPS; телефон —
-// заметно ниже (меньше пикселей = глаже скролл); слабые устройства — ещё ниже. Поверх
-// этого адаптивный DPR в сцене ещё опускает качество при реальных просадках FPS.
-// Телефон держим на ВЫСОКОМ разрешении (2×) — «мыло» уходит. Раньше стоял 1.35 + адаптивное
-// понижение, и iOS-троттлинг rAF во время скролла ложно принимался за слабый GPU → DPR падал
-// в пол → размытая картинка. Теперь на мобиле DPR фиксирован (см. Scene3D — адаптив выключен).
-const dprCap = lowPower ? 1.35 : mobile ? 2.0 : engine === 'gecko' ? 1.3 : 1.75;
-const antialias = !(lowPower || mobile || engine === 'gecko');
+// Реальный GPU (WEBGL_debug_renderer_info): эвристика по CPU/памяти НЕ ловит слабую
+// встроенную графику (Intel HD/UHD, старые Mali/Adreno, софт-рендер) — а тормозит именно фон.
+// Прямой сигнал о видеокарте позволяет заранее снять эффекты, не снижая разрешение (без мыла).
+let gpu = '', weakGpu = false, softwareGpu = false;
+try {
+  const cv = document.createElement('canvas');
+  const gl = cv.getContext('webgl') || cv.getContext('experimental-webgl');
+  if (gl) {
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    gpu = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '') : '';
+    const g = gpu.toLowerCase();
+    softwareGpu = /swiftshader|llvmpipe|software|microsoft basic|mesa offscreen/.test(g);
+    weakGpu = softwareGpu
+      || /intel.*(hd graphics|uhd graphics)/.test(g)     // старые/базовые интеграшки Intel (HD/UHD)
+      || /gma|mobile intel/.test(g)
+      || /mali-4|mali-t[0-6]|mali-g3[01]/.test(g)         // слабые Mali
+      || /adreno \(?[1-4]\d\d/.test(g)                    // Adreno 1xx–4xx
+      || /powervr/.test(g);
+    const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+  }
+} catch { /* нет WebGL/расширения — оставляем дефолт (не слабый) */ }
+
+// «Лёгкий» режим: слабое устройство ИЛИ слабый GPU ИЛИ просьба о пониженной анимации.
+// В нём фон-эффекты (PCB/туман/HUD/параллакс мыши) не рисуются — но РАЗРЕШЕНИЕ НЕ РЕЖЕМ.
+const lite = lowPower || weakGpu;
+
+// Потолок разрешения рендера. Крипко везде (без «мыла»): рендерим в разрешение устройства
+// вплоть до 2×. Нагрузку на слабых снимаем НЕ понижением DPR (это и есть мыло), а отключением
+// эффектов + упрощением геометрии + паузой вне фокуса. Адаптивное понижение DPR в сцене выключено.
+const dprCap = engine === 'gecko' ? 1.75 : 2.0;
+const antialias = !(mobile || engine === 'gecko' || lite);   // MSAA — только на мощных non-Firefox
 
 // Метки на <html> — их используют per-engine/per-browser правила в styles.css
 try {
   document.documentElement.dataset.engine = engine;
   document.documentElement.dataset.browser = browser;
+  if (lite) document.documentElement.dataset.perf = 'lite';
 } catch { /* SSR/edge */ }
 
 // offthread выставляется в true из scene.worker.js (рендер в Web Worker): в этом режиме
 // сцена не снижает DPR/качество под fps — главный поток свободен, скролл плавный.
-export const perf = { engine, browser, lowPower, mobile, dprCap, antialias, offthread: false };
+export const perf = { engine, browser, lowPower, weakGpu, softwareGpu, lite, mobile, gpu, dprCap, antialias, offthread: false };

@@ -17,6 +17,7 @@ const Background3D = lazy(() => import('./Background3D.jsx'));
 import Particles from './Particles.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { hideSplash } from '../splash.js';
+import { perf } from './perfProfile.js';   // профиль устройства + детект слабого GPU (perf.lite)
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 
@@ -32,24 +33,15 @@ function useIsMobile() {
   return m;
 }
 
-// Слабое устройство: мало ядер/памяти или просьба о пониженной анимации. На таких
-// НЕ грузим дополнительные canvas-слои (частицы, потоки данных) — только адаптивную сцену.
-function isLowPowerDevice() {
-  try {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
-    const cores = navigator.hardwareConcurrency || 8;
-    const mem = navigator.deviceMemory || 8;
-    return cores <= 4 || mem <= 4;
-  } catch { return false; }
-}
-
 export default function Site() {
   const path = useRoute();
   const known = ROUTES[path];
   const route = known || ROUTES['/'];       // фон/оттенок неба для 404 берём как у главной
   const Page = known ? route.Comp : NotFoundPage;
   const isMobile = useIsMobile();
-  const lowPower = useState(isLowPowerDevice)[0];   // считаем один раз на маунте
+  // «Лёгкий» режим: слабое устройство ИЛИ слабый GPU ИЛИ reduced-motion (см. perfProfile).
+  // На таких НЕ грузим декор-слои глубины (PCB/туман/HUD/частицы) и параллакс мыши.
+  const lowPower = useState(() => perf.lite)[0];
   const a11y = useA11y();   // версия для слабовидящих — без 3D, частиц и тумана
   const theme = useTheme(); // dark/light — влияет на палитру неба под страницу
 

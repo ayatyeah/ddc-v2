@@ -1761,13 +1761,13 @@ html[data-a11y='on'] .kz-field { display: none; }
   transform: translate3d(calc(var(--mx, 0) * 22px), calc(var(--sy, 0px) * 0.06 + var(--my, 0) * 16px), 0);
   will-change: transform;
 }
-/* Туман — СТАТИЧНЫЕ размытые пятна (без анимации scale, которая заставляла GPU пере-размывать
-   слой каждый кадр). Blur снижен, третье пятно убрано → композитится один раз, дальше почти free. */
-.df-blob { position: absolute; border-radius: 50%; filter: blur(40px); }
-.df-blob.b1 { width: 44vw; height: 44vw; left: 38%; top: 2%; background: radial-gradient(circle, rgba(150,190,255,0.46), transparent 66%); }
-.df-blob.b2 { width: 32vw; height: 32vw; right: -4%; top: 34%; background: radial-gradient(circle, rgba(110,205,255,0.36), transparent 68%); }
+/* Туман — БЕЗ filter:blur. Мягкость даёт сам многоступенчатый radial-gradient (плавный спад),
+   поэтому нет дорогого GPU-размытия и лишнего composited-слоя в памяти. Пятна статичны. */
+.df-blob { position: absolute; border-radius: 50%; }
+.df-blob.b1 { width: 60vw; height: 60vw; left: 32%; top: -8%; background: radial-gradient(circle, rgba(150,190,255,0.34) 0%, rgba(150,190,255,0.12) 38%, transparent 70%); }
+.df-blob.b2 { width: 46vw; height: 46vw; right: -8%; top: 26%; background: radial-gradient(circle, rgba(110,205,255,0.26) 0%, rgba(110,205,255,0.09) 40%, transparent 72%); }
 .df-blob.b3 { display: none; }
-[data-theme='dark'] .df-blob.b1 { background: radial-gradient(circle, rgba(60,120,220,0.30), transparent 68%); }
+[data-theme='dark'] .df-blob.b1 { background: radial-gradient(circle, rgba(60,120,220,0.24) 0%, rgba(60,120,220,0.08) 40%, transparent 72%); }
 [data-theme='dark'] .df-blob.b2 { background: radial-gradient(circle, rgba(50,150,220,0.24), transparent 70%); }
 
 /* HUD — техно-оверлей вокруг сцены (передний план). Быстрый параллакс, гаснет при скролле. */
