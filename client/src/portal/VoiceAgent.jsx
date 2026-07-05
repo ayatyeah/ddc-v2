@@ -31,6 +31,8 @@ export default function VoiceAgent({ onGo, me }) {
     window.speechSynthesis?.addEventListener?.('voiceschanged', load);
     return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', load);
   }, []);
+  // Если панель закрыли во время записи — прекращаем слушать (без отправки).
+  useEffect(() => { if (!open && phase === 'listening') { cancelRef.current = true; try { mrRef.current?.state !== 'inactive' && mrRef.current?.stop(); } catch {} } }, [open, phase]);
   // Приятный русский голос: предпочитаем нейросетевые (Natural/Online) и женские.
   const speak = useCallback((text) => {
     try {
@@ -123,21 +125,25 @@ export default function VoiceAgent({ onGo, me }) {
       const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
       ctx.createMediaStreamSource(stream).connect(analyser);
       const data = new Uint8Array(analyser.fftSize);
-      const SPEECH = 0.03, SIL_MS = 1000, MAX_MS = 13000, NOSPEECH_MS = 4500;
-      let speaking = false, silence = 0, t0 = Date.now();
+      // Порог адаптируется к микрофону: первые ~450мс меряем фоновый шум, речь = заметно выше него.
+      const SIL_MS = 900, MAX_MS = 14000, NOSPEECH_MS = 6000;
+      let speaking = false, silence = 0, t0 = Date.now(), calib = [], noise = 0.01;
       const tick = () => {
         if (!mrRef.current || mrRef.current.state === 'inactive') return;
         analyser.getByteTimeDomainData(data);
         let s = 0; for (let i = 0; i < data.length; i++) { const x = (data[i] - 128) / 128; s += x * x; }
         const vol = Math.sqrt(s / data.length); setLevel(vol);
-        const now = Date.now();
-        if (vol > SPEECH) { speaking = true; silence = 0; }
-        else if (speaking) { if (!silence) silence = now; else if (now - silence > SIL_MS) { stopRec(); return; } }
-        if (now - t0 > MAX_MS) { stopRec(); return; }
-        if (!speaking && now - t0 > NOSPEECH_MS) { cancelRec(); return; }
-        vadRef.current = setTimeout(tick, 70);
+        const now = Date.now(), el = now - t0;
+        if (el < 450) calib.push(vol);
+        else if (calib) { noise = Math.max(0.008, calib.reduce((a, b) => a + b, 0) / (calib.length || 1)); calib = null; }
+        const speakThr = Math.max(0.02, noise * 2.4), silThr = Math.max(0.014, noise * 1.6);
+        if (vol > speakThr) { speaking = true; silence = 0; }
+        else if (speaking && vol < silThr) { if (!silence) silence = now; else if (now - silence > SIL_MS) { stopRec(); return; } }
+        if (el > MAX_MS) { stopRec(); return; }
+        if (!speaking && el > NOSPEECH_MS) { stopRec(); return; }   // отправляем всё равно — тихую речь распознаёт сервер
+        vadRef.current = setTimeout(tick, 60);
       };
-      mr.start(); setPhase('listening'); vadRef.current = setTimeout(tick, 70);
+      mr.start(); setPhase('listening'); vadRef.current = setTimeout(tick, 60);
     } catch { cleanup(); setPhase('idle'); addLog('bot', 'Не удалось начать запись.'); }
   };
   const stopRec = () => { clearTimeout(vadRef.current); try { if (mrRef.current && mrRef.current.state !== 'inactive') mrRef.current.stop(); } catch {} };
