@@ -14,6 +14,36 @@ const REQ_LABEL = { vacation: 'Отпуск', sick: 'Больничный', trip
 const hasMic = typeof navigator !== 'undefined' && navigator.mediaDevices && typeof window !== 'undefined' && window.MediaRecorder;
 const blobToDataUrl = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(blob); });
 
+// webm/opus от MediaRecorder бывает капризным для распознавания. Декодируем его в браузере и
+// перекодируем в WAV (моно, 16 кГц, 16-бит PCM) — этот формат сервер/OpenAI распознают железно,
+// и он в разы легче (16 кГц моно вместо 48 кГц стерео). Возвращаем WAV-Blob.
+function encodeWav(audioBuffer, targetRate = 16000) {
+  const srcRate = audioBuffer.sampleRate, len = audioBuffer.length;
+  const ch0 = audioBuffer.getChannelData(0);
+  const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+  // Даунмикс в моно
+  const mono = new Float32Array(len);
+  for (let i = 0; i < len; i++) mono[i] = ch1 ? (ch0[i] + ch1[i]) / 2 : ch0[i];
+  // Ресемпл в targetRate (линейная интерполяция) — если исходник уже ≤ target, оставляем как есть
+  let out = mono, rate = srcRate;
+  if (srcRate > targetRate) {
+    const ratio = srcRate / targetRate, outLen = Math.floor(len / ratio);
+    out = new Float32Array(outLen); rate = targetRate;
+    for (let i = 0; i < outLen; i++) {
+      const pos = i * ratio, i0 = Math.floor(pos), frac = pos - i0;
+      out[i] = mono[i0] * (1 - frac) + (mono[i0 + 1] || 0) * frac;
+    }
+  }
+  const n = out.length, buffer = new ArrayBuffer(44 + n * 2), view = new DataView(buffer);
+  const wr = (o, str) => { for (let i = 0; i < str.length; i++) view.setUint8(o + i, str.charCodeAt(i)); };
+  wr(0, 'RIFF'); view.setUint32(4, 36 + n * 2, true); wr(8, 'WAVE'); wr(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  wr(36, 'data'); view.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) { let s = Math.max(-1, Math.min(1, out[i])); view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
 export default function VoiceAgent({ onGo, me }) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState('idle');    // idle | listening | processing
@@ -112,7 +142,14 @@ export default function VoiceAgent({ onGo, me }) {
       if (cancelRef.current || !blob.size) { setPhase('idle'); return; }
       setPhase('processing');
       try {
-        const audio = await blobToDataUrl(blob);
+        let audio;
+        try {
+          const ab = await blob.arrayBuffer();
+          const dctx = new (window.AudioContext || window.webkitAudioContext)();
+          const audioBuffer = await dctx.decodeAudioData(ab);
+          dctx.close();
+          audio = await blobToDataUrl(encodeWav(audioBuffer));   // WAV 16кГц — надёжное распознавание
+        } catch { audio = await blobToDataUrl(blob); }           // фолбэк: как записали
         const r = await sendJSON('/api/assistant/voice', 'POST', { audio });
         if (r.text) addLog('me', r.text);
         await execute(r.actions, r.say);
@@ -122,6 +159,7 @@ export default function VoiceAgent({ onGo, me }) {
     // Детект голоса/тишины (VAD): автоматически останавливаем запись после паузы.
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)(); ctxRef.current = ctx;
+      ctx.resume?.().catch(() => {});   // браузер часто создаёт контекст «suspended» → анализатор молчит
       const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
       ctx.createMediaStreamSource(stream).connect(analyser);
       const data = new Uint8Array(analyser.fftSize);

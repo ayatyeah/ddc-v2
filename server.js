@@ -2006,9 +2006,10 @@ async function parseCommand(text) {
 const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe';
 async function transcribeAudio(buf, mime) {
   if (!OPENAI_KEY) throw new Error('Не задан OPENAI_API_KEY в .env');
-  const ext = /wav/.test(mime) ? 'wav' : /mp4|m4a|mpeg|mpga/.test(mime) ? 'mp4' : /ogg/.test(mime) ? 'ogg' : 'webm';
+  const base = String(mime || '').split(';')[0].trim();   // отбрасываем ;codecs=… (OpenAI строг к типу)
+  const ext = /wav/.test(base) ? 'wav' : /mp4|m4a|mpeg|mpga/.test(base) ? 'mp4' : /ogg/.test(base) ? 'ogg' : /webm/.test(base) ? 'webm' : 'wav';
   const fd = new FormData();
-  fd.append('file', new Blob([buf], { type: mime || 'audio/webm' }), `audio.${ext}`);
+  fd.append('file', new Blob([buf], { type: base || 'audio/wav' }), `audio.${ext}`);
   fd.append('model', OPENAI_TRANSCRIBE_MODEL);
   fd.append('language', 'ru');
   const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -2039,6 +2040,7 @@ app.post('/api/assistant/voice', auth, async (req, res) => {
   if (!buf.length || buf.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Некорректное аудио' });
   try {
     const text = await transcribeAudio(buf, mime);
+    console.log('[voice] bytes=%d mime=%s text=%j', buf.length, mime, text);
     if (!text) return res.json({ text: '', say: 'Не расслышал. Повторите, пожалуйста.', actions: [] });
     res.json(await parseCommand(text));
   } catch (e) { console.error('POST /api/assistant/voice:', e.message); res.status(502).json({ error: 'Ассистент недоступен: ' + (e.message || 'ошибка') }); }
