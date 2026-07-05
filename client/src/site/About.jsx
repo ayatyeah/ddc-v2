@@ -6,23 +6,34 @@ import Workstation from './Workstation.jsx';
 
 function TeamCard({ name, role, slug, i }) {
   const ref = useRef(null);
+  const rectRef = useRef(null);   // кэш геометрии: читаем layout ОДИН раз на входе, не на каждом движении
+  const rafRef = useRef(0);
+  const posRef = useRef({ x: 0, y: 0 });
+  // Наведение: запоминаем rect (единственное чтение layout), дальше только пишем стили.
+  const onEnter = () => { if (ref.current) rectRef.current = ref.current.getBoundingClientRect(); };
   const onMove = (e) => {
-    const el = ref.current; if (!el) return;
-    const r = el.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width - 0.5;
-    const py = (e.clientY - r.top) / r.height - 0.5;
-    el.style.setProperty('--ry', `${px * 16}deg`);
-    el.style.setProperty('--rx', `${-py * 16}deg`);
-    el.style.setProperty('--mx', `${(px + 0.5) * 100}%`);
-    el.style.setProperty('--my', `${(py + 0.5) * 100}%`);
+    const r = rectRef.current; if (!r) return;
+    posRef.current = { x: e.clientX, y: e.clientY };
+    if (rafRef.current) return;   // троттлинг через rAF — не чаще одного кадра
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      const el = ref.current; if (!el) return;
+      const px = (posRef.current.x - r.left) / r.width - 0.5;
+      const py = (posRef.current.y - r.top) / r.height - 0.5;
+      el.style.setProperty('--ry', `${px * 16}deg`);
+      el.style.setProperty('--rx', `${-py * 16}deg`);
+      el.style.setProperty('--mx', `${(px + 0.5) * 100}%`);
+      el.style.setProperty('--my', `${(py + 0.5) * 100}%`);
+    });
   };
   const onLeave = () => {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
     const el = ref.current; if (!el) return;
     el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg');
   };
   return (
     <div className="tcard-wrap" style={{ animationDelay: `${(i % 4) * 0.6}s` }}>
-      <div className="tcard" ref={ref} onMouseMove={onMove} onMouseLeave={onLeave}>
+      <div className="tcard" ref={ref} onMouseEnter={onEnter} onMouseMove={onMove} onMouseLeave={onLeave}>
         <div className="tcard-photo" style={{ backgroundImage: `url(/team/${slug}.jpg)` }} />
         <div className="tcard-shine" />
         <div className="tcard-info"><b>{name}</b><i>{role}</i></div>

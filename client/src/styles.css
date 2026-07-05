@@ -13,8 +13,8 @@
   --line: rgba(0, 0, 0, 0.10);
   --line-2: rgba(0, 0, 0, 0.18);
   --card: #ffffff;
-  --card-glass: rgba(255, 255, 255, 0.66);
-  --nav-glass: rgba(251, 251, 253, 0.72);
+  --card-glass: rgba(255, 255, 255, 0.86);
+  --nav-glass: rgba(251, 251, 253, 0.9);
 
   --blue: #1d54d6;
   --blue-bright: #2f6fe0;
@@ -42,8 +42,8 @@
   --line: rgba(255, 255, 255, 0.12);
   --line-2: rgba(255, 255, 255, 0.22);
   --card: #0e1426;
-  --card-glass: rgba(18, 26, 48, 0.6);
-  --nav-glass: rgba(8, 12, 24, 0.72);
+  --card-glass: rgba(18, 26, 48, 0.82);
+  --nav-glass: rgba(8, 12, 24, 0.88);
 
   --blue: #6ea0ff;
   --blue-bright: #82b0ff;
@@ -242,9 +242,6 @@ html[data-a11y='on'] .fog-shader { display: none; }
    Даём ему «спокойный» профиль — меньше радиусы размытия. (data-engine ставит perfProfile.js) ── */
 [data-engine="gecko"] #fog .cloud { filter: blur(22px); }
 [data-engine="gecko"] #scroll-aurora { filter: blur(20px); }
-[data-engine="gecko"] .nav-island {
-  backdrop-filter: saturate(180%) blur(18px); -webkit-backdrop-filter: saturate(180%) blur(18px);
-}
 
 .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 
@@ -315,11 +312,12 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 /* ── Reveal по скроллу ───────────────────────────────────────────────────────── */
 /* Появление плашек через «вспышку»: короткий световой блик + свечение, затем проявление */
 .reveal { opacity: 0; transform: translateY(16px) scale(0.99); }
-/* Появление «как фокусировка объектива»: размытие → резкость. Без вспышки/свечения. */
-.reveal.in { animation: revealFocus 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* Появление: только opacity + transform (композитятся на GPU). filter:blur убран — он
+   вызывал перерисовку (repaint) на КАЖДОМ появляющемся элементе → рывки при скролле. */
+.reveal.in { animation: revealFocus 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
 @keyframes revealFocus {
-  0%   { opacity: 0; transform: translateY(16px) scale(0.99); filter: blur(8px); }
-  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  0%   { opacity: 0; transform: translateY(16px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* ── Кнопки ──────────────────────────────────────────────────────────────────── */
@@ -353,10 +351,11 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .nav-island {
   display: flex; align-items: center; gap: 8px; padding: 7px;
   /* слой блика (за контентом — кнопки остаются чёткими) поверх тонированного стекла */
+  /* Без backdrop-filter: он пересчитывал blur(44px) над анимируемой 3D-сценой КАЖДЫЙ кадр
+     (главный тормоз десктопа). «Стекло» имитируем непрозрачным фоном + мягким бликом. */
   background:
-    linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04) 40%, rgba(255,255,255,0.12)),
-    rgba(251, 251, 253, 0.34);
-  backdrop-filter: saturate(190%) blur(44px); -webkit-backdrop-filter: saturate(190%) blur(44px);
+    linear-gradient(135deg, rgba(255,255,255,0.5), rgba(255,255,255,0.12) 40%, rgba(255,255,255,0.28)),
+    var(--nav-glass);
   border: 1px solid rgba(255,255,255,0.22); border-radius: 980px;
   box-shadow:
     0 10px 34px rgba(4, 9, 22, 0.24),
@@ -508,7 +507,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .hero-loc {
   margin-top: 28px; display: inline-flex; align-items: center; gap: 8px;
   font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em; color: var(--ink-soft);
-  background: var(--card-glass); backdrop-filter: blur(10px); border: 1px solid var(--line);
+  background: var(--card-glass); border: 1px solid var(--line);
   padding: 8px 14px; border-radius: 980px;
 }
 .hero-loc .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 4px rgba(45,111,224,0.18); }
@@ -574,7 +573,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 /* Правая колонка — за ней 3D-сцена; поверх плавающие виджеты (график, щит, «Исследуйте карту»). */
 .hero-visual { position: relative; align-self: stretch; min-height: 480px; }
 .hv-widget {
-  position: absolute; background: var(--card-glass); backdrop-filter: blur(12px);
+  position: absolute; background: var(--card-glass);
   border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-card); color: var(--blue);
 }
 .hv-chart { top: 4%; right: 1%; width: 132px; height: 86px; padding: 14px; }
@@ -583,7 +582,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .hv-shield { top: 46%; right: 5%; width: 54px; height: 54px; display: grid; place-items: center; }
 .hv-explore {
   position: absolute; bottom: 3%; right: 5%; display: inline-flex; align-items: center; gap: 10px;
-  background: var(--card-glass); backdrop-filter: blur(12px); border: 1px solid var(--line);
+  background: var(--card-glass); border: 1px solid var(--line);
   border-radius: 980px; padding: 11px 18px 11px 12px; font: inherit; font-size: 13.5px; font-weight: 600;
   color: var(--ink); box-shadow: var(--shadow-card); cursor: pointer; transition: transform 0.3s var(--ease);
 }
@@ -724,7 +723,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .stage canvas { width: 100% !important; height: 100% !important; }
 .chip {
   position: absolute; font-size: 12.5px; font-weight: 600; padding: 8px 13px; border-radius: 980px;
-  background: var(--card-glass); backdrop-filter: blur(12px); border: 1px solid var(--line);
+  background: var(--card-glass); border: 1px solid var(--line);
   box-shadow: var(--shadow-card); color: var(--ink); white-space: nowrap; cursor: pointer;
   font-family: inherit; max-width: 46%;
   animation: float 6s var(--ease) infinite;
@@ -738,7 +737,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 /* Панель краткой инфы — раскрывается сбоку, напротив активного чипа */
 .chip-info {
   position: absolute; width: min(46%, 320px); z-index: 6; text-align: left;
-  background: var(--card-glass); backdrop-filter: saturate(170%) blur(18px); -webkit-backdrop-filter: saturate(170%) blur(18px);
+  background: var(--card-glass);
   border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 15px 16px;
   box-shadow: var(--shadow-pop); opacity: 0; pointer-events: none;
   transform: translateY(10px) scale(0.97);
@@ -857,7 +856,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
   position: absolute; top: 46%; transform: translateY(-50%); z-index: 3;
   width: 46px; height: 46px; border-radius: 50%;
   display: grid; place-items: center; cursor: pointer; color: var(--blue);
-  background: var(--nav-glass); backdrop-filter: saturate(160%) blur(14px); -webkit-backdrop-filter: saturate(160%) blur(14px);
+  background: var(--nav-glass);
   border: 1px solid var(--line-2); box-shadow: var(--shadow-pop);
   transition: transform 0.2s var(--ease), background 0.2s, color 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
@@ -880,7 +879,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .news-empty { padding: 60px; text-align: center; color: var(--ink-faint); border: 1px dashed var(--line); border-radius: var(--radius); }
 
 /* модалка новости */
-.modal-ov { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.4); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 24px; animation: fade 0.25s var(--ease); overscroll-behavior: contain; }
+.modal-ov { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.55); display: grid; place-items: center; padding: 24px; animation: fade 0.25s var(--ease); overscroll-behavior: contain; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 /* Заголовок-полоса фиксирован, прокручивается только .inner — надёжно скроллится на любом устройстве */
 .modal { background: var(--card); border-radius: var(--radius); max-width: 640px; width: 100%; max-height: 86vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); animation: modalPop 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -1022,7 +1021,7 @@ textarea.inp { resize: vertical; min-height: 110px; }
 
 /* ── Переход между страницами: контент подменяется СРАЗУ и плавно проявляется ──
    (без фазы ухода/пустого экрана; фон общий, переход бесшовный). ─────────────── */
-.page-tx { animation: pageTxIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; will-change: opacity, transform; }
+.page-tx { animation: pageTxIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes pageTxIn {
   0%   { opacity: 0; transform: translateY(18px) scale(0.99); }
   100% { opacity: 1; transform: none; }
@@ -1075,7 +1074,7 @@ textarea.inp { resize: vertical; min-height: 110px; }
   position: relative; border-radius: 18px; overflow: hidden; aspect-ratio: 3 / 4; cursor: pointer;
   transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transform-style: preserve-3d;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
-  border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow-card); will-change: transform;
+  border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow-card);
 }
 .tcard:hover { box-shadow: var(--shadow-pop); }
 .tcard-photo { position: absolute; inset: 0; background-size: cover; background-position: center top; transform: translateZ(18px) scale(1.08); filter: saturate(1.02) contrast(1.02); }
@@ -1830,4 +1829,11 @@ html[data-a11y='on'] .kz-field { display: none; }
    просадке сцена остаётся, но снимаются окружающие DOM-слои глубины (без «мыла», без потери сцены). */
 [data-perf-tier="2"] .circuit-field, [data-perf-tier="3"] .circuit-field,
 [data-perf-tier="2"] .depth-fog,     [data-perf-tier="3"] .depth-fog,
-[data-perf-tier="2"] .hud-layer,     [data-perf-tier="3"] .hud-layer { display: none !important; }
+[data-perf-tier="2"] .hud-layer,     [data-perf-tier="3"] .hud-layer,
+[data-perf-tier="2"] #scroll-aurora, [data-perf-tier="3"] #scroll-aurora,
+[data-perf-tier="2"] #bg-planet,     [data-perf-tier="3"] #bg-planet,
+[data-perf-tier="2"] #scroll-depth,  [data-perf-tier="3"] #scroll-depth,
+[data-perf-tier="2"] #fog,           [data-perf-tier="3"] #fog,
+[data-perf-tier="2"] #particles,     [data-perf-tier="3"] #particles { display: none !important; }
+/* На tier 3 замораживаем ещё и декоративные CSS-анимации фона — меньше работы композитору. */
+[data-perf-tier="3"] #scroll-aurora, [data-perf-tier="3"] .hero::before { animation: none !important; }
