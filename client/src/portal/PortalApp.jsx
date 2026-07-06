@@ -59,8 +59,16 @@ export default function PortalApp() {
   const [convOpen, setConvOpen] = useState(false);
   // Боковое меню (на телефоне выезжает слева по бургеру; на десктопе всегда видно).
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);   // глобальный ИИ-поиск по порталу (Ctrl/Cmd+K)
   const goTab = (id) => { setConvOpen(false); setMenuOpen(false); setTab(id); };
   const logo = useLogo();   // чёрный логотип на светлой теме, белый на тёмной
+
+  // Ctrl/Cmd+K — открыть глобальный поиск из любого места портала.
+  useEffect(() => {
+    const onKey = (e) => { if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K' || e.key === 'л' || e.key === 'Л')) { e.preventDefault(); setSearchOpen((o) => !o); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   // Mission Control — только для админа и начальников отделов (остальным раздел не виден).
   const isHead = ['admin', 'manager'].includes(me?.role);
   const sections = SECTIONS.filter((s) => s.id !== 'mission' || isHead);
@@ -125,6 +133,10 @@ export default function PortalApp() {
           <div className="pt-brand"><img src={logo} alt="DDC" /></div>
           <PortalBell onGo={goTab} onAuthLost={onAuthLost} />
         </div>
+        <button className="pt-searchbar" onClick={() => setSearchOpen(true)} title="Поиск по порталу (Ctrl+K)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+          <span>Поиск…</span><kbd>Ctrl K</kbd>
+        </button>
         <nav className="pt-nav">
           {sections.map((s) => (
             <button key={s.id} className={`pt-tab ${tab === s.id ? 'active' : ''}`} onClick={() => goTab(s.id)}>
@@ -154,6 +166,9 @@ export default function PortalApp() {
         {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
         {tab === 'chat' && <Chats me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
       </main>
+
+      {/* Глобальный ИИ-поиск по порталу (Ctrl/Cmd+K) */}
+      {searchOpen && <GlobalSearch onGo={goTab} onClose={() => setSearchOpen(false)} onAuthLost={onAuthLost} />}
 
       {/* Голосовой ассистент — плавающая кнопка, доступен из любого раздела */}
       <VoiceAgent onGo={goTab} me={me} />
@@ -263,6 +278,59 @@ function People({ onAuthLost }) {
           </div>
         ))}
         {list.length === 0 && <div className="pt-empty">{users.length ? 'Никого не найдено.' : 'Список пуст.'}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Глобальный ИИ-поиск по порталу (семантический, Ctrl/Cmd+K) ── */
+const SEARCH_KIND_ICON = { document: '📄', news: '📰', request: '📝', task: '✓', event: '📅', person: '👤', service: '⚙' };
+function GlobalSearch({ onGo, onClose, onAuthLost }) {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [semantic, setSemantic] = useState(true);
+  const [active, setActive] = useState(0);
+  const tRef = useRef(0);
+  useEffect(() => {
+    const ql = q.trim();
+    if (!ql) { setResults([]); return; }
+    clearTimeout(tRef.current);
+    tRef.current = setTimeout(async () => {
+      setBusy(true);
+      try { const d = await sendJSON('/api/portal/search', 'POST', { q: ql }); setResults(d.results || []); setSemantic(d.semantic); setActive(0); }
+      catch (e) { if (e.status === 401) onAuthLost?.(); }
+      finally { setBusy(false); }
+    }, 220);
+    return () => clearTimeout(tRef.current);
+  }, [q, onAuthLost]);
+  const openResult = (r) => { if (r?.tab) { onGo?.(r.tab); onClose?.(); } };
+  const onKey = (e) => {
+    if (e.key === 'Escape') onClose?.();
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, results.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); openResult(results[active]); }
+  };
+  return (
+    <div className="pt-gs-ov" onClick={onClose}>
+      <div className="pt-gs" onClick={(e) => e.stopPropagation()} onKeyDown={onKey}>
+        <div className="pt-gs-in">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+          <input autoFocus className="pt-gs-input" placeholder="Поиск по документам, новостям, людям, задачам…" value={q} onChange={(e) => setQ(e.target.value)} />
+          {busy && <span className="pt-gs-spin" />}
+          <button className="pt-gs-esc" onClick={onClose}>Esc</button>
+        </div>
+        <div className="pt-gs-list">
+          {q.trim() && !busy && results.length === 0 && <div className="pt-gs-empty">Ничего не найдено.</div>}
+          {results.map((r, i) => (
+            <button key={r.kind + r.ref_id} className={`pt-gs-item ${i === active ? 'on' : ''}`} onMouseEnter={() => setActive(i)} onClick={() => openResult(r)} disabled={!r.tab}>
+              <span className="pt-gs-ico">{SEARCH_KIND_ICON[r.kind] || '•'}</span>
+              <span className="pt-gs-body"><b>{r.title}</b><small>{r.snippet}</small></span>
+              <span className="pt-gs-kind">{r.kindLabel}</span>
+            </button>
+          ))}
+        </div>
+        <div className="pt-gs-foot">{semantic ? '⚡ Семантический ИИ-поиск' : 'Поиск по ключевым словам'} · ↑↓ выбор · Enter открыть</div>
       </div>
     </div>
   );

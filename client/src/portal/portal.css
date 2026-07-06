@@ -536,6 +536,42 @@
 .va-mic.on { transform: scale(calc(1 + var(--lvl, 0) * 0.04)); }
 .va-fab.live { animation: vaPulse 1.3s ease-in-out infinite; }
 
+/* Глобальный ИИ-поиск (Ctrl+K) */
+.pt-searchbar { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px; padding: 9px 12px; border-radius: 11px; border: 1px solid var(--line); background: color-mix(in srgb, var(--ink) 4%, transparent); color: var(--ink-soft); font: inherit; font-size: 13.5px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.pt-searchbar:hover { border-color: var(--line-2); }
+.pt-searchbar span { flex: 1; text-align: left; }
+.pt-searchbar kbd { font-family: var(--mono, monospace); font-size: 10.5px; padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--ink-faint); }
+.pt-gs-ov { position: fixed; inset: 0; z-index: 200; background: rgba(4, 8, 18, 0.55); display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; animation: gsFade 0.15s ease; }
+@keyframes gsFade { from { opacity: 0; } to { opacity: 1; } }
+.pt-gs { width: min(640px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-pop); overflow: hidden; animation: gsPop 0.18s cubic-bezier(0.22,1,0.36,1); }
+@keyframes gsPop { from { transform: translateY(-8px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+.pt-gs-in { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); color: var(--ink-faint); }
+.pt-gs-input { flex: 1; border: none; background: transparent; font: inherit; font-size: 16px; color: var(--ink); outline: none; }
+.pt-gs-spin { width: 15px; height: 15px; border: 2px solid var(--line-2); border-top-color: var(--blue); border-radius: 50%; animation: gsSpin 0.7s linear infinite; }
+@keyframes gsSpin { to { transform: rotate(360deg); } }
+.pt-gs-esc { border: 1px solid var(--line); background: transparent; color: var(--ink-faint); font-size: 11px; padding: 3px 7px; border-radius: 6px; cursor: pointer; }
+.pt-gs-list { max-height: 56vh; overflow-y: auto; padding: 6px; }
+.pt-gs-empty { padding: 26px; text-align: center; color: var(--ink-faint); font-size: 14px; }
+.pt-gs-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px; border: none; background: transparent; border-radius: 10px; cursor: pointer; font: inherit; color: var(--ink); }
+.pt-gs-item.on { background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.pt-gs-item:disabled { cursor: default; opacity: 0.7; }
+.pt-gs-ico { font-size: 18px; width: 26px; text-align: center; flex: none; }
+.pt-gs-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pt-gs-body b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pt-gs-body small { font-size: 12px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pt-gs-kind { flex: none; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--blue); padding: 3px 8px; border-radius: 6px; background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.pt-gs-foot { padding: 9px 16px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-faint); }
+
+/* ДиДи: режимы (команда/спросить), источники RAG */
+.va-modes { display: flex; gap: 6px; padding: 8px 14px 0; }
+.va-mode { flex: 1; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line); background: transparent; color: var(--ink-soft); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.va-mode.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
+.va-sources { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.va-src { display: block; text-align: left; width: 100%; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--line); background: color-mix(in srgb, var(--ink) 4%, transparent); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; transition: background 0.15s, border-color 0.15s; white-space: normal; }
+.va-src:hover:not(:disabled) { border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); background: color-mix(in srgb, var(--blue) 8%, transparent); }
+.va-src:disabled { cursor: default; opacity: 0.85; }
+.va-src-k { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--blue); margin-right: 6px; }
+
 /* ДиДи: имя, живой текст, режим отклика на имя */
 .va-sub { color: var(--ink-faint); font-weight: 400; font-size: 12px; }
 .va-msg.interim { opacity: 0.6; font-style: italic; }

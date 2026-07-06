@@ -57,12 +57,14 @@ export default function VoiceAgent({ onGo, me }) {
   const [typed, setTyped] = useState('');
   const [interim, setInterim] = useState('');   // живой текст распознавания (нативный движок)
   const [wake, setWake] = useState(() => { try { return localStorage.getItem('dd_wake') === '1'; } catch { return false; } });   // режим отклика на имя «ДиДи»
+  const [mode, setMode] = useState('cmd');   // cmd = выполнять команды | ask = отвечать на вопросы (RAG по базе портала)
   const mrRef = useRef(null), streamRef = useRef(null), ctxRef = useRef(null), vadRef = useRef(0), cancelRef = useRef(false);
   const recRef = useRef(null);
   const startNativeRef = useRef(() => {});   // всегда актуальная ссылка на запуск распознавания (для wake-слушателя)
+  const modeRef = useRef('cmd'); modeRef.current = mode;   // актуальный режим для голосового ввода
   const voicesRef = useRef([]);
   const canVoice = !!SR || hasMic;
-  const addLog = (role, text) => setLog((l) => [...l.slice(-10), { role, text }]);
+  const addLog = (role, text, extra) => setLog((l) => [...l.slice(-12), { role, text, ...extra }]);
 
   // Голоса TTS: подгружаются асинхронно — кэшируем и обновляем по событию.
   useEffect(() => {
@@ -152,6 +154,21 @@ export default function VoiceAgent({ onGo, me }) {
     finally { setPhase('idle'); }
   }, [execute, speak]);
 
+  // Режим «Спроси»: RAG-ответ по базе портала со ссылками на источники (документы/новости/люди…).
+  const runAsk = useCallback(async (text) => {
+    const t = (text || '').trim(); if (!t) return;
+    addLog('me', t); setPhase('processing');
+    try {
+      const r = await sendJSON('/api/assistant/ask', 'POST', { question: t });
+      addLog('bot', r.answer || 'Не нашёл ответа.', { sources: r.sources || [] });
+      speak(r.answer || '');
+    } catch (e) { addLog('bot', e.message || 'ИИ недоступен'); }
+    finally { setPhase('idle'); }
+  }, [speak]);
+
+  // Обработка распознанного/введённого текста по текущему режиму (команда или вопрос).
+  const handleInput = useCallback((text) => { (modeRef.current === 'ask' ? runAsk : runText)(text); }, [runAsk, runText]);
+
   const cleanup = () => {
     clearTimeout(vadRef.current);
     try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch {}
@@ -188,7 +205,7 @@ export default function VoiceAgent({ onGo, me }) {
       recRef.current = null; setLevel(0); setInterim('');
       const t = finalText.trim();
       if (cancelRef.current) { setPhase('idle'); return; }
-      if (t) runText(t); else { setPhase('idle'); addLog('bot', 'Не услышал. Повторите, пожалуйста.'); }
+      if (t) handleInput(t); else { setPhase('idle'); addLog('bot', 'Не услышал. Повторите, пожалуйста.'); }
     };
     try { rec.start(); setPhase('listening'); } catch { startMedia(); }
   };
@@ -292,11 +309,30 @@ export default function VoiceAgent({ onGo, me }) {
             <b>🎙 ДиДи <span className="va-sub">— голосовой ассистент</span></b>
             <button className="va-x" onClick={() => setOpen(false)} aria-label="Закрыть">×</button>
           </div>
+          <div className="va-modes" role="tablist">
+            <button className={`va-mode ${mode === 'cmd' ? 'on' : ''}`} onClick={() => setMode('cmd')} role="tab" aria-selected={mode === 'cmd'}>⚡ Команда</button>
+            <button className={`va-mode ${mode === 'ask' ? 'on' : ''}`} onClick={() => setMode('ask')} role="tab" aria-selected={mode === 'ask'}>❓ Спросить</button>
+          </div>
           <div className="va-log">
-            {log.length === 0 && <div className="va-hint">Я — <b>ДиДи</b>. Нажмите «Говорить», скажите команду и сделайте паузу — я всё выполню. Например: «Открой календарь и впиши встречу на завтра в 10 утра», «Создай срочную задачу — отчёт к пятнице», «Оформи заявку на отпуск с 15 июля».{SR ? ' Включите «Реагировать на имя» — и просто скажите «ДиДи».' : ''}</div>}
-            {log.map((m, i) => <div key={i} className={`va-msg ${m.role}`}>{m.text}</div>)}
+            {log.length === 0 && (mode === 'ask'
+              ? <div className="va-hint">Спросите что угодно о работе — я найду ответ в базе портала. Например: «Как оформить отпуск?», «Какие требования к паролю?», «Можно ли работать удалённо?», «Что делать при фишинговом письме?». Отвечу и покажу источники.</div>
+              : <div className="va-hint">Я — <b>ДиДи</b>. Нажмите «Говорить», скажите команду и сделайте паузу — я всё выполню. Например: «Открой календарь и впиши встречу на завтра в 10 утра», «Создай срочную задачу — отчёт к пятнице», «Оформи заявку на отпуск с 15 июля».{SR ? ' Включите «Реагировать на имя» — и просто скажите «ДиДи».' : ''}</div>)}
+            {log.map((m, i) => (
+              <div key={i} className={`va-msg ${m.role}`}>
+                {m.text}
+                {m.sources && m.sources.length > 0 && (
+                  <div className="va-sources">
+                    {m.sources.slice(0, 5).map((s, j) => (
+                      <button key={j} className="va-src" onClick={() => s.tab && onGo?.(s.tab)} title={s.title} disabled={!s.tab}>
+                        <span className="va-src-k">{s.kindLabel || s.kind}</span> {s.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
             {listening && interim && <div className="va-msg me interim">{interim}…</div>}
-            {processing && <div className="va-msg bot">Распознаю и выполняю…</div>}
+            {processing && <div className="va-msg bot">{mode === 'ask' ? 'Ищу ответ в базе…' : 'Распознаю и выполняю…'}</div>}
           </div>
           {canVoice ? (
             <button className={`va-mic ${listening ? 'on' : ''}`} onClick={listening ? stopRec : startRec} disabled={processing}
@@ -312,8 +348,8 @@ export default function VoiceAgent({ onGo, me }) {
               <span>Реагировать на имя «ДиДи»{wake ? ' — слушаю…' : ''}</span>
             </label>
           )}
-          <form className="va-typed" onSubmit={(e) => { e.preventDefault(); runText(typed); setTyped(''); }}>
-            <input className="adm-input" placeholder="Команда текстом…" value={typed} onChange={(e) => setTyped(e.target.value)} disabled={processing} />
+          <form className="va-typed" onSubmit={(e) => { e.preventDefault(); handleInput(typed); setTyped(''); }}>
+            <input className="adm-input" placeholder={mode === 'ask' ? 'Ваш вопрос…' : 'Команда текстом…'} value={typed} onChange={(e) => setTyped(e.target.value)} disabled={processing} />
             <button className="adm-btn sm" type="submit" disabled={processing || !typed.trim()}>→</button>
           </form>
         </div>
