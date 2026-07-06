@@ -1,8 +1,33 @@
 import { useRef } from 'react';
 import { useLang } from '../store.js';
-import { t, BOARD, PRAVLENIE, VALUES } from '../i18n.js';
+import { t, BOARD, PRAVLENIE, VALUES, TIMELINE } from '../i18n.js';
 import Reveal from './Reveal.jsx';
 import Workstation from './Workstation.jsx';
+
+// Таймлайн истории 1995 → 2025 (БСБ → ЦЦР). Проявляется по скроллу.
+function Timeline({ lang }) {
+  const items = TIMELINE[lang] || TIMELINE.ru;
+  return (
+    <section className="section">
+      <div className="wrap">
+        <Reveal className="board-title"><h2 className="h2" style={{ fontSize: 'clamp(1.5rem,3vw,2.2rem)' }}>История</h2></Reveal>
+        <div className="tl">
+          <span className="tl-rail" />
+          {items.map((it, i) => (
+            <Reveal className="tl-item" key={i} delay={i * 90}>
+              <span className="tl-dot" />
+              <div className="tl-card">
+                <span className="tl-year">{it.y}</span>
+                <b className="tl-t">{it.t}</b>
+                <p className="tl-d">{it.d}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function TeamCard({ name, role, slug, i }) {
   const ref = useRef(null);
@@ -71,6 +96,9 @@ export default function About() {
           </Reveal>
         </div>
       </section>
+
+      {/* История центра: 1995 → 2025 */}
+      <Timeline lang={lang} />
 
       {/* Цифровое рабочее место — между «о центре» и «Советом директоров» */}
       <Workstation />
