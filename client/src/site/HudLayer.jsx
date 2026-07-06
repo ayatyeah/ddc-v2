@@ -15,9 +15,9 @@ export default function HudLayer() {
       </div>
 
       <div className="hud-chip hud-tele">
-        <span><i />UPTIME 99.9%</span>
-        <span><i />TX 350K / DAY</span>
-        <span><i />NODES 17</span>
+        <span><i />DDC · ЦЦР</span>
+        <span><i />NBK GROUP</span>
+        <span><i />ICT · SECURE</span>
       </div>
 
       <div className="hud-scan" />
