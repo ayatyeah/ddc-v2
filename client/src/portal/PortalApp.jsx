@@ -13,6 +13,7 @@ import Booking from './Booking.jsx';
 import PortalBell from './PortalBell.jsx';
 import VoiceAgent from './VoiceAgent.jsx';
 import { connect as rtConnect, on as rtOn, usePresence } from './realtime.js';
+import QRCode from 'qrcode';
 import '../admin/admin.css';
 import './portal.css';
 
@@ -280,12 +281,18 @@ function Profile({ me, onAuthLost }) {
   const [rank, setRank] = useState(null);   // моя позиция в рейтинге + очки/бейджи
   const [ob, setOb] = useState({ steps: [], done: [] });
   const [edit, setEdit] = useState(null);   // { position, phone, skills } при редактировании
+  const [qr, setQr] = useState('');         // QR цифровой визитки (vCard)
   const load = useCallback(() => {
     getJSON('/api/portal/users').then((list) => setInfo(list.find((u) => u.id === me?.id) || null)).catch((e) => { if (e.status === 401) onAuthLost?.(); });
     getJSON('/api/portal/leaderboard').then((l) => setRank(l.find((u) => u.id === me?.id) || { points: 0, badges: [] })).catch(() => {});
     getJSON('/api/portal/onboarding').then(setOb).catch(() => {});
   }, [me, onAuthLost]);
   useEffect(() => { load(); }, [load]);
+  // QR цифровой визитки (vCard) — можно отсканировать и сохранить контакт.
+  useEffect(() => {
+    const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${me?.username || ''}\nORG:Центр цифрового развития (ЦЦР)\nTITLE:${info?.position || roleLabel(me?.role)}\nTEL:${info?.phone || ''}\nEND:VCARD`;
+    QRCode.toDataURL(vcard, { margin: 1, width: 220 }).then(setQr).catch(() => setQr(''));
+  }, [me, info]);
 
   const saveEdit = async () => {
     try { await sendJSON('/api/portal/profile', 'PATCH', edit); setEdit(null); load(); }
@@ -322,6 +329,7 @@ function Profile({ me, onAuthLost }) {
               </div>
             )}
           </div>
+          {qr && <div className="pt-qr" title="Цифровая визитка — отсканируйте, чтобы сохранить контакт"><img src={qr} alt="QR визитка" /><span>Визитка</span></div>}
         </div>
 
         {edit ? (

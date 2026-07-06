@@ -563,6 +563,12 @@
 .pt-req-btn.ai { background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent); }
 .pt-req-btn.ai:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 20%, transparent); }
 
+/* QR цифровой визитки в профиле */
+.pt-qr { margin-left: auto; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pt-qr img { width: 92px; height: 92px; border-radius: 10px; border: 1px solid var(--line); background: #fff; padding: 4px; }
+.pt-qr span { font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+@media (max-width: 560px) { .pt-qr { display: none; } }
+
 /* Геймификация: очки, бейджи, рейтинг */
 .pt-gami { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 8px; }
 .pt-points { font-size: 12.5px; font-weight: 700; color: #b07d12; background: color-mix(in srgb, #b07d12 12%, transparent); padding: 3px 10px; border-radius: 20px; }
