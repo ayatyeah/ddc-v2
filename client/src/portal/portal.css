@@ -563,6 +563,52 @@
 .pt-req-btn.ai { background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent); }
 .pt-req-btn.ai:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 20%, transparent); }
 
+/* Геймификация: очки, бейджи, рейтинг */
+.pt-gami { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 8px; }
+.pt-points { font-size: 12.5px; font-weight: 700; color: #b07d12; background: color-mix(in srgb, #b07d12 12%, transparent); padding: 3px 10px; border-radius: 20px; }
+.pt-badge { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line); padding: 3px 9px; border-radius: 20px; }
+.pt-widget-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.pt-widget-more { border: none; background: transparent; color: var(--blue); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.lb { display: flex; flex-direction: column; gap: 4px; }
+.lb-row { display: flex; align-items: center; gap: 11px; padding: 7px 8px; border-radius: 10px; }
+.lb-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.lb-rank { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--ink-soft); background: color-mix(in srgb, var(--ink) 8%, transparent); flex: none; }
+.lb-rank.r1 { background: #f4cf5e; color: #5a4410; } .lb-rank.r2 { background: #d3dae4; color: #3a4250; } .lb-rank.r3 { background: #e6b58a; color: #5a3a1c; }
+.lb-name { flex: 1; min-width: 0; font-size: 13.5px; display: flex; flex-direction: column; }
+.lb-name small { font-size: 11px; color: var(--ink-faint); }
+.lb-badges { display: flex; gap: 2px; font-size: 13px; }
+.lb-pts { font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
+
+/* Профиль: редактирование + онбординг */
+.pt-fields.edit { grid-template-columns: 1fr; gap: 12px; }
+.pt-editf { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.pt-onboard { margin-top: 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--blue) 4%, transparent); }
+.pt-onboard-h { display: flex; align-items: center; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
+.pt-onboard-bar { height: 7px; border-radius: 20px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; margin-bottom: 12px; }
+.pt-onboard-bar span { display: block; height: 100%; background: linear-gradient(90deg, #2f6fe0, #16a34a); transition: width 0.4s var(--ease); }
+.pt-onboard-steps { display: flex; flex-direction: column; gap: 6px; }
+.pt-onboard-step { display: flex; align-items: center; gap: 10px; font-size: 13.5px; cursor: pointer; }
+.pt-onboard-step.done span { color: var(--ink-faint); text-decoration: line-through; }
+.pt-onboard-step input { width: 17px; height: 17px; accent-color: var(--blue); cursor: pointer; }
+
+/* Переговорные (бронирование) */
+.book-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.book-form .adm-input { flex: 0 0 auto; }
+.book-form .book-title { flex: 1 1 180px; }
+.book-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.book-room { border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-card); overflow: hidden; }
+.book-room-h { display: flex; align-items: baseline; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--blue) 6%, transparent); }
+.book-room-h b { font-size: 14px; } .book-room-h small { font-size: 11px; color: var(--ink-faint); }
+.book-free { padding: 16px 14px; text-align: center; color: #16a34a; font-size: 12.5px; }
+.book-slot { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+.book-slot:last-child { border-bottom: none; }
+.book-time { font-family: var(--mono, monospace); font-size: 12px; font-weight: 600; color: var(--blue); flex: none; }
+.book-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.book-t b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.book-t small { font-size: 11px; color: var(--ink-faint); }
+.book-x { border: none; background: transparent; color: var(--ink-faint); font-size: 17px; cursor: pointer; }
+.book-x:hover { color: #c0455a; }
+
 /* Опросы (живое голосование) */
 .poll-form { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; box-shadow: var(--shadow-card); }
 .poll-opt-row { display: flex; gap: 8px; align-items: center; }

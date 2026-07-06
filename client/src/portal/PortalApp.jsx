@@ -9,6 +9,7 @@ import Requests from './Requests.jsx';
 import Calendar from './Calendar.jsx';
 import PortalNews from './PortalNews.jsx';
 import Polls from './Polls.jsx';
+import Booking from './Booking.jsx';
 import PortalBell from './PortalBell.jsx';
 import VoiceAgent from './VoiceAgent.jsx';
 import { connect as rtConnect, on as rtOn, usePresence } from './realtime.js';
@@ -22,6 +23,7 @@ const SECTIONS = [
   { id: 'profile', label: 'Профиль', icon: 'user' },
   { id: 'people', label: 'Сотрудники', icon: 'people' },
   { id: 'calendar', label: 'Календарь', icon: 'calendar' },
+  { id: 'booking', label: 'Переговорные', icon: 'booking' },
   { id: 'news', label: 'Новости', icon: 'news' },
   { id: 'polls', label: 'Опросы', icon: 'polls' },
   { id: 'docs', label: 'Документы', icon: 'docs' },
@@ -173,6 +175,7 @@ export default function PortalApp() {
         {tab === 'calendar' && <Calendar me={me} onAuthLost={onAuthLost} />}
         {tab === 'news' && <PortalNews me={me} onAuthLost={onAuthLost} />}
         {tab === 'polls' && <Polls me={me} onAuthLost={onAuthLost} />}
+        {tab === 'booking' && <Booking me={me} onAuthLost={onAuthLost} />}
         {tab === 'docs' && <Documents me={me} onAuthLost={onAuthLost} />}
         {tab === 'requests' && <Requests me={me} onAuthLost={onAuthLost} />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
@@ -208,6 +211,7 @@ function PtIco({ name }) {
     calendar: <><rect x="3.5" y="5" width="17" height="16" rx="2" /><path d="M3.5 9h17M8 3v4M16 3v4" /></>,
     news: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
     polls: <><path d="M8 20V10M12 20V4M16 20v-6" /><path d="M4 20h16" /></>,
+    booking: <><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4M9 15h6" /></>,
     docs: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M9 13h6M9 17h6" /></>,
     requests: <><path d="M9 4h6l1 3H8z" /><rect x="4" y="7" width="16" height="14" rx="2" /><path d="M9 13l2 2 4-4" /></>,
     tasks: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 12l2.5 2.5L16 9" /></>,
@@ -239,44 +243,117 @@ function Home({ me, onGo }) {
           </button>
         ))}
       </div>
-      <div className="pt-widget">
-        <b>Виджеты</b>
-        <p className="pt-empty sm">Новости компании, дни рождения и новые сотрудники появятся здесь.</p>
-      </div>
+      <LeaderboardWidget onGo={onGo} />
     </div>
   );
 }
 
-/* ── Профиль сотрудника ── */
+/* ── Рейтинг активности (топ-5) на главной ── */
+function LeaderboardWidget({ onGo }) {
+  const [top, setTop] = useState(null);
+  useEffect(() => { getJSON('/api/portal/leaderboard').then((l) => setTop(l.slice(0, 5))).catch(() => setTop([])); }, []);
+  return (
+    <div className="pt-widget">
+      <div className="pt-widget-h"><b>🏆 Рейтинг активности</b><button className="pt-widget-more" onClick={() => onGo('profile')}>Мой профиль →</button></div>
+      {top == null ? <p className="pt-empty sm">Загрузка…</p>
+        : top.filter((u) => u.points > 0).length === 0 ? <p className="pt-empty sm">Активность появится, когда команда начнёт работать в портале.</p>
+          : (
+            <div className="lb">
+              {top.filter((u) => u.points > 0).map((u, i) => (
+                <div className="lb-row" key={u.id}>
+                  <span className={`lb-rank r${i + 1}`}>{i + 1}</span>
+                  <span className="pt-av xs">{initials(u.name)}</span>
+                  <span className="lb-name">{u.name}<small>{u.department}</small></span>
+                  <span className="lb-badges">{(u.badges || []).slice(0, 3).map((b, j) => <span key={j} title={b.label}>{b.icon}</span>)}</span>
+                  <span className="lb-pts">{u.points}</span>
+                </div>
+              ))}
+            </div>
+          )}
+    </div>
+  );
+}
+
+/* ── Профиль сотрудника: контакты/навыки (редактируемые) + геймификация + онбординг ── */
 function Profile({ me, onAuthLost }) {
   const [info, setInfo] = useState(null);
-  useEffect(() => {
+  const [rank, setRank] = useState(null);   // моя позиция в рейтинге + очки/бейджи
+  const [ob, setOb] = useState({ steps: [], done: [] });
+  const [edit, setEdit] = useState(null);   // { position, phone, skills } при редактировании
+  const load = useCallback(() => {
     getJSON('/api/portal/users').then((list) => setInfo(list.find((u) => u.id === me?.id) || null)).catch((e) => { if (e.status === 401) onAuthLost?.(); });
+    getJSON('/api/portal/leaderboard').then((l) => setRank(l.find((u) => u.id === me?.id) || { points: 0, badges: [] })).catch(() => {});
+    getJSON('/api/portal/onboarding').then(setOb).catch(() => {});
   }, [me, onAuthLost]);
+  useEffect(() => { load(); }, [load]);
+
+  const saveEdit = async () => {
+    try { await sendJSON('/api/portal/profile', 'PATCH', edit); setEdit(null); load(); }
+    catch (e) { if (e.status === 401) onAuthLost?.(); else alert(e.message || 'Не удалось'); }
+  };
+  const toggleStep = async (step, done) => {
+    setOb((o) => ({ ...o, done: done ? [...o.done, step] : o.done.filter((s) => s !== step) }));
+    try { await sendJSON('/api/portal/onboarding', 'POST', { step, done }); } catch { load(); }
+  };
+  const obDone = ob.done.length, obTotal = ob.steps.length;
+
   const rows = [
-    ['Должность', roleLabel(me?.role)],
+    ['Должность', info?.position || roleLabel(me?.role)],
     ['Отдел', info?.department || '—'],
-    ['Руководитель', '—'],
-    ['Телефон', '—'],
-    ['Почта', '—'],
-    ['Дата приёма', '—'],
-    ['Рабочий график', '—'],
+    ['Телефон', info?.phone || '—'],
+    ['Навыки', info?.skills || '—'],
+    ['Дата приёма', info?.hired_at ? new Date(info.hired_at).toLocaleDateString('ru-RU') : '—'],
   ];
   return (
     <div className="pt-view">
-      <div className="pt-view-h"><h2>Профиль</h2></div>
+      <div className="pt-view-h"><h2>Профиль</h2>
+        <button className="adm-btn sm pt-view-act" onClick={() => setEdit(edit ? null : { position: info?.position || '', phone: info?.phone || '', skills: info?.skills || '' })}>{edit ? '× Отмена' : '✎ Редактировать'}</button>
+      </div>
       <div className="pt-profile">
         <div className="pt-profile-top">
           <span className="pt-av xl">{initials(me?.username)}</span>
           <div className="pt-profile-id">
             <h3>{me?.username}</h3>
-            <p>{roleLabel(me?.role)}{info?.department ? ` · ${info.department}` : ''}</p>
+            <p>{info?.position || roleLabel(me?.role)}{info?.department ? ` · ${info.department}` : ''}</p>
+            {rank && (
+              <div className="pt-gami">
+                <span className="pt-points">⭐ {rank.points} очк.</span>
+                {(rank.badges || []).map((b, i) => <span className="pt-badge" key={i} title={b.label}>{b.icon} {b.label}</span>)}
+              </div>
+            )}
           </div>
         </div>
-        <div className="pt-fields">
-          {rows.map(([k, v]) => <div className="pt-field" key={k}><span>{k}</span><b>{v}</b></div>)}
-        </div>
-        <div className="pt-field-note">Контакты, навыки и график заполняются в HR-профиле.</div>
+
+        {edit ? (
+          <div className="pt-fields edit">
+            <label className="pt-editf"><span>Должность</span><input className="adm-input" value={edit.position} onChange={(e) => setEdit({ ...edit, position: e.target.value })} placeholder="напр. Ведущий разработчик" /></label>
+            <label className="pt-editf"><span>Телефон</span><input className="adm-input" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="+7 …" /></label>
+            <label className="pt-editf"><span>Навыки</span><input className="adm-input" value={edit.skills} onChange={(e) => setEdit({ ...edit, skills: e.target.value })} placeholder="React, PostgreSQL, DevOps…" /></label>
+            <button className="adm-btn" onClick={saveEdit}>Сохранить</button>
+          </div>
+        ) : (
+          <div className="pt-fields">
+            {rows.map(([k, v]) => <div className="pt-field" key={k}><span>{k}</span><b>{v}</b></div>)}
+          </div>
+        )}
+
+        {obTotal > 0 && obDone < obTotal && (
+          <div className="pt-onboard">
+            <div className="pt-onboard-h"><b>🚀 Онбординг</b><span>{obDone}/{obTotal}</span></div>
+            <div className="pt-onboard-bar"><span style={{ width: `${Math.round((obDone / obTotal) * 100)}%` }} /></div>
+            <div className="pt-onboard-steps">
+              {ob.steps.map((s) => {
+                const done = ob.done.includes(s.id);
+                return (
+                  <label className={`pt-onboard-step ${done ? 'done' : ''}`} key={s.id}>
+                    <input type="checkbox" checked={done} onChange={(e) => toggleStep(s.id, e.target.checked)} />
+                    <span>{s.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
