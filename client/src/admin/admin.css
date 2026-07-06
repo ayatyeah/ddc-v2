@@ -548,6 +548,38 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 /* Bento-сетка (@magicui/bento-grid): плитки разного размера в единой сетке */
 .dash-bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
 .dash-bento > * { margin: 0; min-width: 0; height: 100%; }
+/* ── Мониторинг ИТ-систем: статус-борд + инциденты ── */
+.mon-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border-radius: 14px; border: 1px solid var(--line); margin-bottom: 16px; }
+.mon-banner.ok { background: color-mix(in srgb, #1f9d57 8%, transparent); border-color: color-mix(in srgb, #1f9d57 30%, var(--line)); }
+.mon-banner.warn { background: color-mix(in srgb, #c8960c 8%, transparent); border-color: color-mix(in srgb, #c8960c 30%, var(--line)); }
+.mon-banner-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.mon-banner.ok .mon-banner-dot { background: #1f9d57; box-shadow: 0 0 0 0 rgba(31,157,87,0.5); animation: livePulse 1.8s ease-in-out infinite; }
+.mon-banner.warn .mon-banner-dot { background: #c8960c; }
+.mon-banner b { font-size: 15px; }
+.mon-sla { display: flex; flex-wrap: wrap; gap: 14px; margin-left: auto; font-size: 12.5px; color: var(--ink-soft); }
+.mon-sla .ok { color: #1f9d57; } .mon-sla .warn { color: #c8960c; } .mon-sla .bad { color: #c0455a; } .mon-sla .mnt { color: #2f6fe0; }
+.mon-systems { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.mon-sys { border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 12px; padding: 13px 15px; background: var(--card); box-shadow: var(--shadow-card); }
+.mon-sys-top { display: flex; align-items: center; gap: 10px; }
+.mon-sys-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
+.mon-sys-t { flex: 1; min-width: 0; } .mon-sys-t b { font-size: 14px; display: block; } .mon-sys-t small { font-size: 11px; color: var(--ink-faint); }
+.mon-sys-badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); padding: 2px 8px; border-radius: 20px; flex: none; }
+.mon-sys-up { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
+.mon-sys-bar { flex: 1; height: 6px; border-radius: 20px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
+.mon-sys-bar i { display: block; height: 100%; background: var(--c); }
+.mon-sys-up b { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.mon-sys-note { font-size: 12px; color: var(--ink-faint); margin-top: 8px; line-height: 1.45; }
+.mon-sys-sel { margin-top: 10px; font-size: 12.5px; padding: 6px 8px; }
+.mon-inc-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.mon-inc-form .adm-input:first-child { flex: 1 1 220px; }
+.mon-incidents { display: flex; flex-direction: column; gap: 10px; }
+.mon-inc { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.mon-inc.resolved { opacity: 0.6; }
+.mon-inc-sev { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); padding: 2px 8px; border-radius: 20px; flex: none; margin-top: 2px; }
+.mon-inc-b { flex: 1; min-width: 0; } .mon-inc-b b { font-size: 14px; } .mon-inc-b small { display: block; font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; } .mon-inc-b p { font-size: 12.5px; color: var(--ink-soft); margin: 6px 0 0; }
+.mon-inc-act { display: flex; gap: 6px; flex: none; }
+.adm-btn.sm, .adm-ghost.sm { padding: 5px 11px; font-size: 12.5px; }
+
 /* Онлайн-карточка + живая точка */
 .dash-card.dc-online .dc-num { display: inline-flex; align-items: center; gap: 10px; }
 .dc-live-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); animation: livePulse 1.8s ease-in-out infinite; }

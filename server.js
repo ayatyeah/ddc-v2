@@ -2894,6 +2894,79 @@ app.post('/api/admin/insight', auth, requireRole('admin', 'manager'), async (req
   } catch (e) { console.error('POST /api/admin/insight:', e.message); res.status(502).json({ error: 'ИИ недоступен' }); }
 });
 
+// ── Статус-борд ИТ-систем + инциденты (мониторинг инфраструктуры) ──
+const SYS_STATUS = ['operational', 'degraded', 'down', 'maintenance'];
+const INC_SEV = ['minor', 'major', 'critical'];
+const INC_STATUS = ['open', 'monitoring', 'resolved'];
+app.get('/api/admin/systems', auth, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const systems = (await db.query(`SELECT id,name,category,status,uptime,owner,note,updated_at FROM systems ORDER BY sort_order, id`)).rows;
+    const incidents = (await db.query(`SELECT i.id,i.system_id,s.name AS system_name,i.title,i.severity,i.status,i.note,i.started_at,i.resolved_at
+      FROM incidents i LEFT JOIN systems s ON s.id=i.system_id ORDER BY (i.status='resolved'), i.id DESC LIMIT 60`)).rows;
+    const byStatus = { operational: 0, degraded: 0, down: 0, maintenance: 0 };
+    systems.forEach((s) => { byStatus[s.status] = (byStatus[s.status] || 0) + 1; });
+    const avgUptime = systems.length ? systems.reduce((a, s) => a + Number(s.uptime), 0) / systems.length : 100;
+    const openInc = incidents.filter((i) => i.status !== 'resolved').length;
+    res.json({ systems, incidents, sla: { total: systems.length, byStatus, avgUptime: Math.round(avgUptime * 100) / 100, openInc } });
+  } catch (e) { console.error('GET /api/admin/systems:', e.message); res.status(500).json({ error: 'Ошибка' }); }
+});
+app.post('/api/admin/systems', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const name = clip(req.body?.name, 120);
+  if (!name) return res.status(400).json({ error: 'Укажите название системы' });
+  try {
+    const { rows } = await db.query(`INSERT INTO systems (name,category,status,uptime,owner,note) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [name, clip(req.body?.category, 60), SYS_STATUS.includes(req.body?.status) ? req.body.status : 'operational', Math.max(0, Math.min(100, Number(req.body?.uptime) || 99.9)), clip(req.body?.owner, 120), clip(req.body?.note, 500)]);
+    logAudit(req, 'system', rows[0].id, 'create', `Добавлена система «${name}»`);
+    res.status(201).json({ id: rows[0].id });
+  } catch (e) { console.error('POST /api/admin/systems:', e.message); res.status(500).json({ error: 'Не удалось' }); }
+});
+app.patch('/api/admin/systems/:id(\\d+)', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const sets = [], vals = []; const push = (c, v) => { sets.push(`${c}=$${sets.length + 1}`); vals.push(v); };
+  if (req.body?.status !== undefined) push('status', SYS_STATUS.includes(req.body.status) ? req.body.status : 'operational');
+  if (req.body?.uptime !== undefined) push('uptime', Math.max(0, Math.min(100, Number(req.body.uptime) || 0)));
+  if (req.body?.name !== undefined) push('name', clip(req.body.name, 120));
+  if (req.body?.category !== undefined) push('category', clip(req.body.category, 60));
+  if (req.body?.owner !== undefined) push('owner', clip(req.body.owner, 120));
+  if (req.body?.note !== undefined) push('note', clip(req.body.note, 500));
+  if (!sets.length) return res.status(400).json({ error: 'Нет изменений' });
+  vals.push(Number(req.params.id));
+  try { await db.query(`UPDATE systems SET ${sets.join(', ')}, updated_at=now() WHERE id=$${vals.length}`, vals); res.json({ ok: true }); }
+  catch (e) { console.error('PATCH /api/admin/systems:', e.message); res.status(500).json({ error: 'Не удалось' }); }
+});
+app.delete('/api/admin/systems/:id(\\d+)', auth, requireRole('admin'), async (req, res) => {
+  try { const id = Number(req.params.id); await db.query(`DELETE FROM incidents WHERE system_id=$1`, [id]); await db.query(`DELETE FROM systems WHERE id=$1`, [id]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: 'Не удалось' }); }
+});
+app.post('/api/admin/incidents', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const title = clip(req.body?.title, 200);
+  if (!title) return res.status(400).json({ error: 'Укажите заголовок инцидента' });
+  const system_id = req.body?.system_id ? Number(req.body.system_id) : null;
+  const severity = INC_SEV.includes(req.body?.severity) ? req.body.severity : 'minor';
+  try {
+    const { rows } = await db.query(`INSERT INTO incidents (system_id,title,severity,note) VALUES ($1,$2,$3,$4) RETURNING id`, [system_id, title, severity, clip(req.body?.note, 1000)]);
+    if (system_id) await db.query(`UPDATE systems SET status=$1, updated_at=now() WHERE id=$2`, [severity === 'critical' ? 'down' : 'degraded', system_id]);
+    logAudit(req, 'incident', rows[0].id, 'create', `Инцидент: ${title}`);
+    res.status(201).json({ id: rows[0].id });
+  } catch (e) { console.error('POST /api/admin/incidents:', e.message); res.status(500).json({ error: 'Не удалось' }); }
+});
+app.patch('/api/admin/incidents/:id(\\d+)', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const status = INC_STATUS.includes(req.body?.status) ? req.body.status : null;
+  if (!status) return res.status(400).json({ error: 'Некорректный статус' });
+  try {
+    const { rows } = await db.query(`UPDATE incidents SET status=$1, resolved_at=CASE WHEN $1='resolved' THEN now() ELSE NULL END WHERE id=$2 RETURNING system_id`, [status, Number(req.params.id)]);
+    if (status === 'resolved' && rows[0]?.system_id) await db.query(`UPDATE systems SET status='operational', updated_at=now() WHERE id=$1`, [rows[0].system_id]);
+    res.json({ ok: true });
+  } catch (e) { console.error('PATCH /api/admin/incidents:', e.message); res.status(500).json({ error: 'Не удалось' }); }
+});
+// Публичный статус (для будущей публичной статус-страницы) — только сводка, без внутренних деталей.
+app.get('/api/status', async (req, res) => {
+  try {
+    const systems = (await db.query(`SELECT name, category, status, uptime FROM systems ORDER BY sort_order, id`)).rows;
+    const open = (await db.query(`SELECT count(*)::int c FROM incidents WHERE status<>'resolved'`)).rows[0].c;
+    res.json({ overall: systems.every((s) => s.status === 'operational') ? 'operational' : 'degraded', systems, open_incidents: open, time: new Date().toISOString() });
+  } catch (e) { res.status(500).json({ error: 'Недоступно' }); }
+});
+
 // ── Админ: история изменений ──────────────────────────────────────────────────
 app.get('/api/admin/audit', auth, async (req, res) => {
   try {
@@ -3087,6 +3160,28 @@ async function seedDemo() {
       if (ids[u]) await db.query(`INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1,$2,NULL,$3)`, [ids[u], nameOf(u), msg]);
     console.log('✓ Демо-данные: 7 сотрудников (2 начальника), задачи, новости, заявки, 2 опроса, события, брони, чат');
   } catch (e) { console.error('seedDemo:', e.message); }
+}
+
+async function seedSystems() {
+  try {
+    if ((await db.query(`SELECT count(*)::int c FROM systems`)).rows[0].c) return;
+    const list = [
+      ['Портал сотрудников ЦЦР', 'Приложения', 'operational', 99.98, 'Отдел разработки'],
+      ['Корпоративная почта', 'Инфраструктура', 'operational', 99.95, 'ИТ-инфраструктура'],
+      ['VPN / удалённый доступ', 'Безопасность', 'operational', 99.90, 'Отдел ИБ'],
+      ['База данных (PostgreSQL)', 'Инфраструктура', 'operational', 99.99, 'ИТ-инфраструктура'],
+      ['Файловое хранилище', 'Инфраструктура', 'degraded', 99.40, 'ИТ-инфраструктура'],
+      ['Служба каталога (LDAP)', 'Инфраструктура', 'operational', 99.97, 'ИТ-инфраструктура'],
+      ['Система мониторинга', 'Наблюдаемость', 'operational', 99.90, 'ИТ-инфраструктура'],
+      ['CI/CD пайплайн', 'Разработка', 'operational', 99.80, 'Отдел разработки'],
+      ['Резервное копирование', 'Инфраструктура', 'maintenance', 99.60, 'ИТ-инфраструктура'],
+    ];
+    let i = 0; const ids = {};
+    for (const [name, cat, st, up, owner] of list) { const r = await db.query(`INSERT INTO systems (name,category,status,uptime,owner,sort_order) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [name, cat, st, up, owner, i++]); ids[name] = r.rows[0].id; }
+    await db.query(`INSERT INTO incidents (system_id,title,severity,status,note,started_at) VALUES ($1,'Повышенная задержка файлового хранилища','major','monitoring','Идёт диагностика дисковой подсистемы, часть операций медленнее обычного.', now() - interval '40 minutes')`, [ids['Файловое хранилище']]);
+    await db.query(`INSERT INTO incidents (system_id,title,severity,status,note,started_at,resolved_at) VALUES ($1,'Плановое обслуживание резервного копирования','minor','resolved','Обновление агента бэкапа завершено.', now() - interval '3 hours', now() - interval '2 hours')`, [ids['Резервное копирование']]);
+    console.log('✓ Реестр ИТ-систем засеян (9 систем, 2 инцидента)');
+  } catch (e) { console.error('seedSystems:', e.message); }
 }
 
 const server = app.listen(PORT, '0.0.0.0', () => {
@@ -3316,11 +3411,25 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        day DATE NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL,
        user_id INTEGER, user_name TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT now()
      );
-     CREATE INDEX IF NOT EXISTS idx_bookings_day ON bookings (room_id, day);`
+     CREATE INDEX IF NOT EXISTS idx_bookings_day ON bookings (room_id, day);
+     -- Реестр ИТ-систем + инциденты (статус-борд «бесперебойность инфраструктуры»)
+     CREATE TABLE IF NOT EXISTS systems (
+       id SERIAL PRIMARY KEY, name TEXT NOT NULL, category TEXT NOT NULL DEFAULT '',
+       status TEXT NOT NULL DEFAULT 'operational',   -- operational|degraded|down|maintenance
+       uptime NUMERIC NOT NULL DEFAULT 99.9, owner TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '',
+       sort_order INTEGER NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE TABLE IF NOT EXISTS incidents (
+       id SERIAL PRIMARY KEY, system_id INTEGER, title TEXT NOT NULL DEFAULT '',
+       severity TEXT NOT NULL DEFAULT 'minor',       -- minor|major|critical
+       status TEXT NOT NULL DEFAULT 'open',           -- open|monitoring|resolved
+       note TEXT NOT NULL DEFAULT '', started_at TIMESTAMPTZ NOT NULL DEFAULT now(), resolved_at TIMESTAMPTZ
+     );`
   ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
    .then(() => seedKnowledge())
    .then(() => seedRooms())
+   .then(() => seedSystems())
    .then(() => seedDemo())
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
