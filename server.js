@@ -1227,7 +1227,7 @@ app.post('/api/admin/careers/:id(\\d+)/analyze', auth, requireRole('admin', 'man
 - Контакты: ${l.email || '—'} ${l.phone || ''}
 - Сопроводительное письмо: ${(l.message || '').slice(0, 2000) || '(не заполнено)'}
 - Резюме (CV): ${cvBlock}`;
-    const text = await callGemini(prompt, 1024);
+    const text = await aiText(prompt, { json: true });   // OpenAI-приоритетно
     const j = parseJsonLoose(text) || {};
     const fit = Math.max(0, Math.min(100, Math.round(Number(j.fit_score) || 0)));
     await db.query(
@@ -1505,7 +1505,7 @@ app.post('/api/portal/requests/:id(\\d+)/analyze', auth, async (req, res) => {
 Автор: ${r.author_name}
 Отвечай ТОЛЬКО JSON, без markdown.`;
     let ai = null;
-    try { ai = parseJsonLoose(await callGemini(prompt, 400)); } catch { /* фолбэк ниже */ }
+    try { ai = parseJsonLoose(await aiText(prompt, { json: true })); } catch { /* фолбэк ниже */ }
     if (!ai) return res.status(502).json({ error: 'ИИ недоступен' });
     const clean = {
       priority: ['low', 'normal', 'high'].includes(ai.priority) ? ai.priority : 'normal',
@@ -2112,6 +2112,25 @@ function cosine(a, b) {
 }
 const sha1 = (s) => crypto.createHash('sha1').update(String(s)).digest('hex');
 
+// Единый текст-LLM для интерактивных ИИ-функций (ответы/анализ/генерация).
+// Приоритет — OpenAI (нет лимита запросов, дёшево по токенам); Gemini — бесплатный фолбэк.
+async function callOpenAIText(prompt, { json = false } = {}) {
+  if (!OPENAI_KEY) throw new Error('Не задан OPENAI_API_KEY');
+  const body = { model: OPENAI_MODEL, messages: [{ role: 'user', content: prompt }] };
+  if (json) body.response_format = { type: 'json_object' };
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_KEY}` },
+    signal: AbortSignal.timeout(25000), body: JSON.stringify(body),
+  });
+  if (!r.ok) { const tx = await r.text(); throw new Error(`OpenAI ${r.status}: ${tx.slice(0, 200)}`); }
+  const j = await r.json();
+  return j?.choices?.[0]?.message?.content || '';
+}
+async function aiText(prompt, opts = {}) {
+  if (OPENAI_KEY) { try { return await callOpenAIText(prompt, opts); } catch (e) { console.error('aiText(openai):', e.message); } }
+  return await callGemini(prompt, opts.maxTokens || 800);   // фолбэк на Gemini
+}
+
 // Сбор всего индексируемого контента портала. tab = раздел портала для перехода по клику.
 async function collectCorpus() {
   const items = [];
@@ -2216,7 +2235,7 @@ app.post('/api/assistant/ask', auth, async (req, res) => {
     const context = hits.map((h, i) => `[${i + 1}] (${KIND_LABEL[h.kind] || h.kind}) ${h.title}\n${(h.body || h.snippet || '').slice(0, 900)}`).join('\n\n');
     const prompt = `Ты — ДиДи, дружелюбный ассистент корпоративного портала DDC (Центр цифрового развития). Ответь на вопрос сотрудника ПО-РУССКИ, опираясь ТОЛЬКО на приведённые фрагменты базы портала. Пиши кратко, по делу, человеческим языком. Если в данных нет ответа — честно скажи об этом. Не выдумывай факты.\n\nФрагменты базы:\n${context}\n\nВопрос: ${q}\n\nОтвет:`;
     let answer = '';
-    try { answer = cleanAnswer(await callGemini(prompt, 700)); } catch { /* фолбэк ниже */ }
+    try { answer = cleanAnswer(await aiText(prompt)); } catch { /* фолбэк ниже */ }
     if (!answer) answer = 'Вот что нашлось по вашему запросу:';
     res.json({ answer, sources });
   } catch (e) { console.error('POST /api/assistant/ask:', e.message); res.status(502).json({ error: 'ИИ недоступен: ' + (e.message || 'ошибка') }); }
@@ -2231,7 +2250,7 @@ app.post('/api/assistant/generate', auth, async (req, res) => {
   const lang = GEN_LANG[req.body?.lang] ? req.body.lang : 'ru';
   if (!topic) return res.status(400).json({ error: 'Укажите тему или тезисы' });
   const prompt = `Напиши ${GEN_KINDS[kind]} на ${GEN_LANG[lang]} языке по теме/тезисам ниже. 2–4 абзаца, деловой, но живой тон. НЕ выдумывай конкретные даты, суммы и цифры, которых нет в теме. Верни ТОЛЬКО готовый текст, без заголовка и без markdown.\n\nТема/тезисы: ${topic}`;
-  try { const text = cleanAnswer(await callGemini(prompt, 800)); if (!text) throw new Error('пусто'); res.json({ text }); }
+  try { const text = cleanAnswer(await aiText(prompt)); if (!text) throw new Error('пусто'); res.json({ text }); }
   catch (e) { console.error('POST /api/assistant/generate:', e.message); res.status(502).json({ error: 'ИИ недоступен' }); }
 });
 
