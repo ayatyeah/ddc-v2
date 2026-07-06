@@ -278,7 +278,35 @@ async function logAudit(req, entity, entityId, action, summary) {
   } catch (e) { console.error('audit:', e.message); }
 }
 
-// Создать in-app уведомление пользователю (доставляется поллингом с фронта).
+// ── Realtime через SSE: живые уведомления/сообщения/присутствие без поллинга ──
+const sseClients = new Map();   // userId -> Set<res>
+function sseSend(res, event, data) { try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* соединение закрыто */ } }
+function broadcast(userIds, event, data) {
+  const ids = Array.isArray(userIds) ? userIds : [userIds];
+  for (const id of ids) { const set = sseClients.get(Number(id)); if (set) for (const res of set) sseSend(res, event, data); }
+}
+function broadcastAll(event, data) { for (const set of sseClients.values()) for (const res of set) sseSend(res, event, data); }
+const onlineUserIds = () => [...sseClients.keys()];
+
+app.get('/api/portal/stream', auth, (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders?.();
+  const uid = Number(req.admin.id);
+  if (!sseClients.has(uid)) sseClients.set(uid, new Set());
+  const set = sseClients.get(uid);
+  const wasOffline = set.size === 0;
+  set.add(res);
+  sseSend(res, 'hello', { ok: true, online: onlineUserIds() });
+  if (wasOffline) broadcastAll('presence', { userId: uid, online: true });
+  const hb = setInterval(() => sseSend(res, 'ping', { t: Date.now() }), 25000);
+  req.on('close', () => {
+    clearInterval(hb);
+    const s = sseClients.get(uid);
+    if (s) { s.delete(res); if (!s.size) { sseClients.delete(uid); broadcastAll('presence', { userId: uid, online: false }); } }
+  });
+});
+
+// Создать in-app уведомление пользователю (доставляется мгновенно по SSE + поллингом как фолбэк).
 // userId может быть null (напр. суперадмин без записи в users) — тогда тихо пропускаем.
 async function notify(userId, type, leadId, title, body) {
   if (!userId) return;
@@ -287,6 +315,7 @@ async function notify(userId, type, leadId, title, body) {
       `INSERT INTO notifications (user_id, type, lead_id, title, body) VALUES ($1,$2,$3,$4,$5)`,
       [userId, type, leadId == null ? null : Number(leadId), (title || '').slice(0, 200), (body || '').slice(0, 500)]
     );
+    broadcast(userId, 'notification', { type, title: (title || '').slice(0, 200), body: (body || '').slice(0, 500) });
   } catch (e) { console.error('notify:', e.message); }
 }
 
@@ -1029,6 +1058,7 @@ app.post('/api/portal/chat', auth, async (req, res) => {
       `INSERT INTO messages (author_id, author_name, recipient_id, body, file_id) VALUES ($1, $2, NULL, $3, $4)
        RETURNING ${MSG_COLS}`,
       [req.admin.id, req.admin.u, body, saved?.id || null]);
+    broadcastAll('chat', { scope: 'team', from: req.admin.id });   // живой общий канал
     res.status(201).json({ ...rows[0], file_name: saved?.orig, file_mime: saved?.mime, file_size: saved?.size });
   } catch (e) { console.error('POST /api/portal/chat:', e.message); res.status(e.status || 500).json({ error: e.status ? e.message : 'Не удалось отправить' }); }
 });
@@ -1059,6 +1089,7 @@ app.post('/api/portal/dm', auth, async (req, res) => {
        RETURNING ${MSG_COLS}`,
       [me, req.admin.u, to, body, saved?.id || null]);
     if (to !== me) await notify(to, 'dm', null, 'Личное сообщение', `${req.admin.u}: ${(body || 'файл').slice(0, 80)}`);
+    broadcast([to, me], 'chat', { scope: 'dm', from: me, to });   // живой диалог у обоих
     res.status(201).json({ ...rows[0], file_name: saved?.orig, file_mime: saved?.mime, file_size: saved?.size });
   } catch (e) { console.error('POST /api/portal/dm:', e.message); res.status(e.status || 500).json({ error: e.status ? e.message : 'Не удалось отправить' }); }
 });
@@ -1128,6 +1159,7 @@ app.post('/api/portal/chats/:id(\\d+)/messages', auth, async (req, res) => {
     const { rows: mem } = await db.query(`SELECT user_id FROM chat_members WHERE chat_id = $1 AND user_id <> $2`, [chatId, me]);
     const { rows: ch } = await db.query(`SELECT name FROM chats WHERE id = $1`, [chatId]);
     for (const m of mem) await notify(m.user_id, 'chat', null, ch[0]?.name || 'Чат', `${req.admin.u}: ${(body || 'файл').slice(0, 80)}`);
+    broadcast([me, ...mem.map((m) => m.user_id)], 'chat', { scope: 'chat', chatId });   // живой групповой чат
     res.status(201).json({ ...rows[0], file_name: saved?.orig, file_mime: saved?.mime, file_size: saved?.size });
   } catch (e) { console.error('POST /api/portal/chats/messages:', e.message); res.status(e.status || 500).json({ error: e.status ? e.message : 'Не удалось отправить' }); }
 });

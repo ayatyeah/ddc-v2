@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getJSON, sendJSON } from '../api.js';
+import { on as rtOn } from './realtime.js';
 
 // Уведомления сотрудника: поллинг /api/notifications, дропдаун, переход в нужный раздел по клику.
 const TYPE_TAB = { task: 'tasks', dm: 'dm', chat: 'chat', request: 'requests', news: 'news', assignment: 'tasks' };
@@ -19,7 +20,8 @@ export default function PortalBell({ onGo, onAuthLost }) {
   useEffect(() => {
     load();
     const t = setInterval(() => { if (!document.hidden) load(); }, 30000);
-    return () => clearInterval(t);
+    const off = rtOn('notification', () => load());   // мгновенно по SSE
+    return () => { clearInterval(t); off(); };
   }, [load]);
 
   useEffect(() => {

@@ -10,6 +10,7 @@ import Calendar from './Calendar.jsx';
 import PortalNews from './PortalNews.jsx';
 import PortalBell from './PortalBell.jsx';
 import VoiceAgent from './VoiceAgent.jsx';
+import { connect as rtConnect, on as rtOn, usePresence } from './realtime.js';
 import '../admin/admin.css';
 import './portal.css';
 
@@ -60,8 +61,18 @@ export default function PortalApp() {
   // Боковое меню (на телефоне выезжает слева по бургеру; на десктопе всегда видно).
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);   // глобальный ИИ-поиск по порталу (Ctrl/Cmd+K)
+  const [toast, setToast] = useState(null);   // всплывающее живое уведомление
   const goTab = (id) => { setConvOpen(false); setMenuOpen(false); setTab(id); };
   const logo = useLogo();   // чёрный логотип на светлой теме, белый на тёмной
+
+  // Realtime: держим SSE-соединение, пока открыт портал; показываем тост на новое уведомление.
+  useEffect(() => {
+    if (state !== 'app') return;
+    const dis = rtConnect();
+    const off = rtOn('notification', (n) => { setToast({ title: n.title, body: n.body, t: Date.now() }); });
+    return () => { off(); dis(); };
+  }, [state]);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
 
   // Ctrl/Cmd+K — открыть глобальный поиск из любого места портала.
   useEffect(() => {
@@ -167,6 +178,14 @@ export default function PortalApp() {
         {tab === 'chat' && <Chats me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
       </main>
 
+      {/* Живое уведомление (SSE) */}
+      {toast && (
+        <div className="pt-toast" onClick={() => { setToast(null); goTab('news'); }} role="status">
+          <span className="pt-toast-dot" />
+          <div className="pt-toast-b"><b>{toast.title || 'Уведомление'}</b>{toast.body && <small>{toast.body}</small>}</div>
+        </div>
+      )}
+
       {/* Глобальный ИИ-поиск по порталу (Ctrl/Cmd+K) */}
       {searchOpen && <GlobalSearch onGo={goTab} onClose={() => setSearchOpen(false)} onAuthLost={onAuthLost} />}
 
@@ -263,18 +282,20 @@ function Profile({ me, onAuthLost }) {
 function People({ onAuthLost }) {
   const [users, setUsers] = useState([]);
   const [q, setQ] = useState('');
+  const online = usePresence();
   useEffect(() => { getJSON('/api/portal/users').then(setUsers).catch((e) => { if (e.status === 401) onAuthLost?.(); }); }, [onAuthLost]);
   const ql = q.trim().toLowerCase();
   const list = ql ? users.filter((u) => [u.name, u.department, u.role, roleLabel(u.role)].some((x) => (x || '').toLowerCase().includes(ql))) : users;
+  const onlineCount = users.filter((u) => online(u.id)).length;
   return (
     <div className="pt-view">
-      <div className="pt-view-h"><h2>Сотрудники</h2><span className="pt-hint">{users.length} чел.</span></div>
+      <div className="pt-view-h"><h2>Сотрудники</h2><span className="pt-hint">{users.length} чел.{onlineCount ? ` · ${onlineCount} онлайн` : ''}</span></div>
       <input className="adm-input pt-search" placeholder="Поиск: имя, отдел, должность…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="pt-people">
         {list.map((u) => (
           <div className="pt-person" key={u.id}>
-            <span className="pt-av">{initials(u.name)}</span>
-            <div className="pt-person-t"><b>{u.name}</b><small>{roleLabel(u.role)}{u.department ? ` · ${u.department}` : ''}</small></div>
+            <span className={`pt-av ${online(u.id) ? 'on' : ''}`}>{initials(u.name)}</span>
+            <div className="pt-person-t"><b>{u.name}{online(u.id) && <span className="pt-online-tag">онлайн</span>}</b><small>{roleLabel(u.role)}{u.department ? ` · ${u.department}` : ''}</small></div>
           </div>
         ))}
         {list.length === 0 && <div className="pt-empty">{users.length ? 'Никого не найдено.' : 'Список пуст.'}</div>}
@@ -366,7 +387,8 @@ function Thread({ me, title, sub, avatar, showAuthor, onBack, poll, post }) {
   const reload = useCallback(async () => {
     try { const rows = await poll(); setMsgs(rows || []); setTimeout(scrollDown, 20); } catch { /* тихо: временная сетевая ошибка */ }
   }, [poll]);
-  useEffect(() => { reload(); const t = setInterval(reload, 4000); return () => clearInterval(t); }, [reload]);
+  // Мгновенное обновление по SSE + редкий поллинг как фолбэк (если SSE недоступен).
+  useEffect(() => { reload(); const t = setInterval(reload, 8000); const off = rtOn('chat', () => reload()); return () => { clearInterval(t); off(); }; }, [reload]);
 
   const onPick = (e) => {
     const f = e.target.files?.[0]; e.target.value = '';
@@ -548,6 +570,7 @@ function CreateChat({ me, onClose, onCreated, onAuthLost }) {
 function Dm({ me, onAuthLost, onConv }) {
   const [users, setUsers] = useState([]);
   const [active, setActive] = useState(null);
+  const online = usePresence();
   const openChat = (u) => { setActive(u); onConv?.(true); };
   const closeChat = () => { setActive(null); onConv?.(false); };
   useEffect(() => () => onConv?.(false), [onConv]);
@@ -565,8 +588,8 @@ function Dm({ me, onAuthLost, onConv }) {
         {users.length === 0 && <div className="pt-empty sm">Список пуст.</div>}
         {users.map((u) => (
           <button key={u.id} className={`pt-user ${active?.id === u.id ? 'active' : ''}`} onClick={() => openChat(u)}>
-            <span className="pt-av sm">{initials(u.name)}</span>
-            <span className="pt-user-t"><b>{u.name}</b><small>{u.department || u.role}</small></span>
+            <span className={`pt-av sm ${online(u.id) ? 'on' : ''}`}>{initials(u.name)}</span>
+            <span className="pt-user-t"><b>{u.name}</b><small>{online(u.id) ? '● онлайн' : (u.department || u.role)}</small></span>
           </button>
         ))}
       </div>
