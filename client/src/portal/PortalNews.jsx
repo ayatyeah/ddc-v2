@@ -16,6 +16,15 @@ export default function PortalNews({ me, onAuthLost }) {
   const [canWrite, setCanWrite] = useState(false);
   const [cat, setCat] = useState('all');
   const [form, setForm] = useState(null);
+  const [genBusy, setGenBusy] = useState(false);
+
+  const generate = async () => {
+    if (!form?.title.trim()) { alert('Сначала введите заголовок/тему новости'); return; }
+    setGenBusy(true);
+    try { const d = await sendJSON('/api/assistant/generate', 'POST', { kind: 'news', topic: form.title.trim() + (form.body ? '. ' + form.body : ''), lang: 'ru' }); setForm((f) => ({ ...f, body: d.text || f.body })); }
+    catch (e) { alert(e.message || 'ИИ недоступен'); }
+    finally { setGenBusy(false); }
+  };
 
   const load = useCallback(async () => {
     try { const d = await getJSON('/api/portal/news'); setItems(d.items || []); setCanWrite(!!d.canWrite); }
@@ -92,8 +101,13 @@ export default function PortalNews({ me, onAuthLost }) {
             </div>
             <div className="adm-field"><label>Заголовок</label>
               <input className="adm-input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} autoFocus /></div>
-            <div className="adm-field"><label>Текст</label>
-              <textarea className="adm-input" rows={7} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} /></div>
+            <div className="adm-field">
+              <label className="pt-gen-lab">Текст
+                <button type="button" className="pt-gen-btn" onClick={generate} disabled={genBusy} title="Сгенерировать текст по заголовку">
+                  {genBusy ? '✨ Пишу…' : '✨ Сгенерировать ИИ'}
+                </button>
+              </label>
+              <textarea className="adm-input" rows={7} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Введите заголовок и нажмите «Сгенерировать ИИ» — ДиДи напишет черновик, который можно поправить." /></div>
             <div className="pt-modal-foot">
               <button type="button" className="adm-btn ghost" onClick={() => setForm(null)}>Отмена</button>
               <button type="submit" className="adm-btn">Опубликовать</button>

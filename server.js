@@ -2222,6 +2222,19 @@ app.post('/api/assistant/ask', auth, async (req, res) => {
   } catch (e) { console.error('POST /api/assistant/ask:', e.message); res.status(502).json({ error: 'ИИ недоступен: ' + (e.message || 'ошибка') }); }
 });
 
+// ИИ-генератор контента: из темы/тезисов → готовый текст (новость/объявление/описание), на нужном языке.
+const GEN_KINDS = { news: 'корпоративную новость для внутреннего портала компании', announcement: 'короткое объявление для сотрудников', service: 'описание ИТ-услуги компании для сайта' };
+const GEN_LANG = { ru: 'русском', kk: 'казахском', en: 'английском' };
+app.post('/api/assistant/generate', auth, async (req, res) => {
+  const topic = clip(req.body?.topic, 600);
+  const kind = GEN_KINDS[req.body?.kind] ? req.body.kind : 'news';
+  const lang = GEN_LANG[req.body?.lang] ? req.body.lang : 'ru';
+  if (!topic) return res.status(400).json({ error: 'Укажите тему или тезисы' });
+  const prompt = `Напиши ${GEN_KINDS[kind]} на ${GEN_LANG[lang]} языке по теме/тезисам ниже. 2–4 абзаца, деловой, но живой тон. НЕ выдумывай конкретные даты, суммы и цифры, которых нет в теме. Верни ТОЛЬКО готовый текст, без заголовка и без markdown.\n\nТема/тезисы: ${topic}`;
+  try { const text = cleanAnswer(await callGemini(prompt, 800)); if (!text) throw new Error('пусто'); res.json({ text }); }
+  catch (e) { console.error('POST /api/assistant/generate:', e.message); res.status(502).json({ error: 'ИИ недоступен' }); }
+});
+
 // Синтез приятного голоса (текст → mp3) через gpt-4o-mini-tts — «голос ДиДи».
 // Тёплый естественный женский голос вместо роботизированного системного. Фолбэк на стороне
 // клиента (браузерный SpeechSynthesis), если ключа/сети нет.

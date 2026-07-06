@@ -536,6 +536,12 @@
 .va-mic.on { transform: scale(calc(1 + var(--lvl, 0) * 0.04)); }
 .va-fab.live { animation: vaPulse 1.3s ease-in-out infinite; }
 
+/* ИИ-генерация текста (композитор новостей) */
+.pt-gen-lab { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pt-gen-btn { border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--line)); background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue); font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
+.pt-gen-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 18%, transparent); }
+.pt-gen-btn:disabled { opacity: 0.6; cursor: default; }
+
 /* ИИ-анализ заявки (для согласующего) */
 .pt-req-ai { margin: 10px 0 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); background: color-mix(in srgb, var(--blue) 6%, transparent); }
 .pt-req-ai-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
