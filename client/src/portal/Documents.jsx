@@ -33,6 +33,19 @@ export default function Documents({ me, onAuthLost }) {
   const [gen, setGen] = useState(null);        // { title, body } — сгенерированный черновик
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [aiPanel, setAiPanel] = useState(null);   // { title, text } — краткое содержание / перевод
+  const [aiBusy, setAiBusy] = useState('');
+
+  const summarize = async (d) => {
+    setAiBusy('sum');
+    try { const r = await sendJSON(`/api/portal/docs/${d.id}/summary`, 'POST', {}); setAiPanel({ title: '📝 Краткое содержание', text: r.summary }); }
+    catch (e) { alert(e.message || 'ИИ недоступен'); } finally { setAiBusy(''); }
+  };
+  const translate = async (d, to) => {
+    setAiBusy(to);
+    try { const r = await sendJSON(`/api/portal/docs/${d.id}/translate`, 'POST', { to }); setAiPanel({ title: to === 'kk' ? '🌐 Аудару (қазақша)' : '🌐 Translation (English)', text: r.text }); }
+    catch (e) { alert(e.message || 'ИИ недоступен'); } finally { setAiBusy(''); }
+  };
 
   const load = useCallback(() => getJSON('/api/portal/docs').then(setItems).catch((e) => { if (e.status === 401) onAuthLost?.(); }), [onAuthLost]);
   useEffect(() => { load(); }, [load]);
@@ -69,12 +82,23 @@ export default function Documents({ me, onAuthLost }) {
     return (
       <div className="pt-view pt-docview">
         <div className="pt-doc-bar">
-          <button className="pt-back-btn" onClick={() => { setActive(null); setView('list'); }} aria-label="Назад">
+          <button className="pt-back-btn" onClick={() => { setActive(null); setView('list'); setAiPanel(null); }} aria-label="Назад">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
           <div className="pt-doc-bar-t"><b>{active.title}</b><small>{typeLabel(active.doc_type)}</small></div>
+          <div className="pt-doc-ai-tools">
+            <button className="pt-doc-aibtn" onClick={() => summarize(active)} disabled={!!aiBusy} title="Краткое содержание ИИ">{aiBusy === 'sum' ? '…' : '📝 Кратко'}</button>
+            <button className="pt-doc-aibtn" onClick={() => translate(active, 'kk')} disabled={!!aiBusy} title="Перевести на казахский">{aiBusy === 'kk' ? '…' : '🌐 KZ'}</button>
+            <button className="pt-doc-aibtn" onClick={() => translate(active, 'en')} disabled={!!aiBusy} title="Перевести на английский">{aiBusy === 'en' ? '…' : '🌐 EN'}</button>
+          </div>
           <a className="adm-btn pt-doc-dl" href={`/api/portal/docs/${active.id}/pdf?download=1`} target="_blank" rel="noreferrer">Скачать PDF</a>
         </div>
+        {aiPanel && (
+          <div className="pt-doc-aipanel">
+            <div className="pt-doc-aipanel-h"><b>{aiPanel.title}</b><button onClick={() => setAiPanel(null)} aria-label="Закрыть">×</button></div>
+            <div className="pt-doc-aipanel-b">{aiPanel.text}</div>
+          </div>
+        )}
         <iframe className="pt-doc-frame" src={`/api/portal/docs/${active.id}/pdf`} title={active.title} />
       </div>
     );

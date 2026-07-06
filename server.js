@@ -1398,7 +1398,7 @@ app.post('/api/portal/docs/generate', auth, async (req, res) => {
 - Кому (адресат): ${to || '—'}
 - Тема: ${subject || '—'}
 - Суть / что изложить: ${details || subject}`;
-    const text = await callGemini(prompt, 1500);
+    const text = await aiText(prompt, { json: true });   // OpenAI-приоритетно
     const j = parseJsonLoose(text) || {};
     const cap = DOC_TYPES[type].charAt(0).toUpperCase() + DOC_TYPES[type].slice(1);
     res.json({ title: clip(j.title, 200) || cap, body: String(j.body || '').slice(0, 12000) });
@@ -1425,6 +1425,29 @@ app.post('/api/portal/docs', auth, async (req, res) => {
       [title, doc_type, category, body, req.admin.id, req.admin.u]);
     res.status(201).json(rows[0]);
   } catch (e) { console.error('POST /api/portal/docs:', e.message); res.status(500).json({ error: 'Не удалось сохранить' }); }
+});
+
+// ИИ-краткое содержание документа (по id — сервер берёт текст из БД).
+app.post('/api/portal/docs/:id(\\d+)/summary', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT title, body FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    const prompt = `Кратко изложи суть документа ниже на русском языке — 3–5 пунктов маркированным списком, по делу, без воды. Документ «${rows[0].title}»:\n"""\n${(rows[0].body || '').slice(0, 6000)}\n"""`;
+    const summary = cleanAnswer(await aiText(prompt));
+    res.json({ summary });
+  } catch (e) { console.error('POST /api/portal/docs/summary:', e.message); res.status(502).json({ error: 'ИИ недоступен' }); }
+});
+// ИИ-перевод документа на казахский/английский.
+const DOC_TR_LANG = { kk: 'казахский', en: 'английский' };
+app.post('/api/portal/docs/:id(\\d+)/translate', auth, async (req, res) => {
+  const to = DOC_TR_LANG[req.body?.to] ? req.body.to : 'kk';
+  try {
+    const { rows } = await db.query(`SELECT title, body FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    const prompt = `Переведи текст делового документа на ${DOC_TR_LANG[to]} язык. Сохрани деловой стиль и структуру. Верни ТОЛЬКО перевод, без пояснений.\n\n${(rows[0].body || '').slice(0, 6000)}`;
+    const text = cleanAnswer(await aiText(prompt));
+    res.json({ text, to });
+  } catch (e) { console.error('POST /api/portal/docs/translate:', e.message); res.status(502).json({ error: 'ИИ недоступен' }); }
 });
 
 // PDF документа: inline для превью в iframe, ?download=1 — на скачивание

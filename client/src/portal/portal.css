@@ -536,6 +536,16 @@
 .va-mic.on { transform: scale(calc(1 + var(--lvl, 0) * 0.04)); }
 .va-fab.live { animation: vaPulse 1.3s ease-in-out infinite; }
 
+/* ИИ-инструменты в предпросмотре документа (кратко / перевод) */
+.pt-doc-ai-tools { display: flex; gap: 6px; margin-left: auto; }
+.pt-doc-aibtn { border: 1px solid color-mix(in srgb, var(--blue) 28%, var(--line)); background: color-mix(in srgb, var(--blue) 9%, transparent); color: var(--blue); font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 10px; border-radius: 9px; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+.pt-doc-aibtn:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 16%, transparent); }
+.pt-doc-aibtn:disabled { opacity: 0.6; cursor: default; }
+.pt-doc-aipanel { margin: 10px 0; border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--blue) 5%, transparent); overflow: hidden; }
+.pt-doc-aipanel-h { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.pt-doc-aipanel-h button { border: none; background: transparent; color: var(--ink-faint); font-size: 19px; line-height: 1; cursor: pointer; }
+.pt-doc-aipanel-b { padding: 12px 14px; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; max-height: 40vh; overflow-y: auto; }
+
 /* ИИ-генерация текста (композитор новостей) */
 .pt-gen-lab { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .pt-gen-btn { border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--line)); background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue); font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
