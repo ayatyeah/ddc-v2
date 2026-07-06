@@ -548,6 +548,32 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 /* Bento-сетка (@magicui/bento-grid): плитки разного размера в единой сетке */
 .dash-bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
 .dash-bento > * { margin: 0; min-width: 0; height: 100%; }
+/* ── База знаний (Wiki) ── */
+.wiki-search { max-width: 480px; margin-bottom: 12px; }
+.wiki-cats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.wiki-cat { border: 1px solid var(--line); background: transparent; color: var(--ink-soft); font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 20px; cursor: pointer; }
+.wiki-cat.on { background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
+.wiki-cat span { opacity: 0.6; font-size: 11px; }
+.wiki-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.wiki-card { text-align: left; border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-card); padding: 15px 16px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: border-color 0.15s, transform 0.15s; }
+.wiki-card:hover { border-color: var(--line-2); transform: translateY(-2px); }
+.wiki-card-cat { align-self: flex-start; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); padding: 2px 9px; border-radius: 20px; }
+.wiki-card b { font-size: 14.5px; line-height: 1.3; }
+.wiki-card small { font-size: 11.5px; color: var(--ink-faint); }
+.wiki-editor { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.wiki-ed-row { display: flex; gap: 10px; } .wiki-ed-row .adm-input { flex: 1; }
+.wiki-body { min-height: 300px; resize: vertical; font-family: inherit; line-height: 1.6; }
+.wiki-ed-foot { display: flex; justify-content: flex-end; gap: 10px; }
+.wiki-modal-ov { position: fixed; inset: 0; z-index: 200; background: rgba(4,8,18,0.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.wiki-modal { width: min(720px, 100%); max-height: 86vh; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-pop); }
+.wiki-modal-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--card); }
+.wiki-modal-h h3 { font-size: 1.3rem; margin: 8px 0 0; } .wiki-modal-h button { border: none; background: transparent; color: var(--ink-faint); font-size: 24px; cursor: pointer; line-height: 1; }
+.wiki-modal-b { padding: 20px 22px; font-size: 15px; line-height: 1.75; white-space: pre-wrap; }
+.wiki-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 22px 16px; }
+.wiki-tags span { font-size: 11.5px; color: var(--ink-faint); background: color-mix(in srgb, var(--ink) 6%, transparent); padding: 2px 9px; border-radius: 20px; }
+.wiki-modal-foot { display: flex; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--line); }
+.adm-ghost.danger { color: #c0455a; }
+
 /* ── Безопасность: 2FA, сессии, журнал входов, RBAC-матрица ── */
 .sec-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
 .sec-card { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: var(--card); box-shadow: var(--shadow-card); }

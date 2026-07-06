@@ -2402,6 +2402,7 @@ async function collectCorpus() {
   const add = (kind, id, title, body, tab) => items.push({ kind, ref_id: Number(id), title: String(title || '').slice(0, 300), body: String(body || '').slice(0, 4000), tab });
   const safe = async (fn) => { try { await fn(); } catch { /* таблицы может не быть */ } };
   await safe(async () => (await db.query(`SELECT id,title,body,category,doc_type FROM documents ORDER BY id`)).rows.forEach((r) => add('document', r.id, r.title, `${r.category || ''} ${r.doc_type || ''}\n${r.body}`, 'docs')));
+  await safe(async () => (await db.query(`SELECT id,title,body,category,tags FROM wiki ORDER BY id`)).rows.forEach((r) => add('wiki', r.id, r.title, `${r.category || ''} ${r.tags || ''}\n${r.body}`, null)));
   await safe(async () => (await db.query(`SELECT id,title,body,category FROM portal_news ORDER BY id`)).rows.forEach((r) => add('news', r.id, r.title, `${r.category || ''}\n${r.body}`, 'news')));
   await safe(async () => (await db.query(`SELECT id,title,body,kind,status FROM requests ORDER BY id`)).rows.forEach((r) => add('request', r.id, r.title, `${r.kind || ''} ${r.status || ''}\n${r.body}`, 'requests')));
   await safe(async () => (await db.query(`SELECT id,title,body,priority,status FROM tasks ORDER BY id`)).rows.forEach((r) => add('task', r.id, r.title, `${r.priority || ''} ${r.status || ''}\n${r.body || ''}`, 'tasks')));
@@ -2470,7 +2471,7 @@ async function semanticSearch(q, limit = 8) {
   } catch (e) { console.error('semanticSearch:', e.message); return keywordSearch(ql, limit); }
 }
 
-const KIND_LABEL = { document: 'Документ', news: 'Новость', request: 'Заявка', task: 'Задача', event: 'Событие', person: 'Сотрудник', service: 'Услуга' };
+const KIND_LABEL = { document: 'Документ', news: 'Новость', request: 'Заявка', task: 'Задача', event: 'Событие', person: 'Сотрудник', service: 'Услуга', wiki: 'База знаний' };
 
 // Gemini иногда оборачивает ответ в JSON ({"answer":"…"}) или markdown-код — достаём чистый текст.
 function cleanAnswer(s) {
@@ -2987,6 +2988,49 @@ app.get('/api/admin/security', auth, requireRole('admin', 'manager'), async (req
   } catch (e) { console.error('GET /api/admin/security:', e.message); res.status(500).json({ error: 'Ошибка' }); }
 });
 
+// ── База знаний (Wiki) ──
+app.get('/api/wiki', auth, async (req, res) => {
+  const q = clip(req.query.q, 200), cat = clip(req.query.category, 60);
+  try {
+    const where = [], vals = [];
+    if (cat) { vals.push(cat); where.push(`category = $${vals.length}`); }
+    if (q) { vals.push(`%${q}%`); where.push(`(title ILIKE $${vals.length} OR body ILIKE $${vals.length} OR tags ILIKE $${vals.length})`); }
+    const sql = `SELECT id, title, category, tags, author, updated_at FROM wiki ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY updated_at DESC LIMIT 300`;
+    const items = (await db.query(sql, vals)).rows;
+    const cats = (await db.query(`SELECT category, count(*)::int c FROM wiki GROUP BY category ORDER BY category`)).rows;
+    res.json({ items, categories: cats });
+  } catch (e) { console.error('GET /api/wiki:', e.message); res.status(500).json({ error: 'Ошибка' }); }
+});
+app.get('/api/wiki/:id(\\d+)', auth, async (req, res) => {
+  try { const { rows } = await db.query(`SELECT * FROM wiki WHERE id = $1`, [Number(req.params.id)]); if (!rows.length) return res.status(404).json({ error: 'Не найдено' }); res.json(rows[0]); }
+  catch (e) { res.status(500).json({ error: 'Ошибка' }); }
+});
+app.post('/api/admin/wiki', auth, requireRole('admin', 'manager', 'editor'), async (req, res) => {
+  const title = clip(req.body?.title, 200);
+  if (!title) return res.status(400).json({ error: 'Укажите заголовок' });
+  try {
+    const { rows } = await db.query(`INSERT INTO wiki (title, category, body, tags, author) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [title, clip(req.body?.category, 60) || 'Общее', String(req.body?.body || '').slice(0, 20000), clip(req.body?.tags, 200), req.admin.u]);
+    logAudit(req, 'wiki', rows[0].id, 'create', `Статья базы знаний «${title}»`);
+    res.status(201).json({ id: rows[0].id });
+  } catch (e) { console.error('POST /api/admin/wiki:', e.message); res.status(500).json({ error: 'Не удалось' }); }
+});
+app.patch('/api/admin/wiki/:id(\\d+)', auth, requireRole('admin', 'manager', 'editor'), async (req, res) => {
+  const sets = [], vals = []; const push = (c, v) => { sets.push(`${c}=$${sets.length + 1}`); vals.push(v); };
+  if (req.body?.title !== undefined) push('title', clip(req.body.title, 200));
+  if (req.body?.category !== undefined) push('category', clip(req.body.category, 60) || 'Общее');
+  if (req.body?.body !== undefined) push('body', String(req.body.body || '').slice(0, 20000));
+  if (req.body?.tags !== undefined) push('tags', clip(req.body.tags, 200));
+  if (!sets.length) return res.status(400).json({ error: 'Нет изменений' });
+  vals.push(Number(req.params.id));
+  try { await db.query(`UPDATE wiki SET ${sets.join(', ')}, updated_at=now() WHERE id=$${vals.length}`, vals); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: 'Не удалось' }); }
+});
+app.delete('/api/admin/wiki/:id(\\d+)', auth, requireRole('admin', 'manager', 'editor'), async (req, res) => {
+  try { await db.query(`DELETE FROM wiki WHERE id=$1`, [Number(req.params.id)]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: 'Не удалось' }); }
+});
+
 // Публичный статус (для будущей публичной статус-страницы) — только сводка, без внутренних деталей.
 app.get('/api/status', async (req, res) => {
   try {
@@ -3189,6 +3233,22 @@ async function seedDemo() {
       if (ids[u]) await db.query(`INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1,$2,NULL,$3)`, [ids[u], nameOf(u), msg]);
     console.log('✓ Демо-данные: 7 сотрудников (2 начальника), задачи, новости, заявки, 2 опроса, события, брони, чат');
   } catch (e) { console.error('seedDemo:', e.message); }
+}
+
+async function seedWiki() {
+  try {
+    if ((await db.query(`SELECT count(*)::int c FROM wiki`)).rows[0].c) return;
+    const arts = [
+      ['Git-флоу и код-ревью', 'Разработка', 'git, review, ci', 'Работаем по trunk-based с короткоживущими ветками. Ветка от main: feature/<задача>. Перед PR — прогнать линтер и тесты. PR требует минимум одного апрува код-ревью. Мёрж только после зелёного CI. Коммиты — по смыслу, сообщение по-русски.'],
+      ['Стандарты кода', 'Разработка', 'code style, lint', 'Единый стиль на проект (ESLint/Prettier для JS, соответствующие линтеры для других языков). Именование — осмысленное, без сокращений. Комментарии — там, где логика неочевидна. Секреты — только в переменных окружения, никогда в репозитории.'],
+      ['Регламент релизов', 'Разработка', 'release, deploy', 'Релизы — по расписанию, с чек-листом: тесты пройдены, миграции обратимы, есть план отката. Деплой в нерабочее время для критичных систем. После релиза — мониторинг метрик 30 минут.'],
+      ['Настройка окружения разработчика', 'Онбординг', 'setup, dev', 'Установите Node.js LTS, доступ к репозиторию и корпоративному VPN, настройте 2FA. Скопируйте .env.example → .env и запросите значения у тимлида. Запуск: npm install && npm run dev.'],
+      ['Политика паролей и 2FA', 'Безопасность', 'password, 2fa, security', 'Пароль — не менее 12 символов, разный регистр, цифры, спецсимволы; смена каждые 90 дней. Двухфакторная аутентификация обязательна для портала и корпоративных систем. Пароли не передавать и не хранить в открытом виде.'],
+      ['Как сообщить об инциденте', 'Эксплуатация', 'incident, sre', 'Инцидент — любое отклонение в работе систем. Зарегистрируйте его в разделе «Мониторинг» админки с указанием системы и серьёзности. Критичные инциденты — сразу дежурному инженеру. После устранения — короткий разбор причин.'],
+    ];
+    for (const [title, cat, tags, body] of arts) await db.query(`INSERT INTO wiki (title, category, tags, body, author) VALUES ($1,$2,$3,$4,'ЦЦР')`, [title, cat, tags, body]);
+    console.log(`✓ База знаний: засеяно ${arts.length} статей`);
+  } catch (e) { console.error('seedWiki:', e.message); }
 }
 
 async function seedSystems() {
@@ -3454,6 +3514,12 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        status TEXT NOT NULL DEFAULT 'open',           -- open|monitoring|resolved
        note TEXT NOT NULL DEFAULT '', started_at TIMESTAMPTZ NOT NULL DEFAULT now(), resolved_at TIMESTAMPTZ
      );
+     -- База знаний (Wiki): статьи с категориями (индексируются в семантический поиск)
+     CREATE TABLE IF NOT EXISTS wiki (
+       id SERIAL PRIMARY KEY, title TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Общее',
+       body TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', author TEXT NOT NULL DEFAULT '',
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
      -- Журнал входов (аудит безопасности)
      CREATE TABLE IF NOT EXISTS login_events (
        id SERIAL PRIMARY KEY, user_id INTEGER, username TEXT NOT NULL DEFAULT '',
@@ -3466,6 +3532,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
    .then(() => seedKnowledge())
    .then(() => seedRooms())
    .then(() => seedSystems())
+   .then(() => seedWiki())
    .then(() => seedDemo())
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
