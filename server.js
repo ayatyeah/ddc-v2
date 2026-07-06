@@ -2254,6 +2254,31 @@ app.post('/api/assistant/generate', auth, async (req, res) => {
   catch (e) { console.error('POST /api/assistant/generate:', e.message); res.status(502).json({ error: 'ИИ недоступен' }); }
 });
 
+// Публичный ИИ-чатбот сайта: отвечает посетителям об услугах ЦЦР (ТОЛЬКО публичный контент —
+// услуги; внутренние данные портала не доступны). Ведёт к разделу «Контакты» для заявки.
+const publicAskLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
+app.post('/api/public/ask', publicAskLimiter, async (req, res) => {
+  const q = clip(req.body?.q || req.body?.question, 400);
+  if (!q) return res.status(400).json({ error: 'Пустой вопрос' });
+  try {
+    let hits = [];
+    if (OPENAI_KEY) {
+      const [qv] = await embed([q]);
+      const { rows } = await db.query(`SELECT title, body, embedding FROM search_index WHERE kind = 'service' AND embedding IS NOT NULL`);
+      hits = rows.map((r) => ({ title: r.title, body: r.body, score: cosine(qv, r.embedding) })).sort((a, b) => b.score - a.score).slice(0, 5);
+    } else {
+      const { rows } = await db.query(`SELECT title, body FROM search_index WHERE kind = 'service' AND (title ILIKE $1 OR body ILIKE $1) LIMIT 5`, [`%${q}%`]);
+      hits = rows;
+    }
+    const ctx = hits.map((h, i) => `[${i + 1}] ${h.title}\n${(h.body || '').slice(0, 600)}`).join('\n\n') || '(нет данных)';
+    const prompt = `Ты — дружелюбный ассистент сайта Центра цифрового развития (ЦЦР) — дочерней организации Национального Банка Казахстана. Ответь на вопрос посетителя ПО-РУССКИ кратко (2–4 предложения), опираясь на список услуг ниже. Если спрашивают, как заказать услугу, оставить заявку или связаться — предложи оформить заявку через раздел «Контакты» на сайте. Не выдумывай конкретные цены и сроки.\n\nУслуги ЦЦР:\n${ctx}\n\nВопрос: ${q}\n\nОтвет:`;
+    let answer = '';
+    try { answer = cleanAnswer(await aiText(prompt)); } catch { /* фолбэк ниже */ }
+    if (!answer) answer = 'Уточните, пожалуйста, вопрос — или напишите нам через раздел «Контакты», мы поможем.';
+    res.json({ answer });
+  } catch (e) { console.error('POST /api/public/ask:', e.message); res.status(502).json({ error: 'Ассистент недоступен' }); }
+});
+
 // Синтез приятного голоса (текст → mp3) через gpt-4o-mini-tts — «голос ДиДи».
 // Тёплый естественный женский голос вместо роботизированного системного. Фолбэк на стороне
 // клиента (браузерный SpeechSynthesis), если ключа/сети нет.

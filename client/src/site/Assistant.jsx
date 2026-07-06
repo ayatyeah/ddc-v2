@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useLang } from '../store.js';
 import { t, FAQ } from '../i18n.js';
 import { IcoChat } from './icons.jsx';
+import { sendJSON } from '../api.js';
 
 export default function Assistant() {
   const lang = useLang();
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState([]);
   const [typing, setTyping] = useState(false);
+  const [text, setText] = useState('');
   const bodyRef = useRef(null);
 
   // Приветствие при первом открытии и сброс диалога при смене языка.
@@ -28,6 +30,19 @@ export default function Assistant() {
       setMsgs((m) => [...m, { who: 'bot', text: item.a }]);
       setTyping(false);
     }, 600);
+  };
+
+  // Свободный вопрос → публичный ИИ-ассистент (RAG по услугам ЦЦР).
+  const send = async (e) => {
+    e?.preventDefault?.();
+    const q = text.trim();
+    if (!q || typing) return;
+    setText('');
+    setMsgs((m) => [...m, { who: 'user', text: q }]);
+    setTyping(true);
+    try { const d = await sendJSON('/api/public/ask', 'POST', { q }); setMsgs((m) => [...m, { who: 'bot', text: d.answer || '—' }]); }
+    catch { setMsgs((m) => [...m, { who: 'bot', text: 'Извините, ассистент временно недоступен. Напишите нам через раздел «Контакты».' }]); }
+    finally { setTyping(false); }
   };
 
   const faq = FAQ[lang] || FAQ.ru;
@@ -61,6 +76,13 @@ export default function Assistant() {
               <button key={i} className="asst-q" onClick={() => ask(item)}>{item.q}</button>
             ))}
           </div>
+
+          <form className="asst-input" onSubmit={send}>
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Спросите об услугах ЦЦР…" aria-label="Ваш вопрос" />
+            <button type="submit" disabled={typing || !text.trim()} aria-label="Отправить">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+            </button>
+          </form>
         </div>
       )}
     </>
