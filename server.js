@@ -2021,6 +2021,142 @@ async function transcribeAudio(buf, mime) {
   return String(j.text || '').trim();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ИИ-поиск и RAG «Спроси у ДиДи»: семантический индекс по всему порталу.
+// Эмбеддинги (OpenAI text-embedding-3-small) → косинусное сходство в JS. Индекс строится из
+// документов/новостей/заявок/задач/событий/людей/услуг с кэшем по хэшу (переэмбеддим только
+// изменённое). Работает и БЕЗ ключа: тогда индекс хранит текст, а поиск — по ключевым словам.
+// ─────────────────────────────────────────────────────────────────────────────
+const OPENAI_EMBED_MODEL = process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-small';
+async function embed(input) {
+  if (!OPENAI_KEY) throw new Error('Не задан OPENAI_API_KEY');
+  const r = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST', headers: { Authorization: `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(30000),
+    body: JSON.stringify({ model: OPENAI_EMBED_MODEL, input }),
+  });
+  if (!r.ok) { const tx = await r.text(); throw new Error(`Embed ${r.status}: ${tx.slice(0, 200)}`); }
+  const j = await r.json();
+  return (j.data || []).map((d) => d.embedding);
+}
+function cosine(a, b) {
+  if (!a || !b || a.length !== b.length) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
+}
+const sha1 = (s) => crypto.createHash('sha1').update(String(s)).digest('hex');
+
+// Сбор всего индексируемого контента портала. tab = раздел портала для перехода по клику.
+async function collectCorpus() {
+  const items = [];
+  const add = (kind, id, title, body, tab) => items.push({ kind, ref_id: Number(id), title: String(title || '').slice(0, 300), body: String(body || '').slice(0, 4000), tab });
+  const safe = async (fn) => { try { await fn(); } catch { /* таблицы может не быть */ } };
+  await safe(async () => (await db.query(`SELECT id,title,body,category,doc_type FROM documents ORDER BY id`)).rows.forEach((r) => add('document', r.id, r.title, `${r.category || ''} ${r.doc_type || ''}\n${r.body}`, 'docs')));
+  await safe(async () => (await db.query(`SELECT id,title,body,category FROM portal_news ORDER BY id`)).rows.forEach((r) => add('news', r.id, r.title, `${r.category || ''}\n${r.body}`, 'news')));
+  await safe(async () => (await db.query(`SELECT id,title,body,kind,status FROM requests ORDER BY id`)).rows.forEach((r) => add('request', r.id, r.title, `${r.kind || ''} ${r.status || ''}\n${r.body}`, 'requests')));
+  await safe(async () => (await db.query(`SELECT id,title,body,priority,status FROM tasks ORDER BY id`)).rows.forEach((r) => add('task', r.id, r.title, `${r.priority || ''} ${r.status || ''}\n${r.body || ''}`, 'tasks')));
+  await safe(async () => (await db.query(`SELECT id,title,descr,kind FROM events ORDER BY id`)).rows.forEach((r) => add('event', r.id, r.title, `${r.kind || ''}\n${r.descr || ''}`, 'calendar')));
+  await safe(async () => (await db.query(`SELECT id, COALESCE(NULLIF(full_name,''), username) AS name, department, role FROM users WHERE active IS NOT FALSE ORDER BY id`)).rows.forEach((r) => add('person', r.id, r.name, `${r.role || ''} ${r.department || ''}`, 'people')));
+  await safe(async () => (await db.query(`SELECT id,name_ru,desc_ru FROM services ORDER BY id`)).rows.forEach((r) => add('service', r.id, r.name_ru, r.desc_ru, null)));
+  return items;
+}
+
+let aiIndexReady = false, aiIndexAt = 0, aiIndexing = false;
+async function reindexAll(force = false) {
+  if (aiIndexing) return; aiIndexing = true;
+  try {
+    const corpus = await collectCorpus();
+    const existing = new Map();
+    (await db.query(`SELECT kind, ref_id, hash, embedding IS NOT NULL AS has_vec FROM search_index`)).rows
+      .forEach((r) => existing.set(`${r.kind}:${r.ref_id}`, { hash: r.hash, hasVec: r.has_vec }));
+    const seen = new Set();
+    const toEmbed = [];
+    for (const it of corpus) {
+      const key = `${it.kind}:${it.ref_id}`; seen.add(key);
+      const text = `${it.title}\n${it.body}`.trim();
+      const h = sha1(text);
+      const ex = existing.get(key);
+      const changed = force || !ex || ex.hash !== h;
+      const needVec = OPENAI_KEY && (changed || !ex.hasVec);
+      if (changed) {   // обновляем текстовые поля (для keyword-поиска — всегда)
+        await db.query(
+          `INSERT INTO search_index (kind, ref_id, title, body, tab, hash, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6, now())
+           ON CONFLICT (kind, ref_id) DO UPDATE SET title=$3, body=$4, tab=$5, hash=$6, updated_at=now()`,
+          [it.kind, it.ref_id, it.title, it.body, it.tab, h]);
+      }
+      if (needVec) toEmbed.push({ ...it, text });
+    }
+    for (let i = 0; i < toEmbed.length; i += 64) {   // эмбеддинги пачками
+      const batch = toEmbed.slice(i, i + 64);
+      const vecs = await embed(batch.map((b) => b.text));
+      for (let j = 0; j < batch.length; j++) {
+        await db.query(`UPDATE search_index SET embedding=$3 WHERE kind=$1 AND ref_id=$2`, [batch[j].kind, batch[j].ref_id, JSON.stringify(vecs[j])]);
+      }
+    }
+    for (const key of existing.keys()) if (!seen.has(key)) { const [kind, ref] = key.split(':'); await db.query(`DELETE FROM search_index WHERE kind=$1 AND ref_id=$2`, [kind, Number(ref)]); }
+    aiIndexReady = OPENAI_KEY ? toEmbed.length >= 0 : false; aiIndexAt = Date.now();
+  } catch (e) { console.error('reindexAll:', e.message); }
+  finally { aiIndexing = false; }
+}
+
+async function keywordSearch(q, limit) {
+  try {
+    const { rows } = await db.query(
+      `SELECT kind, ref_id, title, body, tab FROM search_index WHERE title ILIKE $1 OR body ILIKE $1 ORDER BY updated_at DESC LIMIT $2`,
+      [`%${q}%`, limit]);
+    return rows.map((r) => ({ kind: r.kind, ref_id: r.ref_id, title: r.title, snippet: r.body.slice(0, 200), tab: r.tab }));
+  } catch { return []; }
+}
+async function semanticSearch(q, limit = 8) {
+  const ql = String(q || '').trim(); if (!ql) return [];
+  if (!OPENAI_KEY) return keywordSearch(ql, limit);
+  try {
+    const [qv] = await embed([ql]);
+    const { rows } = await db.query(`SELECT kind, ref_id, title, body, tab, embedding FROM search_index WHERE embedding IS NOT NULL`);
+    if (!rows.length) return keywordSearch(ql, limit);
+    const scored = rows.map((r) => ({ r, score: cosine(qv, r.embedding) })).sort((a, b) => b.score - a.score).slice(0, limit);
+    return scored.map(({ r, score }) => ({ kind: r.kind, ref_id: r.ref_id, title: r.title, snippet: r.body.slice(0, 200), body: r.body, tab: r.tab, score: Math.round(score * 100) / 100 }));
+  } catch (e) { console.error('semanticSearch:', e.message); return keywordSearch(ql, limit); }
+}
+
+const KIND_LABEL = { document: 'Документ', news: 'Новость', request: 'Заявка', task: 'Задача', event: 'Событие', person: 'Сотрудник', service: 'Услуга' };
+
+// Gemini иногда оборачивает ответ в JSON ({"answer":"…"}) или markdown-код — достаём чистый текст.
+function cleanAnswer(s) {
+  let t = String(s || '').trim();
+  t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  if (t.startsWith('{') && /"answer"/.test(t)) { try { const o = JSON.parse(t); if (o && typeof o.answer === 'string') return o.answer.trim(); } catch { /* оставим как есть */ } }
+  return t;
+}
+
+// Семантический поиск по порталу
+app.post('/api/portal/search', auth, async (req, res) => {
+  const q = clip(req.body?.q, 200);
+  if (!q) return res.json({ results: [], semantic: !!OPENAI_KEY });
+  try { res.json({ results: (await semanticSearch(q, 10)).map((r) => ({ kind: r.kind, ref_id: r.ref_id, title: r.title, snippet: r.snippet, tab: r.tab, score: r.score, kindLabel: KIND_LABEL[r.kind] || r.kind })), semantic: !!OPENAI_KEY && aiIndexReady }); }
+  catch (e) { console.error('POST /api/portal/search:', e.message); res.status(502).json({ error: 'Поиск недоступен' }); }
+});
+
+// RAG «Спроси у ДиДи»: вопрос → релевантные фрагменты → ответ ИИ со ссылками на источники
+app.post('/api/assistant/ask', auth, async (req, res) => {
+  const q = clip(req.body?.question || req.body?.q, 500);
+  if (!q) return res.status(400).json({ error: 'Пустой вопрос' });
+  try {
+    const hits = await semanticSearch(q, 6);
+    const sources = hits.map((h) => ({ kind: h.kind, kindLabel: KIND_LABEL[h.kind] || h.kind, ref_id: h.ref_id, title: h.title, tab: h.tab }));
+    if (!hits.length) return res.json({ answer: 'Не нашёл информации по этому вопросу в базе портала. Попробуйте переформулировать.', sources: [] });
+    if (!GEMINI_KEYS.length && !OPENAI_KEY) return res.json({ answer: 'Вот что нашлось по вашему запросу:', sources });
+    const context = hits.map((h, i) => `[${i + 1}] (${KIND_LABEL[h.kind] || h.kind}) ${h.title}\n${(h.body || h.snippet || '').slice(0, 900)}`).join('\n\n');
+    const prompt = `Ты — ДиДи, дружелюбный ассистент корпоративного портала DDC (Центр цифрового развития). Ответь на вопрос сотрудника ПО-РУССКИ, опираясь ТОЛЬКО на приведённые фрагменты базы портала. Пиши кратко, по делу, человеческим языком. Если в данных нет ответа — честно скажи об этом. Не выдумывай факты.\n\nФрагменты базы:\n${context}\n\nВопрос: ${q}\n\nОтвет:`;
+    let answer = '';
+    try { answer = cleanAnswer(await callGemini(prompt, 700)); } catch { /* фолбэк ниже */ }
+    if (!answer) answer = 'Вот что нашлось по вашему запросу:';
+    res.json({ answer, sources });
+  } catch (e) { console.error('POST /api/assistant/ask:', e.message); res.status(502).json({ error: 'ИИ недоступен: ' + (e.message || 'ошибка') }); }
+});
+
 // Синтез приятного голоса (текст → mp3) через gpt-4o-mini-tts — «голос ДиДи».
 // Тёплый естественный женский голос вместо роботизированного системного. Фолбэк на стороне
 // клиента (браузерный SpeechSynthesis), если ключа/сети нет.
@@ -2434,6 +2570,39 @@ async function seedDepartments() {
   } catch (e) { console.error('seedDepartments:', e.message); }
 }
 
+// База знаний: несколько реальных регламентов (один раз, если документов ещё нет).
+// Нужна, чтобы ИИ-поиск и «Спроси у ДиДи» отвечали содержательно на типовые вопросы.
+const KNOWLEDGE = [
+  { title: 'Регламент ежегодного оплачиваемого отпуска', category: 'HR', doc_type: 'Регламент',
+    body: 'Каждому сотруднику ЦЦР предоставляется ежегодный оплачиваемый отпуск 24 календарных дня. Заявление на отпуск подаётся через портал (раздел «Заявки» → тип «Отпуск») не менее чем за 14 календарных дней до предполагаемой даты начала. Заявку согласует руководитель отдела, затем HR. Отпуск можно делить на части, при этом одна из частей должна быть не менее 14 дней. Неиспользованные дни переносятся на следующий год. При увольнении неиспользованные дни компенсируются.' },
+  { title: 'Как получить справку с места работы', category: 'HR', doc_type: 'Инструкция',
+    body: 'Справка с места работы (о доходах, для визы, в банк) оформляется через портал: раздел «Заявки» → тип «Справка». Укажите назначение справки и язык (русский/казахский). Срок изготовления — до 3 рабочих дней. Готовую справку можно забрать в отделе кадров или получить в электронном виде с ЭЦП. Для срочных случаев отметьте приоритет «Срочно».' },
+  { title: 'Политика удалённой и гибридной работы', category: 'HR', doc_type: 'Политика',
+    body: 'Сотрудникам доступен гибридный формат: до 2 дней удалённой работы в неделю по согласованию с руководителем. Удалённый доступ к рабочим системам предоставляется только через корпоративный VPN с обязательной двухфакторной аутентификацией (2FA). В дни удалённой работы сотрудник должен быть на связи в рабочее время (09:00–18:00) и отмечать присутствие в портале.' },
+  { title: 'Регламент информационной безопасности', category: 'IT', doc_type: 'Регламент',
+    body: 'Пароль должен содержать не менее 12 символов, включать буквы разного регистра, цифры и спецсимволы, меняться каждые 90 дней. Обязательна двухфакторная аутентификация (2FA) при входе в портал и корпоративные системы. Запрещено передавать пароли третьим лицам и сохранять их в открытом виде. При получении подозрительного письма (фишинг) не переходите по ссылкам и сообщите в службу ИБ через раздел «Заявки» → «Доступ/ИБ». Рабочие данные нельзя выгружать на личные устройства и в публичные облака.' },
+  { title: 'Порядок оформления командировки', category: 'HR', doc_type: 'Инструкция',
+    body: 'Командировка оформляется через портал: «Заявки» → «Командировка». Укажите город, даты, цель поездки и смету расходов. Заявку согласует руководитель и финансовый отдел. Суточные и проживание компенсируются по нормам компании. Авансовый отчёт с документами предоставляется в течение 5 рабочих дней после возвращения.' },
+  { title: 'Онбординг: первый день нового сотрудника', category: 'HR', doc_type: 'Чек-лист',
+    body: 'В первый день: получить пропуск и рабочее место, активировать учётную запись портала, настроить 2FA, ознакомиться с регламентом ИБ, добавиться в общий чат команды, познакомиться с руководителем и наставником. В первую неделю: пройти вводный инструктаж, заполнить профиль в портале (навыки, контакты), изучить регламенты отдела. Наставник назначается автоматически.' },
+  { title: 'Как пользоваться порталом и подавать заявки', category: 'IT', doc_type: 'Инструкция',
+    body: 'Портал сотрудника — единое рабочее пространство ЦЦР: новости, документы, задачи, календарь, заявки, чаты и голосовой ассистент ДиДи. Чтобы подать заявку (отпуск, справка, командировка, доступ, оборудование), откройте раздел «Заявки», выберите тип и заполните форму. Статус заявки отслеживается там же. Голосовой ассистент ДиДи выполняет команды голосом и текстом: «открой календарь», «создай задачу», «оформи заявку на отпуск».' },
+];
+async function seedKnowledge() {
+  try {
+    let added = 0;
+    for (const d of KNOWLEDGE) {
+      const { rows } = await db.query(`SELECT 1 FROM documents WHERE title=$1 LIMIT 1`, [d.title]);
+      if (rows.length) continue;
+      await db.query(
+        `INSERT INTO documents (title, doc_type, body, category, author_name) VALUES ($1,$2,$3,$4,$5)`,
+        [d.title, d.doc_type, d.body, d.category, 'HR / ИТ ЦЦР']);
+      added++;
+    }
+    if (added) console.log(`✓ База знаний: добавлено ${added} регламентов`);
+  } catch (e) { console.error('seedKnowledge:', e.message); }
+}
+
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`ЦЦР backend слушает на :${PORT} (${PROD ? 'production' : 'development'})`);
   // Лёгкая идемпотентная авто-миграция — чтобы деплой не требовал ручного `npm run init-db`.
@@ -2598,12 +2767,29 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        author_name TEXT NOT NULL DEFAULT '',
        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
      );
-     CREATE INDEX IF NOT EXISTS idx_portal_news_created ON portal_news (pinned DESC, created_at DESC);`
+     CREATE INDEX IF NOT EXISTS idx_portal_news_created ON portal_news (pinned DESC, created_at DESC);
+     -- Семантический индекс портала для ИИ-поиска и RAG «Спроси у ДиДи»
+     CREATE TABLE IF NOT EXISTS search_index (
+       id         SERIAL PRIMARY KEY,
+       kind       TEXT NOT NULL,
+       ref_id     INTEGER NOT NULL,
+       title      TEXT NOT NULL DEFAULT '',
+       body       TEXT NOT NULL DEFAULT '',
+       tab        TEXT,
+       hash       TEXT NOT NULL DEFAULT '',
+       embedding  JSONB,
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+       UNIQUE (kind, ref_id)
+     );`
   ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
+   .then(() => seedKnowledge())
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);
+  // Построение ИИ-индекса портала (поиск/RAG) + периодическое обновление
+  setTimeout(() => reindexAll().then(() => console.log('✓ ИИ-индекс портала построен')).catch(() => {}), 5000);
+  setInterval(() => reindexAll().catch(() => {}), 5 * 60 * 1000);
 });
 
 // Порт занят другим процессом → внятное сообщение и чистый выход (без «зависшего» процесса).
