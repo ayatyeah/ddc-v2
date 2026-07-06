@@ -122,11 +122,13 @@ html[data-a11y='on'] #scroll-bg::after { display: none; }  /* в версии д
 #scroll-aurora { display: none; }
 [data-theme='dark'] #scroll-aurora {
   display: block; position: fixed; inset: -12%; z-index: -4; pointer-events: none; opacity: 0.9;
+  /* Фирменная палитра DDC: синий → фиолетовый → золотой акцент. */
   background:
     radial-gradient(38% 34% at 22% 26%, rgba(46, 96, 190, 0.24), transparent 70%),
-    radial-gradient(34% 30% at 82% 30%, rgba(72, 122, 212, 0.17), transparent 70%),
+    radial-gradient(34% 30% at 82% 30%, rgba(90, 63, 214, 0.18), transparent 70%),
     radial-gradient(46% 42% at 64% 84%, rgba(28, 66, 146, 0.20), transparent 72%),
-    radial-gradient(30% 28% at 48% 54%, rgba(40, 86, 168, 0.14), transparent 72%);
+    radial-gradient(26% 24% at 12% 78%, rgba(176, 125, 18, 0.10), transparent 72%),
+    radial-gradient(30% 28% at 48% 54%, rgba(47, 111, 224, 0.14), transparent 72%);
   filter: blur(32px);
   animation: auroraDrift 42s ease-in-out infinite alternate;
 }
@@ -136,6 +138,36 @@ html[data-a11y='on'] #scroll-bg::after { display: none; }  /* в версии д
   100% { transform: translate3d(-1%, 2%, 0) scale(1.04); }
 }
 @media (prefers-reduced-motion: reduce) { [data-theme='dark'] #scroll-aurora { animation: none; } }
+
+/* ── Фирменный слой DDC: финтех-глифы + скан-лайн (цифровая инфраструктура НБ РК) ── */
+#ddc-brand { position: fixed; inset: 0; z-index: -3; pointer-events: none; overflow: hidden; }
+.ddc-glyph {
+  position: absolute; font-family: var(--mono, monospace); font-weight: 700; color: var(--blue);
+  opacity: 0; line-height: 1; letter-spacing: 0.02em; user-select: none;
+  text-shadow: 0 0 18px currentColor;
+  animation: ddcFloat 22s ease-in-out infinite;
+}
+.ddc-glyph:nth-child(3n) { color: #7c66e6; }   /* фиолетовый акцент */
+.ddc-glyph:nth-child(5n) { color: #c69a3a; }   /* золотой акцент */
+@keyframes ddcFloat {
+  0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.96); }
+  18%  { opacity: 0.14; }
+  50%  { opacity: 0.20; transform: translate3d(6px, -8px, 0) scale(1.03); }
+  82%  { opacity: 0.12; }
+  100% { opacity: 0; transform: translate3d(-4px, -18px, 0) scale(0.98); }
+}
+.ddc-scan {
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(120,180,255,0.04) 0 1px, transparent 1px 3px);
+  mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
+  opacity: 0.5;
+}
+[data-theme='light'] #ddc-brand { opacity: 0.5; }
+[data-theme='light'] .ddc-scan { opacity: 0.25; }
+/* На слабых/средних устройствах и в reduced-motion фирменный слой отключаем (перф) */
+[data-perf-tier="2"] #ddc-brand, [data-perf-tier="3"] #ddc-brand { display: none; }
+@media (prefers-reduced-motion: reduce) { .ddc-glyph { animation: none; opacity: 0.1; } .ddc-scan { display: none; } }
 #scroll-grain {
   position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.5;
   background-image: radial-gradient(circle at 1px 1px, rgba(0,0,0,0.04) 1px, transparent 0);

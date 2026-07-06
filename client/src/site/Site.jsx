@@ -9,6 +9,7 @@ import Assistant from './Assistant.jsx';
 import Fog from './Fog.jsx';
 import CircuitField from './CircuitField.jsx';
 import DepthFog from './DepthFog.jsx';
+import DdcBrand from './DdcBrand.jsx';
 import HudLayer from './HudLayer.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
@@ -187,6 +188,7 @@ export default function Site() {
           сцена + небо. */}
       {!isMobile && !lowPower && !a11y && <CircuitField />}
       {!isMobile && !lowPower && !a11y && <DepthFog />}
+      {!isMobile && !lowPower && !a11y && <DdcBrand />}
       {/* 3D-сцена DDC (карта + здание) — на ВСЕХ устройствах, включая телефон. */}
       {!a11y && (
         <ErrorBoundary fallback={null}>
