@@ -1471,6 +1471,14 @@ app.get('/api/portal/docs', auth, async (req, res) => {
     res.json(rows);
   } catch (e) { console.error('GET /api/portal/docs:', e.message); res.status(500).json({ error: 'Ошибка чтения документов' }); }
 });
+// Один документ с текстом (для предпросмотра без тяжёлого PDF-iframe)
+app.get('/api/portal/docs/:id(\\d+)', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT id, title, doc_type, category, body, author_name, created_at FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    res.json(rows[0]);
+  } catch (e) { console.error('GET /api/portal/docs/:id:', e.message); res.status(500).json({ error: 'Ошибка' }); }
+});
 
 app.post('/api/portal/docs', auth, async (req, res) => {
   const title = clip(req.body?.title, 200) || 'Документ';
@@ -1634,14 +1642,15 @@ app.delete('/api/portal/requests/:id(\\d+)', auth, async (req, res) => {
 app.get('/api/portal/polls', auth, async (req, res) => {
   try {
     const me = req.admin.id;
-    const { rows } = await db.query(`SELECT id, question, options, author_id, author_name, created_at FROM polls ORDER BY id DESC LIMIT 100`);
+    const { rows } = await db.query(`SELECT id, question, options, multi, author_id, author_name, created_at FROM polls ORDER BY id DESC LIMIT 100`);
     const out = [];
     for (const p of rows) {
       const v = await db.query(`SELECT option_idx, count(*)::int c FROM poll_votes WHERE poll_id = $1 GROUP BY option_idx`, [p.id]);
       const counts = (p.options || []).map((_, i) => v.rows.find((x) => x.option_idx === i)?.c || 0);
-      let mine = null;
-      if (me != null) { const mv = await db.query(`SELECT option_idx FROM poll_votes WHERE poll_id = $1 AND user_id = $2`, [p.id, me]); mine = mv.rows[0]?.option_idx ?? null; }
-      out.push({ id: p.id, question: p.question, options: p.options, author_id: p.author_id, author_name: p.author_name, created_at: p.created_at, counts, total: counts.reduce((a, b) => a + b, 0), my_vote: mine });
+      const voters = (await db.query(`SELECT count(DISTINCT user_id)::int c FROM poll_votes WHERE poll_id = $1`, [p.id])).rows[0].c;
+      let mine = [];
+      if (me != null) mine = (await db.query(`SELECT option_idx FROM poll_votes WHERE poll_id = $1 AND user_id = $2`, [p.id, me])).rows.map((r) => r.option_idx);
+      out.push({ id: p.id, question: p.question, options: p.options, multi: p.multi, author_id: p.author_id, author_name: p.author_name, created_at: p.created_at, counts, total: voters, my_votes: mine });
     }
     res.json(out);
   } catch (e) { console.error('GET /api/portal/polls:', e.message); res.status(500).json({ error: 'Ошибка чтения опросов' }); }
@@ -1649,9 +1658,10 @@ app.get('/api/portal/polls', auth, async (req, res) => {
 app.post('/api/portal/polls', auth, requireRole('admin', 'manager'), async (req, res) => {
   const question = clip(req.body?.question, 300);
   const options = Array.isArray(req.body?.options) ? req.body.options.map((o) => clip(o, 120)).filter(Boolean).slice(0, 8) : [];
+  const multi = !!req.body?.multi;
   if (!question || options.length < 2) return res.status(400).json({ error: 'Нужен вопрос и минимум 2 варианта' });
   try {
-    const { rows } = await db.query(`INSERT INTO polls (question, options, author_id, author_name) VALUES ($1,$2,$3,$4) RETURNING id`, [question, JSON.stringify(options), req.admin.id, req.admin.u]);
+    const { rows } = await db.query(`INSERT INTO polls (question, options, multi, author_id, author_name) VALUES ($1,$2,$3,$4,$5) RETURNING id`, [question, JSON.stringify(options), multi, req.admin.id, req.admin.u]);
     broadcastAll('poll', { id: rows[0].id });
     res.status(201).json({ id: rows[0].id });
   } catch (e) { console.error('POST /api/portal/polls:', e.message); res.status(500).json({ error: 'Не удалось создать' }); }
@@ -1661,10 +1671,19 @@ app.post('/api/portal/polls/:id(\\d+)/vote', auth, async (req, res) => {
   if (me == null) return res.status(403).json({ error: 'Голосование доступно сотрудникам с учётной записью' });
   const id = Number(req.params.id), opt = Number(req.body?.option);
   try {
-    const p = await db.query(`SELECT options FROM polls WHERE id = $1`, [id]);
+    const p = await db.query(`SELECT options, multi FROM polls WHERE id = $1`, [id]);
     if (!p.rows.length) return res.status(404).json({ error: 'Опрос не найден' });
     if (!Number.isInteger(opt) || opt < 0 || opt >= (p.rows[0].options || []).length) return res.status(400).json({ error: 'Некорректный вариант' });
-    await db.query(`INSERT INTO poll_votes (poll_id, user_id, option_idx) VALUES ($1,$2,$3) ON CONFLICT (poll_id, user_id) DO UPDATE SET option_idx = $3, created_at = now()`, [id, me, opt]);
+    if (p.rows[0].multi) {
+      // множественный выбор: переключаем вариант (второй клик — снять голос)
+      const has = (await db.query(`SELECT 1 FROM poll_votes WHERE poll_id=$1 AND user_id=$2 AND option_idx=$3`, [id, me, opt])).rows.length;
+      if (has) await db.query(`DELETE FROM poll_votes WHERE poll_id=$1 AND user_id=$2 AND option_idx=$3`, [id, me, opt]);
+      else await db.query(`INSERT INTO poll_votes (poll_id, user_id, option_idx) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [id, me, opt]);
+    } else {
+      // одиночный выбор: заменяем прежний голос
+      await db.query(`DELETE FROM poll_votes WHERE poll_id=$1 AND user_id=$2`, [id, me]);
+      await db.query(`INSERT INTO poll_votes (poll_id, user_id, option_idx) VALUES ($1,$2,$3)`, [id, me, opt]);
+    }
     broadcastAll('poll', { id });
     res.json({ ok: true });
   } catch (e) { console.error('POST /api/portal/polls/vote:', e.message); res.status(500).json({ error: 'Не удалось проголосовать' }); }
@@ -1680,31 +1699,6 @@ app.delete('/api/portal/polls/:id(\\d+)', auth, async (req, res) => {
     broadcastAll('poll', { id, deleted: true });
     res.json({ ok: true });
   } catch (e) { console.error('DELETE /api/portal/polls:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
-});
-
-// ── Геймификация: рейтинг активности + бейджи (очки считаются на лету из активности) ──
-app.get('/api/portal/leaderboard', auth, async (req, res) => {
-  try {
-    const users = (await db.query(`SELECT id, COALESCE(NULLIF(full_name,''),username) AS name, department FROM users WHERE active IS NOT FALSE`)).rows;
-    const map = new Map(users.map((u) => [u.id, { id: u.id, name: u.name, department: u.department || '', tasks: 0, news: 0, polls: 0, docs: 0, msgs: 0 }]));
-    const add = (id, f, n) => { const r = map.get(Number(id)); if (r) r[f] += n; };
-    (await db.query(`SELECT assignee_id id, count(*)::int c FROM tasks WHERE status='done' AND assignee_id IS NOT NULL GROUP BY assignee_id`)).rows.forEach((r) => add(r.id, 'tasks', r.c));
-    (await db.query(`SELECT author_id id, count(*)::int c FROM portal_news WHERE author_id IS NOT NULL GROUP BY author_id`)).rows.forEach((r) => add(r.id, 'news', r.c));
-    (await db.query(`SELECT author_id id, count(*)::int c FROM polls WHERE author_id IS NOT NULL GROUP BY author_id`)).rows.forEach((r) => add(r.id, 'polls', r.c));
-    (await db.query(`SELECT author_id id, count(*)::int c FROM documents WHERE author_id IS NOT NULL GROUP BY author_id`)).rows.forEach((r) => add(r.id, 'docs', r.c));
-    (await db.query(`SELECT author_id id, count(*)::int c FROM messages WHERE author_id IS NOT NULL GROUP BY author_id`)).rows.forEach((r) => add(r.id, 'msgs', r.c));
-    const out = [...map.values()].map((r) => {
-      const points = r.tasks * 10 + r.news * 15 + r.polls * 8 + r.docs * 5 + Math.min(r.msgs, 50);
-      const badges = [];
-      if (r.tasks >= 5) badges.push({ icon: '✅', label: 'Исполнитель' });
-      if (r.news >= 3) badges.push({ icon: '📣', label: 'Ньюсмейкер' });
-      if (r.msgs >= 30) badges.push({ icon: '💬', label: 'Коммуникатор' });
-      if (points >= 80) badges.push({ icon: '🏅', label: 'Активист' });
-      if (points > 0 && !badges.length) badges.push({ icon: '🚀', label: 'Старт' });
-      return { id: r.id, name: r.name, department: r.department, points, badges };
-    }).sort((a, b) => b.points - a.points);
-    res.json(out);
-  } catch (e) { console.error('GET /api/portal/leaderboard:', e.message); res.status(500).json({ error: 'Ошибка' }); }
 });
 
 // Обновление собственного профиля (контакты, навыки, должность)
@@ -1758,34 +1752,6 @@ app.post('/api/portal/2fa/disable', auth, async (req, res) => {
     await db.query(`UPDATE users SET totp_enabled=FALSE, totp_secret='' WHERE id=$1`, [me]);
     res.json({ ok: true });
   } catch (e) { console.error('2fa disable:', e.message); res.status(500).json({ error: 'Ошибка' }); }
-});
-
-// ── Онбординг: чек-лист нового сотрудника ──
-const ONBOARD_STEPS = [
-  { id: 'account', label: 'Активировать учётную запись портала' },
-  { id: 'profile', label: 'Заполнить профиль: контакты и навыки' },
-  { id: 'ib', label: 'Ознакомиться с регламентом ИБ и настроить 2FA' },
-  { id: 'team', label: 'Вступить в общий чат команды' },
-  { id: 'docs', label: 'Изучить регламенты в разделе «Документы»' },
-  { id: 'mentor', label: 'Познакомиться с руководителем и наставником' },
-];
-app.get('/api/portal/onboarding', auth, async (req, res) => {
-  const me = req.admin.id;
-  try {
-    const done = me ? (await db.query(`SELECT step FROM onboarding WHERE user_id=$1 AND done`, [me])).rows.map((r) => r.step) : [];
-    res.json({ steps: ONBOARD_STEPS, done });
-  } catch (e) { console.error('GET onboarding:', e.message); res.status(500).json({ error: 'Ошибка' }); }
-});
-app.post('/api/portal/onboarding', auth, async (req, res) => {
-  const me = req.admin.id;
-  if (!me) return res.status(403).json({ error: 'Доступно сотрудникам' });
-  const step = clip(req.body?.step, 40), done = !!req.body?.done;
-  if (!ONBOARD_STEPS.find((s) => s.id === step)) return res.status(400).json({ error: 'Некорректный шаг' });
-  try {
-    await db.query(`INSERT INTO onboarding (user_id, step, done, done_at) VALUES ($1,$2,$3, CASE WHEN $3 THEN now() END)
-                    ON CONFLICT (user_id, step) DO UPDATE SET done=$3, done_at=CASE WHEN $3 THEN now() END`, [me, step, done]);
-    res.json({ ok: true });
-  } catch (e) { console.error('POST onboarding:', e.message); res.status(500).json({ error: 'Не удалось' }); }
 });
 
 // ── Бронирование переговорных ──
@@ -1917,34 +1883,6 @@ const KZ_HOLIDAYS = [
   ['05-07', 'День защитника Отечества'], ['05-09', 'День Победы'], ['07-06', 'День столицы'],
   ['08-30', 'День Конституции'], ['10-25', 'День Республики'], ['12-16', 'День Независимости'],
 ];
-// Экспорт календаря в .ics (iCalendar) — открывается в Google Calendar / Outlook / Apple.
-function icsStamp(d, dateOnly) {
-  const dt = new Date(d);
-  if (dateOnly) return dt.toISOString().slice(0, 10).replace(/-/g, '');
-  return dt.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-}
-app.get('/api/portal/calendar.ics', auth, async (req, res) => {
-  try {
-    const { rows } = await db.query(`SELECT id, kind, title, descr, starts_at, ends_at, all_day FROM events ORDER BY starts_at LIMIT 800`);
-    const esc = (s) => String(s || '').replace(/([,;\\])/g, '\\$1').replace(/\r?\n/g, '\\n');
-    const now = icsStamp(new Date());
-    let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//DDC//Portal//RU\r\nCALSCALE:GREGORIAN\r\nX-WR-CALNAME:Календарь ЦЦР\r\n';
-    for (const e of rows) {
-      ics += 'BEGIN:VEVENT\r\n';
-      ics += `UID:evt-${e.id}@ddc-portal\r\nDTSTAMP:${now}\r\n`;
-      if (e.all_day) ics += `DTSTART;VALUE=DATE:${icsStamp(e.starts_at, true)}\r\n`;
-      else { ics += `DTSTART:${icsStamp(e.starts_at)}\r\n`; if (e.ends_at) ics += `DTEND:${icsStamp(e.ends_at)}\r\n`; }
-      ics += `SUMMARY:${esc(e.title)}\r\n`;
-      if (e.descr) ics += `DESCRIPTION:${esc(e.descr)}\r\n`;
-      ics += 'END:VEVENT\r\n';
-    }
-    ics += 'END:VCALENDAR\r\n';
-    res.set('Content-Type', 'text/calendar; charset=utf-8');
-    res.set('Content-Disposition', 'attachment; filename="ddc-calendar.ics"');
-    res.send(ics);
-  } catch (e) { console.error('GET /api/portal/calendar.ics:', e.message); res.status(500).json({ error: 'Ошибка экспорта' }); }
-});
-
 app.get('/api/portal/events', auth, async (req, res) => {
   // Диапазон запрашиваемого месяца (ISO-даты from/to); по умолчанию текущий месяц ±.
   const from = (req.query.from && String(req.query.from).slice(0, 10)) || null;
@@ -2102,13 +2040,20 @@ app.post('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
   const username = String(req.body?.username || '').trim().slice(0, 60);
   const password = String(req.body?.password || '');
   const full_name = String(req.body?.full_name || '').trim().slice(0, 120);
+  const phone = String(req.body?.phone || '').trim().slice(0, 40);
   const department = String(req.body?.department || '').trim().slice(0, 120);
   const role = ALLOWED_ROLES.includes(req.body?.role) ? req.body.role : 'staff';
   const birth_date = req.body?.birth_date ? String(req.body.birth_date).slice(0, 10) : '';
   if (!username || password.length < 4) {
     return res.status(400).json({ error: 'Логин и пароль (от 4 символов) обязательны' });
   }
-  // Дата рождения обязательна при регистрации (нужна для дней рождения в календаре).
+  // ФИО, телефон и дата рождения обязательны при регистрации сотрудника.
+  if (full_name.split(/\s+/).filter(Boolean).length < 2) {
+    return res.status(400).json({ error: 'Укажите ФИО полностью (фамилия и имя)' });
+  }
+  if (phone.replace(/\D/g, '').length < 10) {
+    return res.status(400).json({ error: 'Укажите корректный номер телефона' });
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(birth_date)) {
     return res.status(400).json({ error: 'Укажите дату рождения сотрудника' });
   }
@@ -2118,10 +2063,10 @@ app.post('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
-      `INSERT INTO users (username, password_hash, full_name, department, role, birth_date)
-       VALUES ($1,$2,$3,$4,$5,$6)
+      `INSERT INTO users (username, password_hash, full_name, phone, department, role, birth_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
        RETURNING id, username, full_name, department, role, active, birth_date, created_at`,
-      [username, hash, full_name, department, role, birth_date]
+      [username, hash, full_name, phone, department, role, birth_date]
     );
     logAudit(req, 'user', rows[0].id, 'create', `Создан пользователь ${username} (${role})`);
     res.status(201).json(rows[0]);
@@ -3078,6 +3023,72 @@ async function seedRooms() {
   } catch (e) { console.error('seedRooms:', e.message); }
 }
 
+// Демо-данные: казахстанские сотрудники, начальники, задачи, новости, заявки, опрос, события —
+// чтобы портал «ожил» на защите. Идемпотентно: если демо-сотрудники уже есть, ничего не делаем.
+const DEMO_STAFF = [
+  { username: 'n.sagatov', full_name: 'Нурлан Сағатов', phone: '+7 701 111 22 33', birth: '1985-04-12', dept: 'Разработка ИС', position: 'Начальник отдела разработки', role: 'manager' },
+  { username: 'a.kasymova', full_name: 'Айгерім Қасымова', phone: '+7 701 222 33 44', birth: '1988-09-03', dept: 'Информационная безопасность', position: 'Начальник отдела ИБ', role: 'manager' },
+  { username: 'd.akhmetov', full_name: 'Данияр Ахметов', phone: '+7 705 333 44 55', birth: '1994-01-20', dept: 'Разработка ИС', position: 'Ведущий разработчик', role: 'staff' },
+  { username: 'a.zhumabekova', full_name: 'Әсел Жұмабекова', phone: '+7 705 444 55 66', birth: '1996-07-15', dept: 'Аналитика и данные', position: 'Дата-аналитик', role: 'staff' },
+  { username: 't.ospanov', full_name: 'Тимур Оспанов', phone: '+7 707 555 66 77', birth: '1991-11-28', dept: 'ИТ-инфраструктура', position: 'DevOps-инженер', role: 'staff' },
+  { username: 'm.serikkyzy', full_name: 'Мадина Серікқызы', phone: '+7 707 666 77 88', birth: '1998-03-08', dept: 'Поддержка 1477', position: 'Специалист поддержки', role: 'staff' },
+  { username: 'e.tursynov', full_name: 'Ерлан Тұрсынов', phone: '+7 708 777 88 99', birth: '1990-06-30', dept: 'Информационная безопасность', position: 'Инженер по ИБ', role: 'staff' },
+];
+async function seedDemo() {
+  try {
+    if ((await db.query(`SELECT 1 FROM users WHERE username='n.sagatov' LIMIT 1`)).rows.length) return;
+    const hash = await bcrypt.hash('demo1234', 10);
+    const ids = {}; const nameOf = (u) => DEMO_STAFF.find((s) => s.username === u)?.full_name || '';
+    for (const s of DEMO_STAFF) {
+      const r = await db.query(
+        `INSERT INTO users (username, password_hash, full_name, phone, department, position, role, birth_date, active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true) ON CONFLICT (username) DO NOTHING RETURNING id`,
+        [s.username, hash, s.full_name, s.phone, s.dept, s.position, s.role, s.birth]);
+      if (r.rows[0]) ids[s.username] = r.rows[0].id;
+    }
+    const day = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
+    const tasks = [
+      ['Обновить модуль расчётов', 'Рефакторинг ядра расчётов, покрыть тестами.', 'd.akhmetov', 'high', 7, 'open'],
+      ['Отчёт по инцидентам ИБ за месяц', 'Собрать сводку и метрики.', 'e.tursynov', 'normal', 3, 'in_progress'],
+      ['Дашборд объёма транзакций по регионам', 'Витрина + визуализация.', 'a.zhumabekova', 'high', 10, 'open'],
+      ['Настроить CI/CD для нового сервиса', 'Пайплайн сборки и деплоя.', 't.ospanov', 'urgent', 2, 'in_progress'],
+      ['Разобрать очередь обращений 1477', 'Обработать обращения за неделю.', 'm.serikkyzy', 'normal', 1, 'in_progress'],
+      ['Код-ревью PR по авторизации', 'Проверить и смёржить.', 'd.akhmetov', 'normal', 4, 'open'],
+    ];
+    for (const [title, body, u, prio, off, st] of tasks) {
+      if (!ids[u]) continue;
+      await db.query(`INSERT INTO tasks (title, body, assignee_id, assignee_name, created_by, priority, due_date, status) VALUES ($1,$2,$3,$4,'Нурлан Сағатов',$5,$6,$7)`,
+        [title, body, ids[u], nameOf(u), prio, day(off), st]);
+    }
+    for (const [title, body, cat] of [
+      ['Запуск обновлённого портала сотрудников', 'Коллеги! Запущен новый портал: задачи, заявки, чаты, календарь, документы и голосовой ассистент ДиДи. Делитесь обратной связью.', 'company'],
+      ['Итоги квартала: рекордный оборот', 'Инфраструктура ЦЦР обрабатывает свыше 350 тысяч транзакций в день на сумму 5,9 трлн ₸. Спасибо каждому за вклад!', 'company'],
+      ['Обновление регламента информационной безопасности', 'С понедельника действует обновлённый регламент ИБ. Обязательна двухфакторная аутентификация. Подробнее — в разделе «Документы».', 'it'],
+    ]) await db.query(`INSERT INTO portal_news (title, body, category, author_name) VALUES ($1,$2,$3,'HR ЦЦР')`, [title, body, cat]);
+    if (ids['d.akhmetov']) await db.query(`INSERT INTO requests (kind,title,body,status,author_id,author_name) VALUES ('vacation','Отпуск с 20 по 31 июля','Прошу ежегодный отпуск, задачи передам коллеге.','review',$1,'Данияр Ахметов')`, [ids['d.akhmetov']]);
+    if (ids['m.serikkyzy']) await db.query(`INSERT INTO requests (kind,title,body,status,author_id,author_name) VALUES ('certificate','Справка с места работы','Для банка, на русском языке.','review',$1,'Мадина Серікқызы')`, [ids['m.serikkyzy']]);
+    if (ids['t.ospanov']) await db.query(`INSERT INTO requests (kind,title,body,status,author_id,author_name,decided_by,decided_at) VALUES ('equipment','Замена ноутбука','Текущий не тянет сборки.','approved',$1,'Тимур Оспанов','Айгерім Қасымова',now())`, [ids['t.ospanov']]);
+    const poll = await db.query(`INSERT INTO polls (question, options, multi, author_name) VALUES ($1,$2,false,'HR ЦЦР') RETURNING id`,
+      ['Какой формат корпоратива предпочитаете?', JSON.stringify(['Выезд на природу', 'Ресторан в городе', 'Тимбилдинг-квест', 'Онлайн-формат'])]);
+    const poll2 = await db.query(`INSERT INTO polls (question, options, multi, author_name) VALUES ($1,$2,true,'HR ЦЦР') RETURNING id`,
+      ['Какие темы обучения вам интересны? (можно несколько)', JSON.stringify(['Kubernetes и DevOps', 'ИИ и машинное обучение', 'Информационная безопасность', 'Управление проектами', 'Аналитика данных'])]);
+    const voters = Object.values(ids);
+    for (let i = 0; i < voters.length; i++) {
+      await db.query(`INSERT INTO poll_votes (poll_id,user_id,option_idx) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [poll.rows[0].id, voters[i], i % 4]);
+      await db.query(`INSERT INTO poll_votes (poll_id,user_id,option_idx) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [poll2.rows[0].id, voters[i], i % 5]);
+      if (i % 2 === 0) await db.query(`INSERT INTO poll_votes (poll_id,user_id,option_idx) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [poll2.rows[0].id, voters[i], (i + 1) % 5]);
+    }
+    await db.query(`INSERT INTO events (kind,title,descr,starts_at,all_day,created_by_name) VALUES ('meeting','Планёрка отдела разработки','Еженедельная синхронизация команды',$1,false,'Нурлан Сағатов')`, [new Date(Date.now() + 2 * 86400000).toISOString()]);
+    await db.query(`INSERT INTO events (kind,title,descr,starts_at,all_day,created_by_name) VALUES ('presentation','Демо нового дашборда','Показ аналитики транзакций',$1,false,'Әсел Жұмабекова')`, [new Date(Date.now() + 4 * 86400000).toISOString()]);
+    const room = (await db.query(`SELECT id FROM rooms ORDER BY id LIMIT 1`)).rows[0];
+    if (room && ids['n.sagatov']) await db.query(`INSERT INTO bookings (room_id,title,day,start_min,end_min,user_id,user_name) VALUES ($1,'Планёрка отдела',$2,600,660,$3,'Нурлан Сағатов')`, [room.id, day(0), ids['n.sagatov']]);
+    if (room && ids['a.zhumabekova']) await db.query(`INSERT INTO bookings (room_id,title,day,start_min,end_min,user_id,user_name) VALUES ($1,'Демо дашборда',$2,840,900,$3,'Әсел Жұмабекова')`, [room.id, day(0), ids['a.zhumabekova']]);
+    for (const [u, msg] of [['n.sagatov', 'Всем привет! Рад видеть команду в новом портале 👋'], ['a.zhumabekova', 'Привет! Дашборд по транзакциям почти готов, скоро покажу.'], ['t.ospanov', 'Коллеги, деплой нового сервиса завтра в 14:00.']])
+      if (ids[u]) await db.query(`INSERT INTO messages (author_id, author_name, recipient_id, body) VALUES ($1,$2,NULL,$3)`, [ids[u], nameOf(u), msg]);
+    console.log('✓ Демо-данные: 7 сотрудников (2 начальника), задачи, новости, заявки, 2 опроса, события, брони, чат');
+  } catch (e) { console.error('seedDemo:', e.message); }
+}
+
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`ЦЦР backend слушает на :${PORT} (${PROD ? 'production' : 'development'})`);
   // Лёгкая идемпотентная авто-миграция — чтобы деплой не требовал ручного `npm run init-db`.
@@ -3274,6 +3285,13 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
        PRIMARY KEY (poll_id, user_id)
      );
+     ALTER TABLE polls ADD COLUMN IF NOT EXISTS multi BOOLEAN NOT NULL DEFAULT FALSE;   -- множественный выбор
+     DO $$ BEGIN
+       ALTER TABLE poll_votes DROP CONSTRAINT IF EXISTS poll_votes_pkey;
+       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'poll_votes_uniq') THEN
+         ALTER TABLE poll_votes ADD CONSTRAINT poll_votes_uniq UNIQUE (poll_id, user_id, option_idx);
+       END IF;
+     END $$;
      -- Профиль сотрудника: контакты/навыки/должность/дата приёма
      ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
      ALTER TABLE users ADD COLUMN IF NOT EXISTS skills TEXT NOT NULL DEFAULT '';
@@ -3303,6 +3321,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
    .then(() => seedDepartments())
    .then(() => seedKnowledge())
    .then(() => seedRooms())
+   .then(() => seedDemo())
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);

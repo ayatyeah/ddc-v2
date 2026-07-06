@@ -19,7 +19,7 @@ export default function Users({ onAuthLost, me }) {
   const [items, setItems] = useState([]);
   const [depts, setDepts] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [form, setForm] = useState({ username: '', password: '', full_name: '', department: '', role: 'staff', birth_date: '' });
+  const [form, setForm] = useState({ username: '', password: '', full_name: '', phone: '', department: '', role: 'staff', birth_date: '' });
   const [dept, setDept] = useState({ name: '', descr: '' });
   const [err, setErr] = useState('');
   const [derr, setDerr] = useState('');
@@ -39,11 +39,13 @@ export default function Users({ onAuthLost, me }) {
   useEffect(() => { load(); }, [load]);
 
   const create = async () => {
+    if (form.full_name.trim().split(/\s+/).filter(Boolean).length < 2) { setErr('Укажите ФИО полностью (фамилия и имя)'); return; }
+    if (form.phone.replace(/\D/g, '').length < 10) { setErr('Укажите корректный номер телефона'); return; }
     if (!form.birth_date) { setErr('Укажите дату рождения сотрудника'); return; }
     setBusy(true); setErr('');
     try {
       await sendJSON('/api/admin/users', 'POST', form);
-      setForm({ username: '', password: '', full_name: '', department: '', role: 'staff', birth_date: '' });
+      setForm({ username: '', password: '', full_name: '', phone: '', department: '', role: 'staff', birth_date: '' });
       load();
     } catch (e) {
       if (authGuard(e)) return;
@@ -121,8 +123,10 @@ export default function Users({ onAuthLost, me }) {
       <div className="us-create">
         <input className="adm-input" placeholder="Логин" value={form.username}
           onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} autoComplete="off" />
-        <input className="adm-input" placeholder="ФИО" value={form.full_name}
-          onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} autoComplete="off" />
+        <input className="adm-input" placeholder="ФИО полностью *" title="Фамилия и имя обязательны" value={form.full_name}
+          onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} autoComplete="off" required />
+        <input className="adm-input" type="tel" placeholder="Телефон *" title="Телефон обязателен" value={form.phone}
+          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} autoComplete="off" inputMode="tel" required />
         <select className="adm-input" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}>
           <option value="">— без отдела —</option>
           {depts.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}

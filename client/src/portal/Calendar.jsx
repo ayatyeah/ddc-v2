@@ -91,7 +91,6 @@ export default function Calendar({ me, onAuthLost }) {
       <div className="pt-view-h">
         <h2>Календарь</h2>
         <span className="pt-hint">Праздники, дни рождения, встречи и дедлайны</span>
-        <a className="adm-btn sm pt-view-act" href="/api/portal/calendar.ics" title="Экспорт в Google Calendar / Outlook / Apple">📅 Экспорт .ics</a>
       </div>
 
       {/* Фильтры типов событий */}

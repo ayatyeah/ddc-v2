@@ -25,6 +25,7 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
   const [consent, setConsent] = useState(false);
   const [state, setState] = useState('idle');
   const [err, setErr] = useState('');
+  const [cvHelp, setCvHelp] = useState(false);   // модалка «каким должно быть резюме»
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   // Список вакансий — чтобы кандидат мог выбрать, на какую откликается.
@@ -103,6 +104,7 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
                     <span>{cv ? cv.name : t(lang, 'careers.cv.pick')}</span>
                   </label>
                   {cv && <button type="button" className="cv-x" onClick={() => setCv(null)} aria-label="Убрать файл">✕</button>}
+                  <button type="button" className="cv-help-btn" onClick={() => setCvHelp(true)}>Каким должно быть резюме?</button>
                   <p className="cv-hint">{t(lang, 'careers.cv.hint')}</p>
                 </div>
               )}
@@ -116,6 +118,26 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
           </Reveal>
         </div>
       </div>
+
+      {cvHelp && (
+        <div className="cv-help-ov" onClick={() => setCvHelp(false)}>
+          <div className="cv-help" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Требования к резюме">
+            <div className="cv-help-h"><b>📄 Каким должно быть резюме</b><button onClick={() => setCvHelp(false)} aria-label="Закрыть">×</button></div>
+            <div className="cv-help-b">
+              <p>Чтобы мы быстрее оценили ваш отклик, приложите резюме (CV), где есть:</p>
+              <ul>
+                <li><b>Контакты</b> — ФИО, телефон, email, город, ссылки (GitHub/LinkedIn/портфолио).</li>
+                <li><b>Желаемая позиция</b> — на какую роль претендуете и уровень (junior/middle/senior).</li>
+                <li><b>Опыт работы</b> — компания, должность, период и <b>конкретные достижения с цифрами</b> (что сделали и какой результат).</li>
+                <li><b>Ключевые навыки и стек</b> — языки, фреймворки, инструменты, базы данных.</li>
+                <li><b>Образование и сертификаты</b> — вуз, курсы, профильные сертификаты.</li>
+                <li><b>Проекты</b> — 2–3 значимых проекта с вашей ролью и технологиями.</li>
+              </ul>
+              <p className="cv-help-fmt"><b>Формат:</b> PDF или DOCX, 1–2 страницы, актуальная версия, без сканов и лишних украшений. Пишите по делу — конкретика важнее объёма.</p>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

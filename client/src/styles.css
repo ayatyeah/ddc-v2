@@ -949,6 +949,18 @@ textarea.inp { resize: vertical; min-height: 110px; }
 .cv-x { border: none; background: transparent; color: var(--ink-faint); cursor: pointer; font-size: 16px; }
 .cv-x:hover { color: var(--ink); }
 .cv-hint { flex-basis: 100%; font-size: 12px; color: var(--ink-faint); margin: 0; }
+/* «Каким должно быть резюме» — кнопка + модалка */
+.cv-help-btn { border: none; background: transparent; color: var(--blue); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
+.cv-help-ov { position: fixed; inset: 0; z-index: 200; background: rgba(4, 8, 18, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.cv-help { width: min(560px, 100%); max-height: 86vh; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-pop); }
+.cv-help-h { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); font-size: 16px; position: sticky; top: 0; background: var(--card); }
+.cv-help-h button { border: none; background: transparent; color: var(--ink-faint); font-size: 22px; line-height: 1; cursor: pointer; }
+.cv-help-b { padding: 18px 20px; }
+.cv-help-b p { font-size: 14px; line-height: 1.6; color: var(--ink); margin: 0 0 12px; }
+.cv-help-b ul { margin: 0 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 9px; }
+.cv-help-b li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.cv-help-b li b { color: var(--ink); }
+.cv-help-fmt { font-size: 13px; color: var(--ink-soft); background: color-mix(in srgb, var(--blue) 6%, transparent); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0; }
 
 /* Вакансии на странице «Карьера» */
 .vac-sec { padding-bottom: clamp(20px, 4vw, 48px); }

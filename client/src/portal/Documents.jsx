@@ -33,13 +33,15 @@ export default function Documents({ me, onAuthLost }) {
   const [gen, setGen] = useState(null);        // { title, body } — сгенерированный черновик
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [aiPanel, setAiPanel] = useState(null);   // { title, text } — краткое содержание / перевод
+  const [aiPanel, setAiPanel] = useState(null);   // { title, text } — перевод
   const [aiBusy, setAiBusy] = useState('');
+  const [fullBody, setFullBody] = useState('');   // текст открытого документа (предпросмотр)
 
-  const summarize = async (d) => {
-    setAiBusy('sum');
-    try { const r = await sendJSON(`/api/portal/docs/${d.id}/summary`, 'POST', {}); setAiPanel({ title: '📝 Краткое содержание', text: r.summary }); }
-    catch (e) { alert(e.message || 'ИИ недоступен'); } finally { setAiBusy(''); }
+  // Открыть документ: подгружаем текст для предпросмотра (без тяжёлого PDF-iframe).
+  const openDoc = async (d) => {
+    setActive(d); setView('preview'); setAiPanel(null); setFullBody('');
+    try { const full = await getJSON(`/api/portal/docs/${d.id}`); setFullBody(full.body || ''); }
+    catch (e) { if (e.status === 401) onAuthLost?.(); }
   };
   const translate = async (d, to) => {
     setAiBusy(to);
@@ -62,7 +64,7 @@ export default function Documents({ me, onAuthLost }) {
     setBusy(true); setErr('');
     try {
       const d = await sendJSON('/api/portal/docs', 'POST', { title: gen.title, doc_type: form.type, category: form.category, body: gen.body });
-      setGen(null); setForm(EMPTY); load(); setActive(d); setView('preview');
+      setFullBody(gen.body); setGen(null); setForm(EMPTY); load(); setActive(d); setAiPanel(null); setView('preview');
     } catch (e) { if (e.status === 401) onAuthLost?.(); else setErr(e.message || 'Не удалось сохранить'); }
     finally { setBusy(false); }
   };
@@ -82,16 +84,15 @@ export default function Documents({ me, onAuthLost }) {
     return (
       <div className="pt-view pt-docview">
         <div className="pt-doc-bar">
-          <button className="pt-back-btn" onClick={() => { setActive(null); setView('list'); setAiPanel(null); }} aria-label="Назад">
+          <button className="pt-back-btn" onClick={() => { setActive(null); setView('list'); setAiPanel(null); setFullBody(''); }} aria-label="Назад">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
           <div className="pt-doc-bar-t"><b>{active.title}</b><small>{typeLabel(active.doc_type)}</small></div>
           <div className="pt-doc-ai-tools">
-            <button className="pt-doc-aibtn" onClick={() => summarize(active)} disabled={!!aiBusy} title="Краткое содержание ИИ">{aiBusy === 'sum' ? '…' : '📝 Кратко'}</button>
             <button className="pt-doc-aibtn" onClick={() => translate(active, 'kk')} disabled={!!aiBusy} title="Перевести на казахский">{aiBusy === 'kk' ? '…' : '🌐 KZ'}</button>
             <button className="pt-doc-aibtn" onClick={() => translate(active, 'en')} disabled={!!aiBusy} title="Перевести на английский">{aiBusy === 'en' ? '…' : '🌐 EN'}</button>
           </div>
-          <a className="adm-btn pt-doc-dl" href={`/api/portal/docs/${active.id}/pdf?download=1`} target="_blank" rel="noreferrer">Скачать PDF</a>
+          <a className="adm-btn pt-doc-dl" href={`/api/portal/docs/${active.id}/pdf?download=1`} target="_blank" rel="noreferrer" download>⬇ Скачать PDF</a>
         </div>
         {aiPanel && (
           <div className="pt-doc-aipanel">
@@ -99,7 +100,10 @@ export default function Documents({ me, onAuthLost }) {
             <div className="pt-doc-aipanel-b">{aiPanel.text}</div>
           </div>
         )}
-        <iframe className="pt-doc-frame" src={`/api/portal/docs/${active.id}/pdf`} title={active.title} />
+        <div className="pt-doc-read">
+          <h1>{active.title}</h1>
+          {fullBody ? <div className="pt-doc-text">{fullBody}</div> : <div className="pt-empty">Загрузка текста…</div>}
+        </div>
       </div>
     );
   }
@@ -164,7 +168,7 @@ export default function Documents({ me, onAuthLost }) {
       <div className="pt-docs">
         {list.map((d) => (
           <div className="pt-doc-card" key={d.id}>
-            <button className="pt-doc-open" onClick={() => { setActive(d); setView('preview'); }}>
+            <button className="pt-doc-open" onClick={() => openDoc(d)}>
               <span className="pt-doc-ic" style={{ color: catColor(d.category) }}>
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M9 13h6M9 17h6" /></svg>
               </span>

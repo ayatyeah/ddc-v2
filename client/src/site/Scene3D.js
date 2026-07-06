@@ -567,13 +567,25 @@ export function initScene(canvas) {
   let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps
   // Адаптивный губернатор качества: 0 = полное, 1 = без параллакса мыши, 2 = без DOM-слоёв глубины,
   // 3 = + облегчённые материалы/additive-слои. Разрешение (DPR) НЕ трогаем — без «мыла».
-  let perfTier = 0, tierHold = 0, badWin = 0, goodWin = 0;
+  // На заведомо слабом GPU (perf.lite) стартуем сразу в облегчённом режиме — не ждём, пока
+  // реактивный губернатор поймает первую просадку (это ~1–2с начального джанка). Губернатор
+  // потом сам поднимет качество, если устройство внезапно тянет.
+  let perfTier = perf.lite ? 3 : 0, tierHold = perf.lite ? 8 : 0, badWin = 0, goodWin = 0, tierInit = false;
+  // Применение «тяжёлого»/облегчённого набора (дюст, пакеты, материал плиты — главный fill-rate).
+  function applyHeavy(heavy) {
+    if (gMap.userData.dust) gMap.userData.dust.visible = !heavy;
+    (gMap.userData.packets || []).forEach((pk, i) => { pk.visible = heavy ? (i % 3 === 0) : true; });
+    const pm = gMap.userData.plateMat;                      // плита карты — самая большая площадь
+    if (pm) { pm.envMapIntensity = heavy ? 0.4 : 1.6; pm.bumpScale = heavy ? 0 : 0.65; }   // uniforms: без перекомпиляции шейдера
+  }
   // Вступительная «сборка» карты при загрузке (один раз, по таймеру — не под скролл):
   // контур прорисовывается → города зажигаются по очереди → дуги протягиваются → башни.
   let introStart = -1, introDone = false; const INTRO_DUR = 2.6;
   function loop() {
     raf = 0;
     if (running) raf = requestAnimationFrame(loop);
+    // Разовое применение старт-качества для слабых устройств (когда сцена уже собрана).
+    if (!tierInit) { tierInit = true; if (perf.lite) { applyHeavy(true); try { document.documentElement.dataset.perfTier = String(perfTier); } catch { /* SSR */ } } }
     const t = clock.getElapsedTime();
     // Сглаживание по реальному времени кадра (а не фикс-шаг): переходы одинаково
     // плавные на 60/90/120 Гц и не «дёргаются» при просадках fps. dt ограничен,
@@ -603,12 +615,7 @@ export function initScene(canvas) {
           perfTier = want;
           if (degraded) tierHold = 4;            // после ухудшения ждём ~3с перед попыткой восстановления
           try { document.documentElement.dataset.perfTier = String(perfTier); } catch { /* SSR */ }
-          const heavy = perfTier >= 3;
-          if (gMap.userData.dust) gMap.userData.dust.visible = !heavy;
-          (gMap.userData.packets || []).forEach((pk, i) => { pk.visible = heavy ? (i % 3 === 0) : true; });
-          const pm = gMap.userData.plateMat;                     // плита карты — самая большая площадь = главный fill-rate
-          // envMapIntensity/bumpScale — это uniforms: меняются без перекомпиляции шейдера (без хитча).
-          if (pm) { pm.envMapIntensity = heavy ? 0.4 : 1.6; pm.bumpScale = heavy ? 0 : 0.65; }
+          applyHeavy(perfTier >= 3);
         }
       }
       perfAcc = 0; perfN = 0; perfT = t;

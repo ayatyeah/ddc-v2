@@ -264,30 +264,27 @@ function Home({ me, onGo }) {
           </button>
         ))}
       </div>
-      <LeaderboardWidget onGo={onGo} />
+      <NewsWidget onGo={onGo} />
     </div>
   );
 }
 
-/* ── Рейтинг активности (топ-5) на главной ── */
-function LeaderboardWidget({ onGo }) {
-  const [top, setTop] = useState(null);
-  useEffect(() => { getJSON('/api/portal/leaderboard').then((l) => setTop(l.slice(0, 5))).catch(() => setTop([])); }, []);
+/* ── Свежие новости компании на главной ── */
+function NewsWidget({ onGo }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => { getJSON('/api/portal/news').then((d) => setItems((d.items || []).slice(0, 4))).catch(() => setItems([])); }, []);
   return (
     <div className="pt-widget">
-      <div className="pt-widget-h"><b>🏆 Рейтинг активности</b><button className="pt-widget-more" onClick={() => onGo('profile')}>Мой профиль →</button></div>
-      {top == null ? <p className="pt-empty sm">Загрузка…</p>
-        : top.filter((u) => u.points > 0).length === 0 ? <p className="pt-empty sm">Активность появится, когда команда начнёт работать в портале.</p>
+      <div className="pt-widget-h"><b>📰 Новости компании</b><button className="pt-widget-more" onClick={() => onGo('news')}>Все новости →</button></div>
+      {items == null ? <p className="pt-empty sm">Загрузка…</p>
+        : items.length === 0 ? <p className="pt-empty sm">Новостей пока нет.</p>
           : (
-            <div className="lb">
-              {top.filter((u) => u.points > 0).map((u, i) => (
-                <div className="lb-row" key={u.id}>
-                  <span className={`lb-rank r${i + 1}`}>{i + 1}</span>
-                  <span className="pt-av xs">{initials(u.name)}</span>
-                  <span className="lb-name">{u.name}<small>{u.department}</small></span>
-                  <span className="lb-badges">{(u.badges || []).slice(0, 3).map((b, j) => <span key={j} title={b.label}>{b.icon}</span>)}</span>
-                  <span className="lb-pts">{u.points}</span>
-                </div>
+            <div className="hw-news">
+              {items.map((n) => (
+                <button className="hw-news-row" key={n.id} onClick={() => onGo('news')}>
+                  <b>{n.title}</b>
+                  <small>{n.body}</small>
+                </button>
               ))}
             </div>
           )}
@@ -298,14 +295,10 @@ function LeaderboardWidget({ onGo }) {
 /* ── Профиль сотрудника: контакты/навыки (редактируемые) + геймификация + онбординг ── */
 function Profile({ me, onAuthLost }) {
   const [info, setInfo] = useState(null);
-  const [rank, setRank] = useState(null);   // моя позиция в рейтинге + очки/бейджи
-  const [ob, setOb] = useState({ steps: [], done: [] });
   const [edit, setEdit] = useState(null);   // { position, phone, skills } при редактировании
   const [qr, setQr] = useState('');         // QR цифровой визитки (vCard)
   const load = useCallback(() => {
     getJSON('/api/portal/users').then((list) => setInfo(list.find((u) => u.id === me?.id) || null)).catch((e) => { if (e.status === 401) onAuthLost?.(); });
-    getJSON('/api/portal/leaderboard').then((l) => setRank(l.find((u) => u.id === me?.id) || { points: 0, badges: [] })).catch(() => {});
-    getJSON('/api/portal/onboarding').then(setOb).catch(() => {});
   }, [me, onAuthLost]);
   useEffect(() => { load(); }, [load]);
   // QR цифровой визитки (vCard) — можно отсканировать и сохранить контакт.
@@ -318,11 +311,6 @@ function Profile({ me, onAuthLost }) {
     try { await sendJSON('/api/portal/profile', 'PATCH', edit); setEdit(null); load(); }
     catch (e) { if (e.status === 401) onAuthLost?.(); else alert(e.message || 'Не удалось'); }
   };
-  const toggleStep = async (step, done) => {
-    setOb((o) => ({ ...o, done: done ? [...o.done, step] : o.done.filter((s) => s !== step) }));
-    try { await sendJSON('/api/portal/onboarding', 'POST', { step, done }); } catch { load(); }
-  };
-  const obDone = ob.done.length, obTotal = ob.steps.length;
 
   const rows = [
     ['Должность', info?.position || roleLabel(me?.role)],
@@ -342,12 +330,6 @@ function Profile({ me, onAuthLost }) {
           <div className="pt-profile-id">
             <h3>{me?.username}</h3>
             <p>{info?.position || roleLabel(me?.role)}{info?.department ? ` · ${info.department}` : ''}</p>
-            {rank && (
-              <div className="pt-gami">
-                <span className="pt-points">⭐ {rank.points} очк.</span>
-                {(rank.badges || []).map((b, i) => <span className="pt-badge" key={i} title={b.label}>{b.icon} {b.label}</span>)}
-              </div>
-            )}
           </div>
           {qr && <div className="pt-qr" title="Цифровая визитка — отсканируйте, чтобы сохранить контакт"><img src={qr} alt="QR визитка" /><span>Визитка</span></div>}
         </div>
@@ -362,24 +344,6 @@ function Profile({ me, onAuthLost }) {
         ) : (
           <div className="pt-fields">
             {rows.map(([k, v]) => <div className="pt-field" key={k}><span>{k}</span><b>{v}</b></div>)}
-          </div>
-        )}
-
-        {obTotal > 0 && obDone < obTotal && (
-          <div className="pt-onboard">
-            <div className="pt-onboard-h"><b>🚀 Онбординг</b><span>{obDone}/{obTotal}</span></div>
-            <div className="pt-onboard-bar"><span style={{ width: `${Math.round((obDone / obTotal) * 100)}%` }} /></div>
-            <div className="pt-onboard-steps">
-              {ob.steps.map((s) => {
-                const done = ob.done.includes(s.id);
-                return (
-                  <label className={`pt-onboard-step ${done ? 'done' : ''}`} key={s.id}>
-                    <input type="checkbox" checked={done} onChange={(e) => toggleStep(s.id, e.target.checked)} />
-                    <span>{s.label}</span>
-                  </label>
-                );
-              })}
-            </div>
           </div>
         )}
 
