@@ -548,6 +548,10 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 /* Bento-сетка (@magicui/bento-grid): плитки разного размера в единой сетке */
 .dash-bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
 .dash-bento > * { margin: 0; min-width: 0; height: 100%; }
+/* История: панель фильтров + экспорт */
+.hist-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.hist-bar .cal-filters { flex: 1; }
+
 /* ── База знаний (Wiki) ── */
 .wiki-search { max-width: 480px; margin-bottom: 12px; }
 .wiki-cats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }

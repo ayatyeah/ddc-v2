@@ -53,6 +53,14 @@ export default function Users({ onAuthLost, me }) {
     } finally { setBusy(false); }
   };
 
+  const resetPass = async (u) => {
+    const pass = window.prompt(`Новый пароль для «${u.username}» (от 4 символов):`);
+    if (pass == null) return;
+    if (pass.length < 4) { alert('Пароль должен быть не короче 4 символов'); return; }
+    try { await sendJSON(`/api/admin/users/${u.id}/password`, 'POST', { password: pass }); alert(`Пароль пользователя «${u.username}» изменён.`); }
+    catch (e) { if (!authGuard(e)) alert(e.message || 'Не удалось сменить пароль'); }
+  };
+
   const remove = async (id) => {
     if (!window.confirm('Удалить пользователя?')) return;
     try {
@@ -161,7 +169,7 @@ export default function Users({ onAuthLost, me }) {
                 </td>
                 <td data-label="Роль"><span className={`us-role r-${u.role}`}>{roleLabel(u.role)}</span></td>
                 <td data-label="Создан" className="nowrap">{fmtDate(u.created_at)}</td>
-                <td data-label=""><button className="nm-mini del" onClick={() => remove(u.id)}>Удалить</button></td>
+                <td data-label=""><button className="nm-mini" onClick={() => resetPass(u)}>Пароль</button> <button className="nm-mini del" onClick={() => remove(u.id)}>Удалить</button></td>
               </tr>
             ))}
           </tbody>

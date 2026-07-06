@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react';
 import { getJSON } from '../api.js';
 
-const ENTITY_LABEL = { lead: 'Заявка', news: 'Новость', feed: 'AI-лента' };
+const ENTITY_LABEL = { lead: 'Заявка', news: 'Новость', service: 'Услуга', career: 'Карьера', vacancy: 'Вакансия', user: 'Пользователь', department: 'Отдел', feed: 'AI-лента', system: 'Система', incident: 'Инцидент', wiki: 'База знаний' };
 const FILTERS = [
   { id: '', label: 'Все' },
   { id: 'lead', label: 'Заявки' },
   { id: 'news', label: 'Новости' },
+  { id: 'service', label: 'Услуги' },
+  { id: 'career', label: 'Карьера' },
+  { id: 'vacancy', label: 'Вакансии' },
+  { id: 'user', label: 'Пользователи' },
+  { id: 'department', label: 'Отделы' },
+  { id: 'system', label: 'Системы' },
+  { id: 'incident', label: 'Инциденты' },
+  { id: 'wiki', label: 'База знаний' },
   { id: 'feed', label: 'AI-лента' },
 ];
 const fmt = (ts) => { try { return new Date(ts).toLocaleString('ru-RU'); } catch { return ''; } };
+const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
 export default function History({ onAuthLost }) {
   const [rows, setRows] = useState(null);
@@ -21,23 +30,24 @@ export default function History({ onAuthLost }) {
     return () => { alive = false; };
   }, [filter]);
 
-  const activeIdx = Math.max(0, FILTERS.findIndex((f) => f.id === filter));
+  const exportCsv = () => {
+    if (!rows?.length) return;
+    const header = ['Тип', 'Действие', 'Описание', 'Кто', 'Роль', 'Когда'];
+    const lines = rows.map((r) => [ENTITY_LABEL[r.entity] || r.entity, r.action, r.summary, r.actor, r.actor_role, fmt(r.created_at)].map(csvCell).join(','));
+    const csv = '﻿' + [header.map(csvCell).join(','), ...lines].join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = `ddc-audit-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="hist-wrap">
-      <div className="seg" role="tablist" aria-label="Фильтр истории" style={{ '--seg-count': FILTERS.length, '--seg-active': activeIdx }}>
-        <span className="seg-thumb" aria-hidden="true" />
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            role="tab"
-            aria-selected={filter === f.id}
-            className={`seg-btn ${filter === f.id ? 'on' : ''}`}
-            onClick={() => setFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="hist-bar">
+        <div className="cal-filters">
+          {FILTERS.map((f) => (
+            <button key={f.id} className={`cal-fchip ${filter === f.id ? 'on' : ''}`} style={{ '--c': '#2f6fe0' }} onClick={() => setFilter(f.id)}><span className="cal-dot" /> {f.label}</button>
+          ))}
+        </div>
+        <button className="adm-btn sm" onClick={exportCsv} disabled={!rows?.length} title="Экспорт в CSV">⬇ CSV</button>
       </div>
 
       {!rows ? <div className="adm-hint">Загрузка…</div> : rows.length === 0 ? <div className="adm-hint">Записей нет</div> : (

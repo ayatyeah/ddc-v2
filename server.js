@@ -2135,6 +2135,19 @@ app.patch('/api/admin/users/:id(\\d+)', auth, requireRole('admin'), async (req, 
   }
 });
 
+// Смена пароля пользователя администратором
+app.post('/api/admin/users/:id(\\d+)/password', auth, requireRole('admin'), async (req, res) => {
+  const password = String(req.body?.password || '');
+  if (password.length < 4) return res.status(400).json({ error: 'Пароль должен быть не короче 4 символов' });
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const { rows } = await db.query(`UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING username`, [hash, Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден' });
+    logAudit(req, 'user', Number(req.params.id), 'password', `Сменён пароль пользователя ${rows[0].username}`);
+    res.json({ ok: true });
+  } catch (e) { console.error('POST /api/admin/users/password:', e.message); res.status(500).json({ error: 'Не удалось сменить пароль' }); }
+});
+
 // ── Админ: отделы (создание/список/удаление) ──────────────────────────────────
 app.get('/api/admin/departments', auth, requireRole('admin'), async (req, res) => {
   try {
@@ -2898,12 +2911,17 @@ app.get('/api/admin/dashboard', auth, async (req, res) => {
 });
 
 // ИИ-инсайт по дашборду: короткая сводка «что происходит» + рекомендация на естественном языке.
+// Кэш на 15 минут по «медленным» цифрам (без online) — экономим токены при повторных нажатиях.
+let insightCache = { sig: '', text: '', at: 0 };
 app.post('/api/admin/insight', auth, requireRole('admin', 'manager'), async (req, res) => {
   try {
     const s = req.body?.stats || {};
+    const sig = [s.leads_total, s.leads_new, s.leads_progress, s.last14, s.news_published].join('|');   // online исключён — меняется часто
+    if (insightCache.sig === sig && Date.now() - insightCache.at < 15 * 60 * 1000) return res.json({ insight: insightCache.text, cached: true });
     const prompt = `Ты — аналитик Центра цифрового развития. По цифрам портала дай КОРОТКУЮ сводку (2–3 предложения) по-русски: что происходит с заявками и активностью, и одну практическую рекомендацию. Без воды и без markdown.\nЦифры: всего заявок ${s.leads_total || 0}, новых ${s.leads_new || 0}, в работе ${s.leads_progress || 0}, за 14 дней ${s.last14 || 0}, новостей опубликовано ${s.news_published || 0}, сотрудников онлайн ${s.online || 0}.`;
-    const text = cleanAnswer(await aiText(prompt));
-    res.json({ insight: text || 'Недостаточно данных для инсайта.' });
+    const text = cleanAnswer(await aiText(prompt)) || 'Недостаточно данных для инсайта.';
+    insightCache = { sig, text, at: Date.now() };
+    res.json({ insight: text });
   } catch (e) { console.error('POST /api/admin/insight:', e.message); res.status(502).json({ error: 'ИИ недоступен' }); }
 });
 
@@ -3044,7 +3062,7 @@ app.get('/api/status', async (req, res) => {
 app.get('/api/admin/audit', auth, async (req, res) => {
   try {
     const params = []; let where = '';
-    if (req.query.entity && ['lead', 'news', 'feed', 'service'].includes(req.query.entity)) { params.push(req.query.entity); where = `WHERE entity = $1`; }
+    if (req.query.entity && ['lead', 'news', 'service', 'career', 'vacancy', 'user', 'department', 'feed', 'system', 'incident', 'wiki'].includes(req.query.entity)) { params.push(req.query.entity); where = `WHERE entity = $1`; }
     const { rows } = await db.query(
       `SELECT actor, actor_role, entity, entity_id, action, summary, created_at FROM audit_log ${where} ORDER BY id DESC LIMIT 200`, params);
     res.json(rows);
