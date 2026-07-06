@@ -1555,6 +1555,7 @@ app.post('/api/portal/tasks', auth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${TASK_COLS}`,
       [title, body, assignee_id, assignee_name, req.admin.u, priority, due_date]);
     if (assignee_id && assignee_id !== req.admin.id) await notify(assignee_id, 'task', null, 'Новая задача', title);
+    broadcast([req.admin.id, assignee_id].filter(Boolean), 'task', { id: rows[0].id });
     res.status(201).json(rows[0]);
   } catch (e) { console.error('POST /api/portal/tasks:', e.message); res.status(500).json({ error: 'Не удалось создать задачу' }); }
 });
@@ -1576,6 +1577,7 @@ app.patch('/api/portal/tasks/:id(\\d+)', auth, async (req, res) => {
         WHERE id = $${vals.length - 2} AND (assignee_id = $${vals.length - 1} OR created_by = $${vals.length})
        RETURNING ${TASK_COLS}`, vals);
     if (!rows.length) return res.status(404).json({ error: 'Задача не найдена или нет прав' });
+    broadcast([req.admin.id, rows[0].assignee_id].filter(Boolean), 'task', { id: rows[0].id });
     res.json(rows[0]);
   } catch (e) { console.error('PATCH /api/portal/tasks:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
 });

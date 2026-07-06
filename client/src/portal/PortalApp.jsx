@@ -610,12 +610,15 @@ function Tasks({ me, onAuthLost }) {
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [filter, setFilter] = useState('active');   // active | all | done | overdue
+  const [view, setView] = useState('board');         // board (канбан) | list
+  const [drag, setDrag] = useState(null);            // id перетаскиваемой карточки
   const [form, setForm] = useState({ title: '', body: '', assignee: '', priority: 'normal', due_date: '' });
   const [expanded, setExpanded] = useState(null);
   const load = useCallback(async () => {
     try { setTasks(await getJSON('/api/portal/tasks')); } catch (e) { if (e.status === 401) onAuthLost?.(); }
   }, [onAuthLost]);
   useEffect(() => { load(); getJSON('/api/portal/users').then(setUsers).catch(() => {}); }, [load]);
+  useEffect(() => rtOn('task', () => load()), [load]);   // живая синхронизация доски
 
   const isHead = ['admin', 'manager'].includes(me?.role);   // назначать другим могут руководители/замы
   const create = async (e) => {
@@ -634,6 +637,7 @@ function Tasks({ me, onAuthLost }) {
   };
   const del = async (tk) => { if (!confirm('Удалить задачу?')) return; try { await sendJSON(`/api/portal/tasks/${tk.id}`, 'DELETE'); load(); } catch (e) { if (e.status === 401) onAuthLost?.(); } };
   const cycle = (tk) => patch(tk, { status: tk.status === 'open' ? 'in_progress' : tk.status === 'in_progress' ? 'done' : 'open' });
+  const onDrop = (status) => { const tk = tasks.find((t) => t.id === drag); if (tk && tk.status !== status) { setTasks((ts) => ts.map((t) => t.id === tk.id ? { ...t, status } : t)); patch(tk, { status }); } setDrag(null); };
 
   const today = dateStr(new Date().toISOString());
   const overdue = (tk) => tk.due_date && tk.status !== 'done' && dateStr(tk.due_date) < today;
@@ -644,7 +648,13 @@ function Tasks({ me, onAuthLost }) {
 
   return (
     <div className="pt-view pt-tasks-v">
-      <div className="pt-view-h"><h2>Рабочие задачи</h2><span className="pt-hint">{isHead ? 'Назначайте задачи сотрудникам' : 'Назначенные вам и созданные вами'}</span></div>
+      <div className="pt-view-h">
+        <h2>Рабочие задачи</h2>
+        <div className="pt-viewtoggle">
+          <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')} title="Канбан-доска">▦ Доска</button>
+          <button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')} title="Список">☰ Список</button>
+        </div>
+      </div>
 
       <form className="pt-taskform grid" onSubmit={create}>
         <input className="adm-input tf-title" placeholder={isHead ? 'Новая задача для сотрудника…' : 'Моя задача…'} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
@@ -662,35 +672,65 @@ function Tasks({ me, onAuthLost }) {
         <button className="adm-btn" type="submit">Добавить</button>
       </form>
 
-      <div className="cal-filters">
-        {[['active', `Активные${counts.active ? ` (${counts.active})` : ''}`], ['overdue', `Просроченные${counts.overdue ? ` (${counts.overdue})` : ''}`], ['done', 'Выполненные'], ['all', 'Все']].map(([k, l]) => (
-          <button key={k} className={`cal-fchip ${filter === k ? 'on' : ''}`} style={{ '--c': k === 'overdue' ? '#c0455a' : '#2f6fe0' }} onClick={() => setFilter(k)}><span className="cal-dot" /> {l}</button>
-        ))}
-      </div>
-
-      <div className="pt-tasks">
-        {shown.length === 0 && <div className="pt-empty">Задач нет.</div>}
-        {shown.map((tk) => (
-          <div key={tk.id} className={`pt-task rich ${tk.status === 'done' ? 'done' : ''}`}>
-            <button className={`pt-check st-${tk.status}`} onClick={() => cycle(tk)} title={TSTATUS[tk.status]} aria-label={TSTATUS[tk.status]}>
-              {tk.status === 'done' ? '✓' : tk.status === 'in_progress' ? '◐' : ''}
-            </button>
-            <div className="pt-task-b" onClick={() => tk.body && setExpanded(expanded === tk.id ? null : tk.id)} style={{ cursor: tk.body ? 'pointer' : 'default' }}>
-              <div className="pt-task-t">
-                {tk.title}
-                <span className="pt-prio" style={{ '--c': PRIO[tk.priority]?.c || '#888' }}>{PRIO[tk.priority]?.l}</span>
-                {tk.due_date && <span className={`pt-due ${overdue(tk) ? 'over' : ''}`}>⏱ {fmtDay(tk.due_date)}</span>}
+      {view === 'board' ? (
+        <div className="kanban">
+          {[['open', 'Открыта'], ['in_progress', 'В работе'], ['done', 'Готово']].map(([st, label]) => {
+            const col = tasks.filter((t) => t.status === st);
+            return (
+              <div key={st} className={`kb-col ${drag ? 'dropzone' : ''}`} onDragOver={(e) => e.preventDefault()} onDrop={() => onDrop(st)}>
+                <div className="kb-col-h"><span className={`kb-dot st-${st}`} />{label}<span className="kb-count">{col.length}</span></div>
+                <div className="kb-cards">
+                  {col.map((tk) => (
+                    <div key={tk.id} className={`kb-card ${overdue(tk) ? 'over' : ''} ${drag === tk.id ? 'dragging' : ''}`}
+                      draggable onDragStart={() => setDrag(tk.id)} onDragEnd={() => setDrag(null)}>
+                      <div className="kb-card-t">{tk.title}</div>
+                      {tk.body && <div className="kb-card-d">{tk.body}</div>}
+                      <div className="kb-card-m">
+                        <span className="pt-prio" style={{ '--c': PRIO[tk.priority]?.c || '#888' }}>{PRIO[tk.priority]?.l}</span>
+                        {tk.due_date && <span className={`pt-due ${overdue(tk) ? 'over' : ''}`}>⏱ {fmtDay(tk.due_date)}</span>}
+                      </div>
+                      <div className="kb-card-f">
+                        <span className="kb-who">{tk.assignee_name ? `👤 ${tk.assignee_name}` : 'без исполнителя'}</span>
+                        {(tk.created_by === me?.username || isHead) && <button className="kb-del" onClick={() => del(tk)} aria-label="Удалить">×</button>}
+                      </div>
+                    </div>
+                  ))}
+                  {col.length === 0 && <div className="kb-empty">перетащите сюда</div>}
+                </div>
               </div>
-              <div className="pt-task-m">
-                <span className={`pt-st st-${tk.status}`}>{TSTATUS[tk.status]}</span>
-                {' · '}{tk.assignee_name ? `→ ${tk.assignee_name}` : 'без исполнителя'} · от {tk.created_by}
+            );
+          })}
+        </div>
+      ) : (<>
+        <div className="cal-filters">
+          {[['active', `Активные${counts.active ? ` (${counts.active})` : ''}`], ['overdue', `Просроченные${counts.overdue ? ` (${counts.overdue})` : ''}`], ['done', 'Выполненные'], ['all', 'Все']].map(([k, l]) => (
+            <button key={k} className={`cal-fchip ${filter === k ? 'on' : ''}`} style={{ '--c': k === 'overdue' ? '#c0455a' : '#2f6fe0' }} onClick={() => setFilter(k)}><span className="cal-dot" /> {l}</button>
+          ))}
+        </div>
+        <div className="pt-tasks">
+          {shown.length === 0 && <div className="pt-empty">Задач нет.</div>}
+          {shown.map((tk) => (
+            <div key={tk.id} className={`pt-task rich ${tk.status === 'done' ? 'done' : ''}`}>
+              <button className={`pt-check st-${tk.status}`} onClick={() => cycle(tk)} title={TSTATUS[tk.status]} aria-label={TSTATUS[tk.status]}>
+                {tk.status === 'done' ? '✓' : tk.status === 'in_progress' ? '◐' : ''}
+              </button>
+              <div className="pt-task-b" onClick={() => tk.body && setExpanded(expanded === tk.id ? null : tk.id)} style={{ cursor: tk.body ? 'pointer' : 'default' }}>
+                <div className="pt-task-t">
+                  {tk.title}
+                  <span className="pt-prio" style={{ '--c': PRIO[tk.priority]?.c || '#888' }}>{PRIO[tk.priority]?.l}</span>
+                  {tk.due_date && <span className={`pt-due ${overdue(tk) ? 'over' : ''}`}>⏱ {fmtDay(tk.due_date)}</span>}
+                </div>
+                <div className="pt-task-m">
+                  <span className={`pt-st st-${tk.status}`}>{TSTATUS[tk.status]}</span>
+                  {' · '}{tk.assignee_name ? `→ ${tk.assignee_name}` : 'без исполнителя'} · от {tk.created_by}
+                </div>
+                {expanded === tk.id && tk.body && <div className="pt-task-d">{tk.body}</div>}
               </div>
-              {expanded === tk.id && tk.body && <div className="pt-task-d">{tk.body}</div>}
+              {(tk.created_by === me?.username || isHead) && <button className="cal-del" onClick={() => del(tk)} aria-label="Удалить">×</button>}
             </div>
-            {(tk.created_by === me?.username || isHead) && <button className="cal-del" onClick={() => del(tk)} aria-label="Удалить">×</button>}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </>)}
     </div>
   );
 }
