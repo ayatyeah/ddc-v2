@@ -8,6 +8,7 @@ import Documents from './Documents.jsx';
 import Requests from './Requests.jsx';
 import Calendar from './Calendar.jsx';
 import PortalNews from './PortalNews.jsx';
+import Polls from './Polls.jsx';
 import PortalBell from './PortalBell.jsx';
 import VoiceAgent from './VoiceAgent.jsx';
 import { connect as rtConnect, on as rtOn, usePresence } from './realtime.js';
@@ -22,6 +23,7 @@ const SECTIONS = [
   { id: 'people', label: 'Сотрудники', icon: 'people' },
   { id: 'calendar', label: 'Календарь', icon: 'calendar' },
   { id: 'news', label: 'Новости', icon: 'news' },
+  { id: 'polls', label: 'Опросы', icon: 'polls' },
   { id: 'docs', label: 'Документы', icon: 'docs' },
   { id: 'requests', label: 'Заявки', icon: 'requests' },
   { id: 'tasks', label: 'Задачи', icon: 'tasks' },
@@ -170,6 +172,7 @@ export default function PortalApp() {
         {tab === 'people' && <People onAuthLost={onAuthLost} />}
         {tab === 'calendar' && <Calendar me={me} onAuthLost={onAuthLost} />}
         {tab === 'news' && <PortalNews me={me} onAuthLost={onAuthLost} />}
+        {tab === 'polls' && <Polls me={me} onAuthLost={onAuthLost} />}
         {tab === 'docs' && <Documents me={me} onAuthLost={onAuthLost} />}
         {tab === 'requests' && <Requests me={me} onAuthLost={onAuthLost} />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
@@ -204,6 +207,7 @@ function PtIco({ name }) {
     people: <><circle cx="9" cy="8" r="2.6" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a2.6 2.6 0 0 1 0 4.6M20.5 19a5 5 0 0 0-3.5-4.4" /></>,
     calendar: <><rect x="3.5" y="5" width="17" height="16" rx="2" /><path d="M3.5 9h17M8 3v4M16 3v4" /></>,
     news: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
+    polls: <><path d="M8 20V10M12 20V4M16 20v-6" /><path d="M4 20h16" /></>,
     docs: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M9 13h6M9 17h6" /></>,
     requests: <><path d="M9 4h6l1 3H8z" /><rect x="4" y="7" width="16" height="14" rx="2" /><path d="M9 13l2 2 4-4" /></>,
     tasks: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 12l2.5 2.5L16 9" /></>,

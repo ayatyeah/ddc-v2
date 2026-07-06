@@ -1570,6 +1570,58 @@ app.delete('/api/portal/requests/:id(\\d+)', auth, async (req, res) => {
   } catch (e) { console.error('DELETE /api/portal/requests:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });
 
+// ── Опросы сотрудников (живые результаты по SSE) ──
+app.get('/api/portal/polls', auth, async (req, res) => {
+  try {
+    const me = req.admin.id;
+    const { rows } = await db.query(`SELECT id, question, options, author_id, author_name, created_at FROM polls ORDER BY id DESC LIMIT 100`);
+    const out = [];
+    for (const p of rows) {
+      const v = await db.query(`SELECT option_idx, count(*)::int c FROM poll_votes WHERE poll_id = $1 GROUP BY option_idx`, [p.id]);
+      const counts = (p.options || []).map((_, i) => v.rows.find((x) => x.option_idx === i)?.c || 0);
+      let mine = null;
+      if (me != null) { const mv = await db.query(`SELECT option_idx FROM poll_votes WHERE poll_id = $1 AND user_id = $2`, [p.id, me]); mine = mv.rows[0]?.option_idx ?? null; }
+      out.push({ id: p.id, question: p.question, options: p.options, author_id: p.author_id, author_name: p.author_name, created_at: p.created_at, counts, total: counts.reduce((a, b) => a + b, 0), my_vote: mine });
+    }
+    res.json(out);
+  } catch (e) { console.error('GET /api/portal/polls:', e.message); res.status(500).json({ error: 'Ошибка чтения опросов' }); }
+});
+app.post('/api/portal/polls', auth, requireRole('admin', 'manager'), async (req, res) => {
+  const question = clip(req.body?.question, 300);
+  const options = Array.isArray(req.body?.options) ? req.body.options.map((o) => clip(o, 120)).filter(Boolean).slice(0, 8) : [];
+  if (!question || options.length < 2) return res.status(400).json({ error: 'Нужен вопрос и минимум 2 варианта' });
+  try {
+    const { rows } = await db.query(`INSERT INTO polls (question, options, author_id, author_name) VALUES ($1,$2,$3,$4) RETURNING id`, [question, JSON.stringify(options), req.admin.id, req.admin.u]);
+    broadcastAll('poll', { id: rows[0].id });
+    res.status(201).json({ id: rows[0].id });
+  } catch (e) { console.error('POST /api/portal/polls:', e.message); res.status(500).json({ error: 'Не удалось создать' }); }
+});
+app.post('/api/portal/polls/:id(\\d+)/vote', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (me == null) return res.status(403).json({ error: 'Голосование доступно сотрудникам с учётной записью' });
+  const id = Number(req.params.id), opt = Number(req.body?.option);
+  try {
+    const p = await db.query(`SELECT options FROM polls WHERE id = $1`, [id]);
+    if (!p.rows.length) return res.status(404).json({ error: 'Опрос не найден' });
+    if (!Number.isInteger(opt) || opt < 0 || opt >= (p.rows[0].options || []).length) return res.status(400).json({ error: 'Некорректный вариант' });
+    await db.query(`INSERT INTO poll_votes (poll_id, user_id, option_idx) VALUES ($1,$2,$3) ON CONFLICT (poll_id, user_id) DO UPDATE SET option_idx = $3, created_at = now()`, [id, me, opt]);
+    broadcastAll('poll', { id });
+    res.json({ ok: true });
+  } catch (e) { console.error('POST /api/portal/polls/vote:', e.message); res.status(500).json({ error: 'Не удалось проголосовать' }); }
+});
+app.delete('/api/portal/polls/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const p = await db.query(`SELECT author_id FROM polls WHERE id = $1`, [id]);
+    if (!p.rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (p.rows[0].author_id !== req.admin.id && req.admin.role !== 'admin') return res.status(403).json({ error: 'Нет прав' });
+    await db.query(`DELETE FROM poll_votes WHERE poll_id = $1`, [id]);
+    await db.query(`DELETE FROM polls WHERE id = $1`, [id]);
+    broadcastAll('poll', { id, deleted: true });
+    res.json({ ok: true });
+  } catch (e) { console.error('DELETE /api/portal/polls:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
+});
+
 // ── Рабочие задачи ──
 const TASK_COLS = 'id, title, body, assignee_id, assignee_name, created_by, status, priority, due_date, created_at, updated_at';
 const TASK_STATUSES = ['open', 'in_progress', 'done'];
@@ -2954,6 +3006,23 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        embedding  JSONB,
        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
        UNIQUE (kind, ref_id)
+     );
+     -- Опросы сотрудников с живыми результатами
+     CREATE TABLE IF NOT EXISTS polls (
+       id          SERIAL PRIMARY KEY,
+       question    TEXT NOT NULL DEFAULT '',
+       options     JSONB NOT NULL DEFAULT '[]'::jsonb,
+       author_id   INTEGER,
+       author_name TEXT NOT NULL DEFAULT '',
+       closes_at   TIMESTAMPTZ,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE TABLE IF NOT EXISTS poll_votes (
+       poll_id    INTEGER NOT NULL,
+       user_id    INTEGER NOT NULL,
+       option_idx INTEGER NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+       PRIMARY KEY (poll_id, user_id)
      );`
   ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
