@@ -47,6 +47,8 @@ const { buildDocPDF } = require('./docPdf');
 const app = express();
 const PROD = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT) || 3000;
+let APP_VERSION = 'dev';
+try { APP_VERSION = require('./package.json').version || 'dev'; } catch { /* нет package.json */ }
 
 // JWT_SECRET обязателен в проде — иначе сессии можно подделать. Падаем на старте, а не молча используем дефолт.
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -2831,8 +2833,20 @@ app.get('/api/admin/dashboard', auth, async (req, res) => {
       recent: au.rows,
       by_status,
       by_day,
+      online: sseClients.size,   // сотрудников онлайн (живые SSE-соединения)
+      health: { db: true, ai: !!OPENAI_KEY, gemini: GEMINI_KEYS.length > 0, uptime: Math.round(process.uptime()), version: APP_VERSION },
     });
   } catch (e) { console.error('GET /api/admin/dashboard:', e.message); res.status(500).json({ error: 'Не удалось загрузить дашборд' }); }
+});
+
+// ИИ-инсайт по дашборду: короткая сводка «что происходит» + рекомендация на естественном языке.
+app.post('/api/admin/insight', auth, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const s = req.body?.stats || {};
+    const prompt = `Ты — аналитик Центра цифрового развития. По цифрам портала дай КОРОТКУЮ сводку (2–3 предложения) по-русски: что происходит с заявками и активностью, и одну практическую рекомендацию. Без воды и без markdown.\nЦифры: всего заявок ${s.leads_total || 0}, новых ${s.leads_new || 0}, в работе ${s.leads_progress || 0}, за 14 дней ${s.last14 || 0}, новостей опубликовано ${s.news_published || 0}, сотрудников онлайн ${s.online || 0}.`;
+    const text = cleanAnswer(await aiText(prompt));
+    res.json({ insight: text || 'Недостаточно данных для инсайта.' });
+  } catch (e) { console.error('POST /api/admin/insight:', e.message); res.status(502).json({ error: 'ИИ недоступен' }); }
 });
 
 // ── Админ: история изменений ──────────────────────────────────────────────────
@@ -2846,8 +2860,21 @@ app.get('/api/admin/audit', auth, async (req, res) => {
   } catch (e) { console.error('GET /api/admin/audit:', e.message); res.status(500).json({ error: 'Не удалось загрузить историю' }); }
 });
 
-// Health-check
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+// Health-check / статус-страница (публично): состояние БД, ИИ, аптайм, версия.
+app.get('/api/health', async (req, res) => {
+  let db_ok = false;
+  try { await db.query('SELECT 1'); db_ok = true; } catch { /* БД недоступна */ }
+  res.json({
+    ok: db_ok,
+    status: db_ok ? 'operational' : 'degraded',
+    db: db_ok,
+    ai: { openai: !!OPENAI_KEY, gemini: GEMINI_KEYS.length > 0, search_index: aiIndexReady },
+    realtime: { online: sseClients.size },
+    uptime_sec: Math.round(process.uptime()),
+    version: APP_VERSION,
+    time: new Date().toISOString(),
+  });
+});
 
 // Неизвестные API-маршруты — честный 404 JSON (а не SPA-страница)
 app.use('/api', (req, res) => res.status(404).json({ error: 'Не найдено' }));

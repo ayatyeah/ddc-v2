@@ -1,5 +1,23 @@
-import { useEffect, useState } from 'react';
-import { getJSON } from '../api.js';
+import { useEffect, useRef, useState } from 'react';
+import { getJSON, sendJSON } from '../api.js';
+
+// Анимированный счётчик: число «набегает» от 0 при появлении (design-wow, дёшево).
+function CountUp({ value }) {
+  const [n, setN] = useState(0);
+  const ref = useRef(0);
+  useEffect(() => {
+    const target = Number(value) || 0; const from = ref.current; const dur = 650; const t0 = performance.now();
+    let raf;
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / dur); const eased = 1 - Math.pow(1 - p, 3);
+      setN(Math.round(from + (target - from) * eased));
+      if (p < 1) raf = requestAnimationFrame(tick); else ref.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{n}</>;
+}
 
 const ENTITY_LABEL = { lead: 'Заявка', news: 'Новость', feed: 'AI-лента' };
 const fmt = (ts) => { try { return new Date(ts).toLocaleString('ru-RU'); } catch { return ''; } };
@@ -96,41 +114,66 @@ function DonutChart({ byStatus, total }) {
 export default function Dashboard({ onAuthLost, onGoTab }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
+  const [insight, setInsight] = useState('');
+  const [insBusy, setInsBusy] = useState(false);
   useEffect(() => {
     let alive = true;
-    getJSON('/api/admin/dashboard')
+    const load = () => getJSON('/api/admin/dashboard')
       .then((x) => { if (alive) setD(x); })
-      .catch((e) => { if (e.status === 401) return onAuthLost?.(); if (alive) setErr('Не удалось загрузить дашборд'); });
-    return () => { alive = false; };
-  }, []);
+      .catch((e) => { if (e.status === 401) return onAuthLost?.(); if (alive && !d) setErr('Не удалось загрузить дашборд'); });
+    load();
+    const t = setInterval(() => { if (!document.hidden) load(); }, 20000);   // живой онлайн/цифры
+    return () => { alive = false; clearInterval(t); };
+  }, []); // eslint-disable-line
   if (err) return <div className="adm-note">{err}</div>;
   if (!d) return <div className="adm-hint">Загрузка…</div>;
 
   const peak = d.by_day?.length ? Math.max(...d.by_day.map((x) => x.leads)) : 0;
   const last14 = d.by_day?.reduce((a, x) => a + x.leads, 0) || 0;
+  const h = d.health || {};
+  const getInsight = async () => {
+    setInsBusy(true);
+    try { const r = await sendJSON('/api/admin/insight', 'POST', { stats: { ...d, last14 } }); setInsight(r.insight); }
+    catch (e) { setInsight(e.message || 'ИИ недоступен'); } finally { setInsBusy(false); }
+  };
 
   return (
     <div className="dash-bento">
       <button className="dash-card dc-leads" onClick={() => onGoTab?.('leads')}>
-        <span className="dc-num">{d.leads_total}</span>
+        <span className="dc-num"><CountUp value={d.leads_total} /></span>
         <span className="dc-lbl">Заявки</span>
         <span className="dc-sub">{d.leads_new} новых · {d.leads_progress} в работе</span>
       </button>
       <button className="dash-card dc-news" onClick={() => onGoTab?.('news')}>
-        <span className="dc-num">{d.news_total}</span>
+        <span className="dc-num"><CountUp value={d.news_total} /></span>
         <span className="dc-lbl">Новости</span>
         <span className="dc-sub">{d.news_published} опубликовано</span>
       </button>
-      <button className="dash-card dc-feed" onClick={() => onGoTab?.('news')}>
-        <span className="dc-num">{d.feed_count}</span>
-        <span className="dc-lbl">AI-лента</span>
-        <span className="dc-sub">{d.feed_updated ? 'обновлено ' + fmt(d.feed_updated) : 'нет данных'}</span>
-      </button>
+      <div className="dash-card dc-online">
+        <span className="dc-num"><span className="dc-live-dot" /><CountUp value={d.online || 0} /></span>
+        <span className="dc-lbl">Сейчас онлайн</span>
+        <span className="dc-sub">сотрудников в портале</span>
+      </div>
       <div className="dash-card dc-static">
-        <span className="dc-num">{last14}</span>
+        <span className="dc-num"><CountUp value={last14} /></span>
         <span className="dc-lbl">Заявок за 14 дней</span>
         <span className="dc-sub">пик {peak} в день</span>
       </div>
+
+      <section className="chart-card bento-full dash-insight">
+        <div className="chart-head">
+          <h3>🤖 ИИ-инсайт</h3>
+          <button className="adm-btn sm" onClick={getInsight} disabled={insBusy}>{insBusy ? 'Анализирую…' : insight ? 'Обновить' : 'Получить сводку'}</button>
+        </div>
+        {insight ? <p className="dash-insight-t">{insight}</p> : <p className="adm-hint">ИИ проанализирует цифры и подскажет, что происходит и на что обратить внимание.</p>}
+        <div className="dash-sys">
+          <span className={`sys-chip ${h.db ? 'ok' : 'bad'}`}>БД {h.db ? '●' : '○'}</span>
+          <span className={`sys-chip ${h.ai ? 'ok' : 'bad'}`}>OpenAI {h.ai ? '●' : '○'}</span>
+          <span className={`sys-chip ${h.gemini ? 'ok' : 'bad'}`}>Gemini {h.gemini ? '●' : '○'}</span>
+          {h.uptime != null && <span className="sys-chip">аптайм {Math.floor(h.uptime / 3600)}ч {Math.floor((h.uptime % 3600) / 60)}м</span>}
+          {h.version && <span className="sys-chip">v{h.version}</span>}
+        </div>
+      </section>
 
       <section className="chart-card chart-trend bento-2">
         <div className="chart-head">
