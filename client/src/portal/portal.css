@@ -563,6 +563,21 @@
 .pt-req-btn.ai { background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent); }
 .pt-req-btn.ai:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 20%, transparent); }
 
+/* Двухфакторная аутентификация в профиле */
+.pt-2fa { margin-top: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.pt-2fa-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.pt-2fa-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 3px 10px; border-radius: 20px; }
+.pt-2fa-badge.on { color: #16a34a; background: color-mix(in srgb, #16a34a 12%, transparent); }
+.pt-2fa-b { margin-top: 10px; }
+.pt-2fa-b p { font-size: 13px; color: var(--ink-soft); margin: 0 0 10px; line-height: 1.5; }
+.pt-2fa-setup { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; align-items: flex-start; }
+.pt-2fa-setup img { width: 150px; height: 150px; border-radius: 10px; border: 1px solid var(--line); background: #fff; padding: 5px; flex: none; }
+.pt-2fa-steps { flex: 1; min-width: 220px; }
+.pt-2fa-steps p { font-size: 13px; color: var(--ink-soft); margin: 0 0 8px; line-height: 1.5; }
+.pt-2fa-steps code { font-family: var(--mono, monospace); font-size: 12px; background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 2px 6px; border-radius: 5px; word-break: break-all; }
+.pt-2fa-code { display: flex; gap: 8px; }
+.pt-2fa-code .adm-input { flex: 1; letter-spacing: 0.3em; font-size: 18px; text-align: center; }
+
 /* QR цифровой визитки в профиле */
 .pt-qr { margin-left: auto; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .pt-qr img { width: 92px; height: 92px; border-radius: 10px; border: 1px solid var(--line); background: #fff; padding: 4px; }

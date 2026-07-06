@@ -258,6 +258,40 @@ function auth(req, res, next) {
   }
 }
 
+// ── TOTP (RFC 6238) для двухфакторной аутентификации — на чистом crypto, без зависимостей ──
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function base32Encode(buf) {
+  let bits = '', out = '';
+  for (const b of buf) bits += b.toString(2).padStart(8, '0');
+  for (let i = 0; i + 5 <= bits.length; i += 5) out += B32[parseInt(bits.slice(i, i + 5), 2)];
+  const rem = bits.length % 5;
+  if (rem) out += B32[parseInt(bits.slice(bits.length - rem).padEnd(5, '0'), 2)];
+  return out;
+}
+function base32Decode(s) {
+  let bits = ''; const out = [];
+  for (const c of String(s).replace(/=+$/, '').toUpperCase()) { const v = B32.indexOf(c); if (v >= 0) bits += v.toString(2).padStart(5, '0'); }
+  for (let i = 0; i + 8 <= bits.length; i += 8) out.push(parseInt(bits.slice(i, i + 8), 2));
+  return Buffer.from(out);
+}
+function totpCode(secretB32, t = Date.now()) {
+  const key = base32Decode(secretB32);
+  let counter = Math.floor(t / 1000 / 30);
+  const buf = Buffer.alloc(8);
+  for (let i = 7; i >= 0; i--) { buf[i] = counter & 0xff; counter = Math.floor(counter / 256); }
+  const hmac = crypto.createHmac('sha1', key).update(buf).digest();
+  const off = hmac[hmac.length - 1] & 0xf;
+  const code = ((hmac[off] & 0x7f) << 24 | (hmac[off + 1] & 0xff) << 16 | (hmac[off + 2] & 0xff) << 8 | (hmac[off + 3] & 0xff)) % 1000000;
+  return String(code).padStart(6, '0');
+}
+function totpVerify(secretB32, token) {
+  if (!secretB32 || !/^\d{6}$/.test(String(token || ''))) return false;
+  const now = Date.now();
+  for (const d of [-1, 0, 1]) if (totpCode(secretB32, now + d * 30000) === String(token)) return true;   // ±30с окно
+  return false;
+}
+const totpNewSecret = () => base32Encode(crypto.randomBytes(20));
+
 // Доступ только для указанных ролей
 function requireRole(...roles) {
   return (req, res, next) => {
@@ -354,18 +388,42 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   // 2) Пользователь из таблицы users (bcrypt)
   try {
     const { rows } = await db.query(
-      `SELECT id, username, password_hash, role, active FROM users WHERE username = $1`,
+      `SELECT id, username, password_hash, role, active, totp_enabled FROM users WHERE username = $1`,
       [String(username || '').trim()]
     );
     if (rows.length) {
       if (!rows[0].active) return res.status(403).json({ error: 'Учётная запись отключена' });
       const ok = await bcrypt.compare(String(password || ''), rows[0].password_hash);
-      if (ok) return issue(rows[0].username, rows[0].role, rows[0].id);
+      if (ok) {
+        // Если включена 2FA — не выдаём сессию сразу, а просим одноразовый код (второй шаг).
+        if (rows[0].totp_enabled) {
+          const ticket = jwt.sign({ uid: rows[0].id, purpose: '2fa' }, SECRET, { expiresIn: '5m' });
+          return res.json({ twofa: true, ticket });
+        }
+        return issue(rows[0].username, rows[0].role, rows[0].id);
+      }
     }
   } catch (e) {
     console.error('POST /api/login:', e.message);
   }
   return res.status(401).json({ error: 'Неверный логин или пароль' });
+});
+
+// Второй шаг входа: проверка одноразового кода 2FA по тикету от /api/login.
+app.post('/api/login/2fa', loginLimiter, async (req, res) => {
+  const { ticket, code } = req.body || {};
+  let payload;
+  try { payload = jwt.verify(String(ticket || ''), SECRET); } catch { return res.status(401).json({ error: 'Сессия истекла, войдите заново' }); }
+  if (payload.purpose !== '2fa' || !payload.uid) return res.status(400).json({ error: 'Некорректный запрос' });
+  try {
+    const { rows } = await db.query(`SELECT id, username, role, active, totp_secret, totp_enabled FROM users WHERE id = $1`, [payload.uid]);
+    const u = rows[0];
+    if (!u || !u.active || !u.totp_enabled) return res.status(401).json({ error: 'Недоступно' });
+    if (!totpVerify(u.totp_secret, code)) return res.status(401).json({ error: 'Неверный код' });
+    const token = jwt.sign({ u: u.username, role: u.role, id: u.id }, SECRET, { expiresIn: '8h' });
+    res.cookie('ddc_token', token, { ...COOKIE_OPTS, maxAge: 8 * 60 * 60 * 1000 });
+    res.json({ ok: true, username: u.username, role: u.role, id: u.id });
+  } catch (e) { console.error('POST /api/login/2fa:', e.message); res.status(500).json({ error: 'Ошибка входа' }); }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -1658,6 +1716,48 @@ app.patch('/api/portal/profile', auth, async (req, res) => {
       [clip(req.body?.phone, 40), clip(req.body?.skills, 500), clip(req.body?.position, 120), me]);
     res.json({ ok: true });
   } catch (e) { console.error('PATCH /api/portal/profile:', e.message); res.status(500).json({ error: 'Не удалось сохранить' }); }
+});
+
+// ── Двухфакторная аутентификация (TOTP) ──
+app.get('/api/portal/2fa', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.json({ enabled: false, available: false });
+  try { const { rows } = await db.query(`SELECT totp_enabled FROM users WHERE id=$1`, [me]); res.json({ enabled: !!rows[0]?.totp_enabled, available: true }); }
+  catch (e) { res.status(500).json({ error: 'Ошибка' }); }
+});
+app.post('/api/portal/2fa/setup', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Доступно сотрудникам с учётной записью' });
+  try {
+    const { rows } = await db.query(`SELECT username, totp_enabled FROM users WHERE id=$1`, [me]);
+    if (rows[0]?.totp_enabled) return res.status(400).json({ error: '2FA уже включена' });
+    const secret = totpNewSecret();
+    await db.query(`UPDATE users SET totp_secret=$1 WHERE id=$2`, [secret, me]);   // сохраняем как «ожидающий», enabled=false
+    const otpauth = `otpauth://totp/${encodeURIComponent('DDC:' + rows[0].username)}?secret=${secret}&issuer=DDC%20Portal&period=30&digits=6`;
+    res.json({ secret, otpauth });
+  } catch (e) { console.error('2fa setup:', e.message); res.status(500).json({ error: 'Ошибка' }); }
+});
+app.post('/api/portal/2fa/enable', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Доступно сотрудникам' });
+  try {
+    const { rows } = await db.query(`SELECT totp_secret FROM users WHERE id=$1`, [me]);
+    if (!rows[0]?.totp_secret) return res.status(400).json({ error: 'Сначала запустите настройку' });
+    if (!totpVerify(rows[0].totp_secret, req.body?.code)) return res.status(400).json({ error: 'Неверный код из приложения' });
+    await db.query(`UPDATE users SET totp_enabled=TRUE WHERE id=$1`, [me]);
+    res.json({ ok: true });
+  } catch (e) { console.error('2fa enable:', e.message); res.status(500).json({ error: 'Ошибка' }); }
+});
+app.post('/api/portal/2fa/disable', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Доступно сотрудникам' });
+  try {
+    const { rows } = await db.query(`SELECT totp_secret, totp_enabled FROM users WHERE id=$1`, [me]);
+    if (!rows[0]?.totp_enabled) return res.json({ ok: true });
+    if (!totpVerify(rows[0].totp_secret, req.body?.code)) return res.status(400).json({ error: 'Неверный код' });
+    await db.query(`UPDATE users SET totp_enabled=FALSE, totp_secret='' WHERE id=$1`, [me]);
+    res.json({ ok: true });
+  } catch (e) { console.error('2fa disable:', e.message); res.status(500).json({ error: 'Ошибка' }); }
 });
 
 // ── Онбординг: чек-лист нового сотрудника ──
@@ -3179,6 +3279,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
      ALTER TABLE users ADD COLUMN IF NOT EXISTS skills TEXT NOT NULL DEFAULT '';
      ALTER TABLE users ADD COLUMN IF NOT EXISTS position TEXT NOT NULL DEFAULT '';
      ALTER TABLE users ADD COLUMN IF NOT EXISTS hired_at DATE;
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT NOT NULL DEFAULT '';   -- секрет 2FA (base32)
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
      -- Онбординг: прогресс чек-листа нового сотрудника
      CREATE TABLE IF NOT EXISTS onboarding (
        user_id INTEGER NOT NULL,

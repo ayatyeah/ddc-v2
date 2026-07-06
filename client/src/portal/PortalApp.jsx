@@ -60,6 +60,7 @@ export default function PortalApp() {
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [twofa, setTwofa] = useState(null);   // { ticket, code } — второй шаг входа
   const [tab, setTab] = useState('home');
   // На мобиле при открытом диалоге прячем верхнюю панель (мессенджер-стиль).
   const [convOpen, setConvOpen] = useState(false);
@@ -102,8 +103,17 @@ export default function PortalApp() {
     setBusy(true); setErr('');
     try {
       const d = await sendJSON('/api/login', 'POST', { username: login.trim(), password: pass });
-      setMe(d); setState('app');
+      if (d.twofa) { setTwofa({ ticket: d.ticket, code: '' }); }   // требуется второй шаг
+      else { setMe(d); setState('app'); }
     } catch (e) { setErr(e.status === 401 ? 'Неверный логин или пароль' : 'Сервер недоступен'); }
+    finally { setBusy(false); }
+  };
+  const doVerify2fa = async () => {
+    setBusy(true); setErr('');
+    try {
+      const d = await sendJSON('/api/login/2fa', 'POST', { ticket: twofa.ticket, code: twofa.code.trim() });
+      setTwofa(null); setMe(d); setState('app');
+    } catch (e) { setErr(e.status === 401 ? (e.message || 'Неверный код') : 'Сервер недоступен'); }
     finally { setBusy(false); }
   };
   const doLogout = async () => { try { await apiFetch('/api/logout', { method: 'POST' }); } catch {} setState('login'); setMe(null); setLogin(''); setPass(''); };
@@ -117,13 +127,23 @@ export default function PortalApp() {
         <div className="pt-login">
           <div className="pt-login-card">
             <div className="pt-login-logo"><img src={logo} alt="" /> Портал DDC</div>
-            <h1>Вход в портал</h1>
-            <p className="pt-sub">Рабочее пространство сотрудников</p>
-            <div className="adm-field"><label>Логин</label>
-              <input className="adm-input" value={login} onChange={(e) => setLogin(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && doLogin()} autoComplete="username" /></div>
-            <div className="adm-field"><label>Пароль</label>
-              <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && doLogin()} autoComplete="current-password" /></div>
-            <button className="adm-btn" style={{ width: '100%' }} onClick={doLogin} disabled={busy}>{busy ? 'Входим…' : 'Войти'}</button>
+            {!twofa ? (<>
+              <h1>Вход в портал</h1>
+              <p className="pt-sub">Рабочее пространство сотрудников</p>
+              <div className="adm-field"><label>Логин</label>
+                <input className="adm-input" value={login} onChange={(e) => setLogin(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && doLogin()} autoComplete="username" /></div>
+              <div className="adm-field"><label>Пароль</label>
+                <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && doLogin()} autoComplete="current-password" /></div>
+              <button className="adm-btn" style={{ width: '100%' }} onClick={doLogin} disabled={busy}>{busy ? 'Входим…' : 'Войти'}</button>
+            </>) : (<>
+              <h1>Подтверждение входа</h1>
+              <p className="pt-sub">Введите 6-значный код из приложения-аутентификатора</p>
+              <div className="adm-field"><label>Код 2FA</label>
+                <input className="adm-input" value={twofa.code} inputMode="numeric" maxLength={6} placeholder="000000" autoFocus
+                  onChange={(e) => setTwofa((t) => ({ ...t, code: e.target.value.replace(/\D/g, '') }))} onKeyDown={(e) => e.key === 'Enter' && doVerify2fa()} /></div>
+              <button className="adm-btn" style={{ width: '100%' }} onClick={doVerify2fa} disabled={busy || twofa.code.length < 6}>{busy ? 'Проверяем…' : 'Подтвердить'}</button>
+              <button className="adm-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => { setTwofa(null); setErr(''); }}>← Назад</button>
+            </>)}
             <div className="adm-err">{err}</div>
             <a className="pt-back" href="/" data-spa>← На сайт</a>
           </div>
@@ -362,7 +382,67 @@ function Profile({ me, onAuthLost }) {
             </div>
           </div>
         )}
+
+        <TwoFA onAuthLost={onAuthLost} />
       </div>
+    </div>
+  );
+}
+
+/* ── Двухфакторная аутентификация: включение (QR) / отключение ── */
+function TwoFA({ onAuthLost }) {
+  const [status, setStatus] = useState(null);   // { enabled }
+  const [setup, setSetup] = useState(null);      // { otpauth, qr }
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const load = () => getJSON('/api/portal/2fa').then(setStatus).catch((e) => { if (e.status === 401) onAuthLost?.(); });
+  useEffect(() => { load(); }, []); // eslint-disable-line
+
+  const startSetup = async () => {
+    setBusy(true); setErr('');
+    try { const d = await sendJSON('/api/portal/2fa/setup', 'POST', {}); const qr = await QRCode.toDataURL(d.otpauth, { margin: 1, width: 190 }); setSetup({ ...d, qr }); }
+    catch (e) { setErr(e.message || 'Не удалось'); } finally { setBusy(false); }
+  };
+  const enable = async () => {
+    setBusy(true); setErr('');
+    try { await sendJSON('/api/portal/2fa/enable', 'POST', { code: code.trim() }); setSetup(null); setCode(''); load(); }
+    catch (e) { setErr(e.message || 'Неверный код'); } finally { setBusy(false); }
+  };
+  const disable = async () => {
+    const c = prompt('Введите текущий код 2FA для отключения:');
+    if (!c) return;
+    setBusy(true); setErr('');
+    try { await sendJSON('/api/portal/2fa/disable', 'POST', { code: c.trim() }); load(); }
+    catch (e) { setErr(e.message || 'Неверный код'); } finally { setBusy(false); }
+  };
+
+  if (!status?.available) return null;
+  return (
+    <div className="pt-2fa">
+      <div className="pt-2fa-h"><b>🔐 Двухфакторная аутентификация</b>
+        <span className={`pt-2fa-badge ${status.enabled ? 'on' : ''}`}>{status.enabled ? 'Включена' : 'Выключена'}</span>
+      </div>
+      {status.enabled ? (
+        <div className="pt-2fa-b"><p>Вход в портал защищён одноразовым кодом из приложения-аутентификатора.</p>
+          <button className="adm-btn ghost" onClick={disable} disabled={busy}>Отключить 2FA</button></div>
+      ) : !setup ? (
+        <div className="pt-2fa-b"><p>Дополнительная защита входа: код из Google Authenticator / любого TOTP-приложения.</p>
+          <button className="adm-btn" onClick={startSetup} disabled={busy}>{busy ? '…' : 'Включить 2FA'}</button></div>
+      ) : (
+        <div className="pt-2fa-setup">
+          <img src={setup.qr} alt="QR для 2FA" />
+          <div className="pt-2fa-steps">
+            <p>1. Отсканируйте QR в приложении-аутентификаторе (или введите ключ вручную: <code>{setup.secret}</code>).</p>
+            <p>2. Введите 6-значный код для подтверждения:</p>
+            <div className="pt-2fa-code">
+              <input className="adm-input" value={code} inputMode="numeric" maxLength={6} placeholder="000000" onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+              <button className="adm-btn" onClick={enable} disabled={busy || code.length < 6}>Подтвердить</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {err && <div className="adm-err">{err}</div>}
     </div>
   );
 }
