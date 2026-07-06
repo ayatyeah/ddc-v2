@@ -2021,6 +2021,30 @@ async function transcribeAudio(buf, mime) {
   return String(j.text || '').trim();
 }
 
+// Синтез приятного голоса (текст → mp3) через gpt-4o-mini-tts — «голос ДиДи».
+// Тёплый естественный женский голос вместо роботизированного системного. Фолбэк на стороне
+// клиента (браузерный SpeechSynthesis), если ключа/сети нет.
+const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts';
+const OPENAI_TTS_VOICE = process.env.OPENAI_TTS_VOICE || 'shimmer';   // мягкий женский; можно nova/coral/sage
+app.post('/api/assistant/tts', auth, async (req, res) => {
+  const text = clip(req.body?.text, 500);
+  if (!text) return res.status(400).json({ error: 'Пустой текст' });
+  if (!OPENAI_KEY) return res.status(503).json({ error: 'Нет OPENAI_API_KEY' });
+  try {
+    const r = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST', headers: { Authorization: `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(20000),
+      body: JSON.stringify({
+        model: OPENAI_TTS_MODEL, voice: OPENAI_TTS_VOICE, input: text, response_format: 'mp3',
+        instructions: 'Говори по-русски тёплым, спокойным и дружелюбным женским голосом. Естественная живая интонация, доброжелательно, без спешки и без роботизированности. Тебя зовут ДиДи — ассистент корпоративного портала.',
+      }),
+    });
+    if (!r.ok) { const tx = await r.text(); throw new Error(`TTS ${r.status}: ${tx.slice(0, 200)}`); }
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.set('Content-Type', 'audio/mpeg'); res.set('Cache-Control', 'no-store'); res.send(buf);
+  } catch (e) { console.error('POST /api/assistant/tts:', e.message); res.status(502).json({ error: e.message || 'ошибка' }); }
+});
+
 // Команда текстом (фолбэк / ручной ввод).
 app.post('/api/assistant/command', auth, async (req, res) => {
   const text = clip(req.body?.text, 500);

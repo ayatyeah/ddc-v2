@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sendJSON } from '../api.js';
+import { parseVoice } from './voiceNlu.js';
 
-// Голосовой агент портала. Нажал «Говорить» → говоришь → пауза → запись САМА останавливается
-// (детект тишины) → сервер распознаёт речь (gpt-4o-mini-transcribe) + разбирает в действия
-// (gpt-5-mini) → исполняем через существующие эндпоинты (права роли соблюдаются на сервере) →
-// приятный голосовой ответ. Фолбэк — команда текстом. getUserMedia работает по https/localhost.
+// Голосовой агент портала — работает во ВСЕХ браузерах:
+//  • Chrome/Edge/Safari: встроенное распознавание речи (SpeechRecognition) — мгновенно, потоково,
+//    без сети до нашего сервера и без OpenAI-ключа. Авто-стоп по тишине — нативный.
+//  • Firefox и прочие без SpeechRecognition: запись → WAV → сервер (OpenAI) как фолбэк.
+// Понимание команды: сперва локальный парсер на правилах (voiceNlu, без ИИ, мгновенно); если
+// фраза незнакомая — тихий фолбэк на ИИ (/api/assistant/command). Исполнение — через существующие
+// эндпоинты (права роли проверяет сервер). Плюс всегда есть ввод команды текстом.
+const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const TAB_LABEL = {
   home: 'Главная', calendar: 'Календарь', news: 'Новости', docs: 'Документы', requests: 'Заявки',
   tasks: 'Задачи', people: 'Сотрудники', depts: 'Отделы', dm: 'Личные сообщения', chat: 'Чаты',
@@ -50,8 +55,13 @@ export default function VoiceAgent({ onGo, me }) {
   const [level, setLevel] = useState(0);
   const [log, setLog] = useState([]);
   const [typed, setTyped] = useState('');
+  const [interim, setInterim] = useState('');   // живой текст распознавания (нативный движок)
+  const [wake, setWake] = useState(() => { try { return localStorage.getItem('dd_wake') === '1'; } catch { return false; } });   // режим отклика на имя «ДиДи»
   const mrRef = useRef(null), streamRef = useRef(null), ctxRef = useRef(null), vadRef = useRef(0), cancelRef = useRef(false);
+  const recRef = useRef(null);
+  const startNativeRef = useRef(() => {});   // всегда актуальная ссылка на запуск распознавания (для wake-слушателя)
   const voicesRef = useRef([]);
+  const canVoice = !!SR || hasMic;
   const addLog = (role, text) => setLog((l) => [...l.slice(-10), { role, text }]);
 
   // Голоса TTS: подгружаются асинхронно — кэшируем и обновляем по событию.
@@ -62,22 +72,42 @@ export default function VoiceAgent({ onGo, me }) {
     return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', load);
   }, []);
   // Если панель закрыли во время записи — прекращаем слушать (без отправки).
-  useEffect(() => { if (!open && phase === 'listening') { cancelRef.current = true; try { mrRef.current?.state !== 'inactive' && mrRef.current?.stop(); } catch {} } }, [open, phase]);
-  // Приятный русский голос: предпочитаем нейросетевые (Natural/Online) и женские.
-  const speak = useCallback((text) => {
+  useEffect(() => { if (!open && phase === 'listening') { cancelRef.current = true; try { mrRef.current?.state !== 'inactive' && mrRef.current?.stop(); } catch {} try { recRef.current?.stop(); } catch {} } }, [open, phase]);
+  // Запасной голос — браузерный. Спокойные параметры (pitch 1.0, чуть медленнее), избегаем
+  // роботизированных системных голосов (MS Irina/Pavel Desktop), если есть выбор получше.
+  const speakBrowser = useCallback((text) => {
     try {
       const synth = window.speechSynthesis; if (!synth || !text) return;
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ru-RU'; u.rate = 1.0; u.pitch = 1.08;
+      u.lang = 'ru-RU'; u.rate = 0.98; u.pitch = 1.0;
       const ru = voicesRef.current.filter((v) => /ru/i.test(v.lang));
-      const v = ru.find((x) => /natural|online|neural/i.test(x.name))
-        || ru.find((x) => /google/i.test(x.name))
-        || ru.find((x) => /svetlana|alyona|milena|katya|dariya|female|женск/i.test(x.name))
+      const robotic = /desktop|irina|pavel|microsoft/i;
+      const v = ru.find((x) => /natural|neural|online/i.test(x.name))
+        || ru.find((x) => /google|yandex|alena|alyona|milena|svetlana|katya|dariya|female|женск/i.test(x.name))
+        || ru.find((x) => !robotic.test(x.name))
         || ru[0];
       if (v) u.voice = v;
       synth.cancel(); synth.speak(u);
     } catch { /* TTS необязателен */ }
   }, []);
+  // Основной голос ДиДи — тёплый нейросетевой (сервер, gpt-4o-mini-tts). Если недоступен —
+  // мгновенно откатываемся на браузерный голос. Предыдущее воспроизведение прерываем.
+  const ttsRef = useRef(null);
+  const speak = useCallback(async (text) => {
+    if (!text) return;
+    try { ttsRef.current?.pause(); } catch {}
+    try { window.speechSynthesis?.cancel(); } catch {}
+    try {
+      const res = await fetch('/api/assistant/tts', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      if (!res.ok) throw new Error('tts ' + res.status);
+      const blob = await res.blob();
+      if (!/audio/.test(blob.type)) throw new Error('not audio');
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url); ttsRef.current = a;
+      a.onended = () => { try { URL.revokeObjectURL(url); } catch {} };
+      await a.play();
+    } catch { speakBrowser(text); }   // фолбэк на браузерный голос
+  }, [speakBrowser]);
 
   // Исполнение действий (через уже существующие эндпоинты — права проверяет сервер).
   const execute = useCallback(async (actions, say) => {
@@ -109,12 +139,16 @@ export default function VoiceAgent({ onGo, me }) {
     addLog('bot', reply); speak(reply);
   }, [onGo, me, speak]);
 
-  // Отправка (аудио или текст) → разбор → исполнение. Мгновенная обратная связь по фазам.
-  const dispatchText = useCallback(async (text) => {
+  // Разбор → исполнение. Сначала локальный парсер (без ИИ, мгновенно). Если он не понял —
+  // тихий фолбэк на ИИ (/api/assistant/command). Обратная связь по фазам мгновенная.
+  const runText = useCallback(async (text) => {
     const t = (text || '').trim(); if (!t) return;
     addLog('me', t); setPhase('processing');
-    try { const r = await sendJSON('/api/assistant/command', 'POST', { text: t }); await execute(r.actions, r.say); }
-    catch (e) { addLog('bot', e.message || 'Ассистент недоступен'); speak('Ассистент недоступен'); }
+    try {
+      const local = parseVoice(t);
+      if (local.length) { await execute(local); }
+      else { const r = await sendJSON('/api/assistant/command', 'POST', { text: t }); await execute(r.actions, r.say); }
+    } catch (e) { addLog('bot', e.message || 'Ассистент недоступен'); speak('Ассистент недоступен'); }
     finally { setPhase('idle'); }
   }, [execute, speak]);
 
@@ -126,7 +160,66 @@ export default function VoiceAgent({ onGo, me }) {
     setLevel(0);
   };
 
-  const startRec = async () => {
+  // Основной движок: встроенное распознавание браузера. Мгновенно, потоково, авто-стоп по тишине.
+  const startNative = () => {
+    cancelRef.current = false; setInterim('');
+    let rec;
+    try { rec = new SR(); } catch { return startMedia(); }
+    recRef.current = rec;
+    rec.lang = 'ru-RU'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+    let finalText = '';
+    rec.onresult = (e) => {
+      let live = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const seg = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += seg; else live += seg;
+      }
+      setInterim(live || finalText); setLevel(0.5);
+    };
+    rec.onerror = (e) => {
+      recRef.current = null; setLevel(0); setInterim('');
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { setPhase('idle'); addLog('bot', 'Нет доступа к микрофону — разрешите его в браузере (нужен https или localhost).'); return; }
+      if (e.error === 'no-speech') { setPhase('idle'); addLog('bot', 'Не услышал — говорите чуть ближе к микрофону и попробуйте снова.'); return; }
+      if (e.error === 'audio-capture') { setPhase('idle'); addLog('bot', 'Микрофон не найден. Проверьте, что он подключён.'); return; }
+      if (e.error === 'network') { addLog('bot', 'Перехожу на запасной способ распознавания…'); startMedia(); return; }   // фолбэк на серверный STT
+      setPhase('idle');
+    };
+    rec.onend = () => {
+      recRef.current = null; setLevel(0); setInterim('');
+      const t = finalText.trim();
+      if (cancelRef.current) { setPhase('idle'); return; }
+      if (t) runText(t); else { setPhase('idle'); addLog('bot', 'Не услышал. Повторите, пожалуйста.'); }
+    };
+    try { rec.start(); setPhase('listening'); } catch { startMedia(); }
+  };
+
+  const startRec = () => { if (phase !== 'idle') return; if (SR) startNative(); else startMedia(); };
+  startNativeRef.current = startNative;
+
+  // Режим «ДиДи»: фоновое распознавание ждёт обращение по имени и сразу запускает приём команды.
+  // Работает только на движках с SpeechRecognition (Chrome/Edge/Safari). Пока идёт команда
+  // (phase≠idle) — слушатель имени приостановлен, чтобы не было двух распознавателей на один микрофон.
+  useEffect(() => {
+    if (!wake || !SR || phase !== 'idle') return;
+    let rec, stopped = false, restartT = 0;
+    try { rec = new SR(); } catch { return; }
+    rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = true;
+    const WAKE = /(^|\s)(ди\s?ди|диди|деди|dd|d\s?d|дида)(\s|$)/i;
+    rec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const tr = (e.results[i][0].transcript || '').toLowerCase().replace(/ё/g, 'е');
+        if (WAKE.test(tr)) { stopped = true; try { rec.stop(); } catch {} setOpen(true); startNativeRef.current(); return; }
+      }
+    };
+    rec.onerror = (ev) => { if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') { stopped = true; setWake(false); addLog('bot', 'Нет доступа к микрофону для режима «ДиДи».'); } };
+    rec.onend = () => { if (!stopped) restartT = setTimeout(() => { try { rec.start(); } catch {} }, 300); };   // авто-рестарт (Chrome сам обрывает continuous)
+    try { rec.start(); } catch {}
+    return () => { stopped = true; clearTimeout(restartT); try { rec.stop(); } catch {} };
+  }, [wake, phase]);
+  useEffect(() => { try { localStorage.setItem('dd_wake', wake ? '1' : '0'); } catch {} }, [wake]);
+
+  // Фолбэк-движок (Firefox и т.п. без SpeechRecognition): запись → WAV → сервер.
+  const startMedia = async () => {
     if (!hasMic || phase !== 'idle') return;
     cancelRef.current = false;
     let stream;
@@ -151,8 +244,11 @@ export default function VoiceAgent({ onGo, me }) {
           audio = await blobToDataUrl(encodeWav(audioBuffer));   // WAV 16кГц — надёжное распознавание
         } catch { audio = await blobToDataUrl(blob); }           // фолбэк: как записали
         const r = await sendJSON('/api/assistant/voice', 'POST', { audio });
-        if (r.text) addLog('me', r.text);
-        await execute(r.actions, r.say);
+        if (r.text) {
+          addLog('me', r.text);
+          const local = parseVoice(r.text);   // сперва локальный разбор и здесь
+          if (local.length) { await execute(local); } else { await execute(r.actions, r.say); }
+        } else { await execute(r.actions, r.say); }
       } catch (e) { addLog('bot', e.message || 'Ассистент недоступен'); speak('Ассистент недоступен'); }
       finally { setPhase('idle'); }
     };
@@ -184,7 +280,7 @@ export default function VoiceAgent({ onGo, me }) {
       mr.start(); setPhase('listening'); vadRef.current = setTimeout(tick, 60);
     } catch { cleanup(); setPhase('idle'); addLog('bot', 'Не удалось начать запись.'); }
   };
-  const stopRec = () => { clearTimeout(vadRef.current); try { if (mrRef.current && mrRef.current.state !== 'inactive') mrRef.current.stop(); } catch {} };
+  const stopRec = () => { clearTimeout(vadRef.current); try { if (mrRef.current && mrRef.current.state !== 'inactive') mrRef.current.stop(); } catch {} try { recRef.current?.stop(); } catch {} };
   const cancelRec = () => { cancelRef.current = true; stopRec(); };
 
   const listening = phase === 'listening', processing = phase === 'processing';
@@ -193,15 +289,16 @@ export default function VoiceAgent({ onGo, me }) {
       {open && (
         <div className="va-panel">
           <div className="va-head">
-            <b>🎙 Голосовой ассистент</b>
+            <b>🎙 ДиДи <span className="va-sub">— голосовой ассистент</span></b>
             <button className="va-x" onClick={() => setOpen(false)} aria-label="Закрыть">×</button>
           </div>
           <div className="va-log">
-            {log.length === 0 && <div className="va-hint">Нажмите «Говорить», скажите команду и сделайте паузу — я всё выполню. Например: «Открой календарь и впиши встречу на завтра в 10 утра», «Создай срочную задачу — отчёт к пятнице», «Оформи заявку на отпуск с 15 июля».</div>}
+            {log.length === 0 && <div className="va-hint">Я — <b>ДиДи</b>. Нажмите «Говорить», скажите команду и сделайте паузу — я всё выполню. Например: «Открой календарь и впиши встречу на завтра в 10 утра», «Создай срочную задачу — отчёт к пятнице», «Оформи заявку на отпуск с 15 июля».{SR ? ' Включите «Реагировать на имя» — и просто скажите «ДиДи».' : ''}</div>}
             {log.map((m, i) => <div key={i} className={`va-msg ${m.role}`}>{m.text}</div>)}
+            {listening && interim && <div className="va-msg me interim">{interim}…</div>}
             {processing && <div className="va-msg bot">Распознаю и выполняю…</div>}
           </div>
-          {hasMic ? (
+          {canVoice ? (
             <button className={`va-mic ${listening ? 'on' : ''}`} onClick={listening ? stopRec : startRec} disabled={processing}
               style={listening ? { '--lvl': Math.min(1, level * 8) } : undefined}>
               {listening ? '● Слушаю… (пауза = выполнить)' : processing ? 'Обрабатываю…' : '🎙 Говорить'}
@@ -209,13 +306,19 @@ export default function VoiceAgent({ onGo, me }) {
           ) : (
             <div className="va-nofb">Микрофон недоступен — введите команду текстом:</div>
           )}
-          <form className="va-typed" onSubmit={(e) => { e.preventDefault(); dispatchText(typed); setTyped(''); }}>
+          {SR && (
+            <label className="va-wake" title="Фоновое прослушивание имени «ДиДи»">
+              <input type="checkbox" checked={wake} onChange={(e) => setWake(e.target.checked)} />
+              <span>Реагировать на имя «ДиДи»{wake ? ' — слушаю…' : ''}</span>
+            </label>
+          )}
+          <form className="va-typed" onSubmit={(e) => { e.preventDefault(); runText(typed); setTyped(''); }}>
             <input className="adm-input" placeholder="Команда текстом…" value={typed} onChange={(e) => setTyped(e.target.value)} disabled={processing} />
             <button className="adm-btn sm" type="submit" disabled={processing || !typed.trim()}>→</button>
           </form>
         </div>
       )}
-      <button className={`va-fab ${listening ? 'live' : ''}`} onClick={() => setOpen((o) => !o)} aria-label="Голосовой ассистент" title="Голосовой ассистент">
+      <button className={`va-fab ${listening ? 'live' : ''} ${wake && !open ? 'wake' : ''}`} onClick={() => setOpen((o) => !o)} aria-label="ДиДи — голосовой ассистент" title={wake ? 'ДиДи слушает имя' : 'ДиДи — голосовой ассистент'}>
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
         </svg>
