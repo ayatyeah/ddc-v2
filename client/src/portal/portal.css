@@ -536,6 +536,17 @@
 .va-mic.on { transform: scale(calc(1 + var(--lvl, 0) * 0.04)); }
 .va-fab.live { animation: vaPulse 1.3s ease-in-out infinite; }
 
+/* ИИ-анализ заявки (для согласующего) */
+.pt-req-ai { margin: 10px 0 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); background: color-mix(in srgb, var(--blue) 6%, transparent); }
+.pt-req-ai-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pt-req-ai-badge { font-size: 11.5px; font-weight: 700; color: var(--blue); }
+.pt-req-ai-prio { font-size: 11px; font-weight: 700; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); padding: 2px 8px; border-radius: 20px; }
+.pt-req-ai-sum { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.pt-req-ai-rec { margin-top: 8px; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft); border-left: 3px solid var(--c); padding-left: 10px; }
+.pt-req-ai-rec b { color: var(--c); }
+.pt-req-btn.ai { background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent); }
+.pt-req-btn.ai:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 20%, transparent); }
+
 /* Канбан-доска задач (drag-and-drop) */
 .pt-viewtoggle { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .pt-viewtoggle button { border: none; background: transparent; color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; }

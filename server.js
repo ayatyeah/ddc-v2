@@ -1484,8 +1484,38 @@ app.post('/api/portal/requests', auth, async (req, res) => {
     const { rows } = await db.query(
       `INSERT INTO requests (kind, title, body, status, author_id, author_name) VALUES ($1,$2,$3,'review',$4,$5) RETURNING *`,
       [kind, title, body, me, req.admin.u]);
+    broadcastAll('request', { id: rows[0].id });   // списки согласующих обновятся мгновенно
     res.status(201).json(mapReq(rows[0]));
   } catch (e) { console.error('POST /api/portal/requests:', e.message); res.status(500).json({ error: 'Не удалось создать заявку' }); }
+});
+
+// ИИ-анализ заявки для согласующего: приоритет, суть, рекомендация (одобрить/отклонить/уточнить).
+app.post('/api/portal/requests/:id(\\d+)/analyze', auth, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.admin.role)) return res.status(403).json({ error: 'Только для согласующих' });
+  try {
+    const { rows } = await db.query(`SELECT * FROM requests WHERE id = $1`, [Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Заявка не найдена' });
+    const r = rows[0];
+    const prompt = `Ты — HR-ассистент корпоративного портала DDC. Проанализируй заявку сотрудника и верни СТРОГО JSON:
+{"priority":"low|normal|high","summary":"1-2 предложения сути по-русски","recommendation":"approve|reject|clarify","reason":"почему такая рекомендация, 1 короткое предложение по-русски"}
+Заявка:
+Тип: ${REQUEST_KINDS[r.kind] || r.kind}
+Заголовок: ${r.title}
+Детали: ${r.body || '—'}
+Автор: ${r.author_name}
+Отвечай ТОЛЬКО JSON, без markdown.`;
+    let ai = null;
+    try { ai = parseJsonLoose(await callGemini(prompt, 400)); } catch { /* фолбэк ниже */ }
+    if (!ai) return res.status(502).json({ error: 'ИИ недоступен' });
+    const clean = {
+      priority: ['low', 'normal', 'high'].includes(ai.priority) ? ai.priority : 'normal',
+      summary: String(ai.summary || '').slice(0, 400),
+      recommendation: ['approve', 'reject', 'clarify'].includes(ai.recommendation) ? ai.recommendation : 'clarify',
+      reason: String(ai.reason || '').slice(0, 300),
+    };
+    await db.query(`UPDATE requests SET ai = $1 WHERE id = $2`, [JSON.stringify(clean), r.id]);
+    res.json({ ai: clean });
+  } catch (e) { console.error('POST /api/portal/requests/analyze:', e.message); res.status(502).json({ error: 'Ошибка анализа' }); }
 });
 
 // Согласование: одобрить/отклонить/выполнено — только руководители/замы (admin/manager)
@@ -1501,6 +1531,7 @@ app.patch('/api/portal/requests/:id(\\d+)', auth, async (req, res) => {
     if (rows[0].author_id && rows[0].author_id !== req.admin.id) {
       await notify(rows[0].author_id, 'request', null, `Заявка: ${REQ_STATUS_LABEL[status]}`, rows[0].title);
     }
+    broadcastAll('request', { id: rows[0].id });
     res.json(mapReq(rows[0]));
   } catch (e) { console.error('PATCH /api/portal/requests:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
 });
@@ -2802,6 +2833,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
      );
      CREATE INDEX IF NOT EXISTS idx_portal_news_created ON portal_news (pinned DESC, created_at DESC);
+     ALTER TABLE requests ADD COLUMN IF NOT EXISTS ai JSONB;   -- ИИ-анализ заявки для согласующего
      -- Семантический индекс портала для ИИ-поиска и RAG «Спроси у ДиДи»
      CREATE TABLE IF NOT EXISTS search_index (
        id         SERIAL PRIMARY KEY,

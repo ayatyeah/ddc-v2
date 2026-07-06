@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
+import { on as rtOn } from './realtime.js';
+
+const AI_PRIO = { high: ['Высокий приоритет', '#c0455a'], normal: ['Обычный приоритет', '#2f6fe0'], low: ['Низкий приоритет', '#5b6472'] };
+const AI_REC = { approve: ['Рекомендую одобрить', '#1f9d57'], reject: ['Рекомендую отклонить', '#c0455a'], clarify: ['Стоит уточнить детали', '#c8960c'] };
 
 const KINDS = [
   { id: 'vacation', label: 'Отпуск' }, { id: 'sick', label: 'Больничный' }, { id: 'trip', label: 'Командировка' },
@@ -17,9 +21,18 @@ export default function Requests({ me, onAuthLost }) {
   const [form, setForm] = useState({ kind: 'vacation', title: '', body: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [aiBusy, setAiBusy] = useState(null);   // id заявки, анализируемой ИИ
 
   const load = useCallback(() => getJSON('/api/portal/requests').then(setItems).catch((e) => { if (e.status === 401) onAuthLost?.(); }), [onAuthLost]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => rtOn('request', () => load()), [load]);   // живое обновление списка
+
+  const analyze = async (r) => {
+    setAiBusy(r.id);
+    try { const d = await sendJSON(`/api/portal/requests/${r.id}/analyze`, 'POST', {}); setItems((its) => its.map((x) => x.id === r.id ? { ...x, ai: d.ai } : x)); }
+    catch (e) { if (e.status === 401) onAuthLost?.(); else alert(e.message || 'ИИ недоступен'); }
+    finally { setAiBusy(null); }
+  };
 
   const create = async (e) => {
     e?.preventDefault?.();
@@ -62,8 +75,21 @@ export default function Requests({ me, onAuthLost }) {
                 <span className="pt-req-st" style={{ background: col }}>{lbl}</span>
               </div>
               {r.body && <p className="pt-req-b">{r.body}</p>}
+              {r.ai && (
+                <div className="pt-req-ai">
+                  <div className="pt-req-ai-h">
+                    <span className="pt-req-ai-badge">🤖 ИИ-анализ</span>
+                    <span className="pt-req-ai-prio" style={{ '--c': (AI_PRIO[r.ai.priority] || AI_PRIO.normal)[1] }}>{(AI_PRIO[r.ai.priority] || AI_PRIO.normal)[0]}</span>
+                  </div>
+                  {r.ai.summary && <p className="pt-req-ai-sum">{r.ai.summary}</p>}
+                  <div className="pt-req-ai-rec" style={{ '--c': (AI_REC[r.ai.recommendation] || AI_REC.clarify)[1] }}>
+                    <b>{(AI_REC[r.ai.recommendation] || AI_REC.clarify)[0]}</b>{r.ai.reason ? ` — ${r.ai.reason}` : ''}
+                  </div>
+                </div>
+              )}
               <div className="pt-req-act">
                 {isHead && r.status === 'review' && (<>
+                  <button className="pt-req-btn ai" onClick={() => analyze(r)} disabled={aiBusy === r.id}>{aiBusy === r.id ? 'Анализ…' : '🤖 ИИ-анализ'}</button>
                   <button className="pt-req-btn ok" onClick={() => decide(r, 'approved')}>Одобрить</button>
                   <button className="pt-req-btn no" onClick={() => decide(r, 'rejected')}>Отклонить</button>
                 </>)}
