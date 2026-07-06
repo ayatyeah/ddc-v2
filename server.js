@@ -371,6 +371,15 @@ async function fetchLeadRow(id) {
   return rows[0] || null;
 }
 
+// Запись события входа (аудит безопасности).
+async function logLogin(req, userId, username, event) {
+  try {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim().slice(0, 60);
+    const ua = String(req.headers['user-agent'] || '').slice(0, 200);
+    await db.query(`INSERT INTO login_events (user_id, username, event, ip, ua) VALUES ($1,$2,$3,$4,$5)`, [userId || null, String(username || '').slice(0, 60), event, ip, ua]);
+  } catch { /* аудит не критичен */ }
+}
+
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   // id — идентификатор записи в users (нужен для привязки лидов к сотруднику).
@@ -378,6 +387,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   const issue = (u, role, id = null) => {
     const token = jwt.sign({ u, role, id }, SECRET, { expiresIn: '8h' });
     res.cookie('ddc_token', token, { ...COOKIE_OPTS, maxAge: 8 * 60 * 60 * 1000 });
+    logLogin(req, id, u, 'success');
     return res.json({ ok: true, username: u, role, id });
   };
 
@@ -406,6 +416,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   } catch (e) {
     console.error('POST /api/login:', e.message);
   }
+  logLogin(req, null, username, 'fail');
   return res.status(401).json({ error: 'Неверный логин или пароль' });
 });
 
@@ -419,9 +430,10 @@ app.post('/api/login/2fa', loginLimiter, async (req, res) => {
     const { rows } = await db.query(`SELECT id, username, role, active, totp_secret, totp_enabled FROM users WHERE id = $1`, [payload.uid]);
     const u = rows[0];
     if (!u || !u.active || !u.totp_enabled) return res.status(401).json({ error: 'Недоступно' });
-    if (!totpVerify(u.totp_secret, code)) return res.status(401).json({ error: 'Неверный код' });
+    if (!totpVerify(u.totp_secret, code)) { logLogin(req, u.id, u.username, '2fa_fail'); return res.status(401).json({ error: 'Неверный код' }); }
     const token = jwt.sign({ u: u.username, role: u.role, id: u.id }, SECRET, { expiresIn: '8h' });
     res.cookie('ddc_token', token, { ...COOKIE_OPTS, maxAge: 8 * 60 * 60 * 1000 });
+    logLogin(req, u.id, u.username, '2fa_success');
     res.json({ ok: true, username: u.username, role: u.role, id: u.id });
   } catch (e) { console.error('POST /api/login/2fa:', e.message); res.status(500).json({ error: 'Ошибка входа' }); }
 });
@@ -2958,6 +2970,23 @@ app.patch('/api/admin/incidents/:id(\\d+)', auth, requireRole('admin', 'manager'
     res.json({ ok: true });
   } catch (e) { console.error('PATCH /api/admin/incidents:', e.message); res.status(500).json({ error: 'Не удалось' }); }
 });
+// ── Аудит безопасности: журнал входов, охват 2FA, активные сессии ──
+app.get('/api/admin/security', auth, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const events = (await db.query(`SELECT username, event, ip, ua, created_at FROM login_events ORDER BY id DESC LIMIT 60`)).rows;
+    const tw = (await db.query(`SELECT count(*)::int total, count(*) FILTER (WHERE totp_enabled)::int enabled FROM users WHERE active = TRUE`)).rows[0];
+    const failed24 = (await db.query(`SELECT count(*)::int c FROM login_events WHERE event IN ('fail','2fa_fail') AND created_at > now() - interval '24 hours'`)).rows[0].c;
+    // Активные сессии — онлайн-пользователи (живые SSE-соединения) с именами.
+    const onlineIds = onlineUserIds().filter((id) => id > 0);
+    let sessions = [];
+    if (onlineIds.length) {
+      const { rows } = await db.query(`SELECT id, COALESCE(NULLIF(full_name,''),username) AS name, role, last_seen FROM users WHERE id = ANY($1::int[])`, [onlineIds]);
+      sessions = rows;
+    }
+    res.json({ events, twofa: { total: tw.total, enabled: tw.enabled }, failed24, sessions, onlineCount: sseClients.size });
+  } catch (e) { console.error('GET /api/admin/security:', e.message); res.status(500).json({ error: 'Ошибка' }); }
+});
+
 // Публичный статус (для будущей публичной статус-страницы) — только сводка, без внутренних деталей.
 app.get('/api/status', async (req, res) => {
   try {
@@ -3424,7 +3453,14 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        severity TEXT NOT NULL DEFAULT 'minor',       -- minor|major|critical
        status TEXT NOT NULL DEFAULT 'open',           -- open|monitoring|resolved
        note TEXT NOT NULL DEFAULT '', started_at TIMESTAMPTZ NOT NULL DEFAULT now(), resolved_at TIMESTAMPTZ
-     );`
+     );
+     -- Журнал входов (аудит безопасности)
+     CREATE TABLE IF NOT EXISTS login_events (
+       id SERIAL PRIMARY KEY, user_id INTEGER, username TEXT NOT NULL DEFAULT '',
+       event TEXT NOT NULL DEFAULT 'success',   -- success|fail|2fa_success|2fa_fail
+       ip TEXT NOT NULL DEFAULT '', ua TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE INDEX IF NOT EXISTS idx_login_events_created ON login_events (created_at DESC);`
   ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
    .then(() => seedKnowledge())
