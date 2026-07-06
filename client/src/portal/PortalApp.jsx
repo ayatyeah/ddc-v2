@@ -739,6 +739,8 @@ function Tasks({ me, onAuthLost }) {
 function Departments({ me, onAuthLost }) {
   const [depts, setDepts] = useState([]);
   const [edit, setEdit] = useState(null);   // {id,name,desc} редактируемого отдела
+  const [view, setView] = useState('org');  // org (дерево) | list (карточки)
+  const online = usePresence();
   const isAdmin = me?.role === 'admin';
   const load = useCallback(() => { getJSON('/api/portal/departments').then((d) => setDepts(d.departments || [])).catch((e) => { if (e.status === 401) onAuthLost?.(); }); }, [onAuthLost]);
   useEffect(() => { load(); }, [load]);
@@ -749,10 +751,47 @@ function Departments({ me, onAuthLost }) {
     try { await sendJSON(`/api/admin/departments/${edit.id}`, 'PATCH', { name: edit.name.trim(), descr: edit.desc }); setEdit(null); load(); }
     catch (e2) { if (e2.status === 401) onAuthLost?.(); else alert(e2.message || 'Не удалось'); }
   };
+  const totalPeople = depts.reduce((s, d) => s + (d.members?.length || 0), 0);
 
   return (
     <div className="pt-view">
-      <div className="pt-view-h"><h2>Отделы DDC</h2><span className="pt-hint">Структура и сотрудники</span></div>
+      <div className="pt-view-h">
+        <h2>Отделы ЦЦР</h2>
+        <div className="pt-viewtoggle">
+          <button className={view === 'org' ? 'on' : ''} onClick={() => setView('org')}>🏛 Оргструктура</button>
+          <button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>☰ Список</button>
+        </div>
+      </div>
+
+      {view === 'org' && (
+        <div className="orgchart">
+          <div className="org-root-node">
+            <span className="org-logo">🏛</span>
+            <div className="org-root-t"><b>ЦЦР</b><small>Центр цифрового развития · {totalPeople} чел.</small></div>
+          </div>
+          <div className="org-trunk" />
+          <div className="org-branches">
+            {depts.map((d, i) => (
+              <div className="org-branch" key={d.id ?? i}>
+                <div className="org-dept">
+                  <b>{d.name}</b><small>{d.members?.length || 0} чел.</small>
+                </div>
+                <div className="org-people">
+                  {(d.members || []).length === 0 ? <span className="org-empty">—</span>
+                    : d.members.map((m, j) => (
+                      <div className="org-leaf" key={j} title={m.name}>
+                        <span className={`pt-av xs ${online(m.id) ? 'on' : ''}`}>{initials(m.name)}</span>
+                        <span className="org-leaf-n">{m.name}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'list' && (
       <div className="pt-depts">
         {depts.map((d, i) => (
           <div className="pt-dept" key={d.id ?? i}>
@@ -768,6 +807,7 @@ function Departments({ me, onAuthLost }) {
           </div>
         ))}
       </div>
+      )}
 
       {edit && (
         <div className="pt-modal-bg" onClick={() => setEdit(null)}>

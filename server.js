@@ -1660,6 +1660,34 @@ const KZ_HOLIDAYS = [
   ['05-07', 'День защитника Отечества'], ['05-09', 'День Победы'], ['07-06', 'День столицы'],
   ['08-30', 'День Конституции'], ['10-25', 'День Республики'], ['12-16', 'День Независимости'],
 ];
+// Экспорт календаря в .ics (iCalendar) — открывается в Google Calendar / Outlook / Apple.
+function icsStamp(d, dateOnly) {
+  const dt = new Date(d);
+  if (dateOnly) return dt.toISOString().slice(0, 10).replace(/-/g, '');
+  return dt.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+app.get('/api/portal/calendar.ics', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT id, kind, title, descr, starts_at, ends_at, all_day FROM events ORDER BY starts_at LIMIT 800`);
+    const esc = (s) => String(s || '').replace(/([,;\\])/g, '\\$1').replace(/\r?\n/g, '\\n');
+    const now = icsStamp(new Date());
+    let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//DDC//Portal//RU\r\nCALSCALE:GREGORIAN\r\nX-WR-CALNAME:Календарь ЦЦР\r\n';
+    for (const e of rows) {
+      ics += 'BEGIN:VEVENT\r\n';
+      ics += `UID:evt-${e.id}@ddc-portal\r\nDTSTAMP:${now}\r\n`;
+      if (e.all_day) ics += `DTSTART;VALUE=DATE:${icsStamp(e.starts_at, true)}\r\n`;
+      else { ics += `DTSTART:${icsStamp(e.starts_at)}\r\n`; if (e.ends_at) ics += `DTEND:${icsStamp(e.ends_at)}\r\n`; }
+      ics += `SUMMARY:${esc(e.title)}\r\n`;
+      if (e.descr) ics += `DESCRIPTION:${esc(e.descr)}\r\n`;
+      ics += 'END:VEVENT\r\n';
+    }
+    ics += 'END:VCALENDAR\r\n';
+    res.set('Content-Type', 'text/calendar; charset=utf-8');
+    res.set('Content-Disposition', 'attachment; filename="ddc-calendar.ics"');
+    res.send(ics);
+  } catch (e) { console.error('GET /api/portal/calendar.ics:', e.message); res.status(500).json({ error: 'Ошибка экспорта' }); }
+});
+
 app.get('/api/portal/events', auth, async (req, res) => {
   // Диапазон запрашиваемого месяца (ISO-даты from/to); по умолчанию текущий месяц ±.
   const from = (req.query.from && String(req.query.from).slice(0, 10)) || null;

@@ -563,6 +563,25 @@
 .pt-req-btn.ai { background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent); }
 .pt-req-btn.ai:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 20%, transparent); }
 
+/* Оргструктура (дерево) */
+.orgchart { display: flex; flex-direction: column; align-items: center; padding: 8px 0 20px; }
+.org-root-node { display: inline-flex; align-items: center; gap: 12px; padding: 14px 22px; border-radius: 14px; background: linear-gradient(135deg, #2f6fe0, #5a3fd6); color: #fff; box-shadow: 0 10px 26px rgba(47,111,224,0.4); }
+.org-logo { font-size: 24px; }
+.org-root-t b { display: block; font-size: 17px; }
+.org-root-t small { font-size: 12px; opacity: 0.85; }
+.org-trunk { width: 2px; height: 22px; background: var(--line-2); }
+.org-branches { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; width: 100%; }
+.org-branch { position: relative; flex: 1 1 240px; max-width: 320px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-card); overflow: hidden; }
+.org-branch::before { content: ''; position: absolute; top: -12px; left: 50%; width: 2px; height: 12px; background: var(--line-2); }
+.org-dept { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 13px 15px; background: color-mix(in srgb, var(--blue) 7%, transparent); border-bottom: 1px solid var(--line); }
+.org-dept b { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.org-dept small { flex: none; font-size: 11px; color: var(--ink-faint); }
+.org-people { display: flex; flex-direction: column; gap: 2px; padding: 8px; }
+.org-leaf { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 9px; font-size: 13px; transition: background 0.15s; }
+.org-leaf:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.org-leaf-n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.org-empty { padding: 10px; text-align: center; color: var(--ink-faint); font-size: 12px; }
+
 /* Канбан-доска задач (drag-and-drop) */
 .pt-viewtoggle { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .pt-viewtoggle button { border: none; background: transparent; color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
