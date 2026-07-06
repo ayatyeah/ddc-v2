@@ -1013,8 +1013,8 @@ const clip = (v, n) => String(v ?? '').trim().slice(0, n);
 app.get('/api/portal/users', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, username, full_name, department, role FROM users WHERE active = TRUE ORDER BY full_name NULLS LAST, username`);
-    res.json(rows.map((u) => ({ id: u.id, name: u.full_name || u.username, department: u.department || '', role: u.role })));
+      `SELECT id, username, full_name, department, role, position, phone, skills, hired_at FROM users WHERE active = TRUE ORDER BY full_name NULLS LAST, username`);
+    res.json(rows.map((u) => ({ id: u.id, name: u.full_name || u.username, department: u.department || '', role: u.role, position: u.position || '', phone: u.phone || '', skills: u.skills || '', hired_at: u.hired_at })));
   } catch (e) { console.error('GET /api/portal/users:', e.message); res.status(500).json({ error: 'Ошибка чтения сотрудников' }); }
 });
 
@@ -1620,6 +1620,109 @@ app.delete('/api/portal/polls/:id(\\d+)', auth, async (req, res) => {
     broadcastAll('poll', { id, deleted: true });
     res.json({ ok: true });
   } catch (e) { console.error('DELETE /api/portal/polls:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
+});
+
+// ── Геймификация: рейтинг активности + бейджи (очки считаются на лету из активности) ──
+app.get('/api/portal/leaderboard', auth, async (req, res) => {
+  try {
+    const users = (await db.query(`SELECT id, COALESCE(NULLIF(full_name,''),username) AS name, department FROM users WHERE active IS NOT FALSE`)).rows;
+    const map = new Map(users.map((u) => [u.id, { id: u.id, name: u.name, department: u.department || '', tasks: 0, news: 0, polls: 0, docs: 0, msgs: 0 }]));
+    const add = (id, f, n) => { const r = map.get(Number(id)); if (r) r[f] += n; };
+    (await db.query(`SELECT assignee_id id, count(*)::int c FROM tasks WHERE status='done' AND assignee_id IS NOT NULL GROUP BY assignee_id`)).rows.forEach((r) => add(r.id, 'tasks', r.c));
+    (await db.query(`SELECT author_id id, count(*)::int c FROM portal_news WHERE author_id IS NOT NULL GROUP BY author_id`)).rows.forEach((r) => add(r.id, 'news', r.c));
+    (await db.query(`SELECT author_id id, count(*)::int c FROM polls WHERE author_id IS NOT NULL GROUP BY author_id`)).rows.forEach((r) => add(r.id, 'polls', r.c));
+    (await db.query(`SELECT author_id id, count(*)::int c FROM documents WHERE author_id IS NOT NULL GROUP BY author_id`)).rows.forEach((r) => add(r.id, 'docs', r.c));
+    (await db.query(`SELECT author_id id, count(*)::int c FROM messages WHERE author_id IS NOT NULL GROUP BY author_id`)).rows.forEach((r) => add(r.id, 'msgs', r.c));
+    const out = [...map.values()].map((r) => {
+      const points = r.tasks * 10 + r.news * 15 + r.polls * 8 + r.docs * 5 + Math.min(r.msgs, 50);
+      const badges = [];
+      if (r.tasks >= 5) badges.push({ icon: '✅', label: 'Исполнитель' });
+      if (r.news >= 3) badges.push({ icon: '📣', label: 'Ньюсмейкер' });
+      if (r.msgs >= 30) badges.push({ icon: '💬', label: 'Коммуникатор' });
+      if (points >= 80) badges.push({ icon: '🏅', label: 'Активист' });
+      if (points > 0 && !badges.length) badges.push({ icon: '🚀', label: 'Старт' });
+      return { id: r.id, name: r.name, department: r.department, points, badges };
+    }).sort((a, b) => b.points - a.points);
+    res.json(out);
+  } catch (e) { console.error('GET /api/portal/leaderboard:', e.message); res.status(500).json({ error: 'Ошибка' }); }
+});
+
+// Обновление собственного профиля (контакты, навыки, должность)
+app.patch('/api/portal/profile', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Профиль доступен сотрудникам с учётной записью' });
+  try {
+    await db.query(`UPDATE users SET phone=$1, skills=$2, position=$3 WHERE id=$4`,
+      [clip(req.body?.phone, 40), clip(req.body?.skills, 500), clip(req.body?.position, 120), me]);
+    res.json({ ok: true });
+  } catch (e) { console.error('PATCH /api/portal/profile:', e.message); res.status(500).json({ error: 'Не удалось сохранить' }); }
+});
+
+// ── Онбординг: чек-лист нового сотрудника ──
+const ONBOARD_STEPS = [
+  { id: 'account', label: 'Активировать учётную запись портала' },
+  { id: 'profile', label: 'Заполнить профиль: контакты и навыки' },
+  { id: 'ib', label: 'Ознакомиться с регламентом ИБ и настроить 2FA' },
+  { id: 'team', label: 'Вступить в общий чат команды' },
+  { id: 'docs', label: 'Изучить регламенты в разделе «Документы»' },
+  { id: 'mentor', label: 'Познакомиться с руководителем и наставником' },
+];
+app.get('/api/portal/onboarding', auth, async (req, res) => {
+  const me = req.admin.id;
+  try {
+    const done = me ? (await db.query(`SELECT step FROM onboarding WHERE user_id=$1 AND done`, [me])).rows.map((r) => r.step) : [];
+    res.json({ steps: ONBOARD_STEPS, done });
+  } catch (e) { console.error('GET onboarding:', e.message); res.status(500).json({ error: 'Ошибка' }); }
+});
+app.post('/api/portal/onboarding', auth, async (req, res) => {
+  const me = req.admin.id;
+  if (!me) return res.status(403).json({ error: 'Доступно сотрудникам' });
+  const step = clip(req.body?.step, 40), done = !!req.body?.done;
+  if (!ONBOARD_STEPS.find((s) => s.id === step)) return res.status(400).json({ error: 'Некорректный шаг' });
+  try {
+    await db.query(`INSERT INTO onboarding (user_id, step, done, done_at) VALUES ($1,$2,$3, CASE WHEN $3 THEN now() END)
+                    ON CONFLICT (user_id, step) DO UPDATE SET done=$3, done_at=CASE WHEN $3 THEN now() END`, [me, step, done]);
+    res.json({ ok: true });
+  } catch (e) { console.error('POST onboarding:', e.message); res.status(500).json({ error: 'Не удалось' }); }
+});
+
+// ── Бронирование переговорных ──
+app.get('/api/portal/rooms', auth, async (req, res) => {
+  try { res.json((await db.query(`SELECT id, name, capacity FROM rooms ORDER BY sort_order, id`)).rows); }
+  catch (e) { res.status(500).json({ error: 'Ошибка' }); }
+});
+app.get('/api/portal/bookings', auth, async (req, res) => {
+  const day = String(req.query.day || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+  try {
+    const rows = (await db.query(`SELECT id, room_id, title, day, start_min, end_min, user_id, user_name FROM bookings WHERE day=$1 ORDER BY start_min`, [day])).rows;
+    res.json({ day, bookings: rows });
+  } catch (e) { res.status(500).json({ error: 'Ошибка' }); }
+});
+app.post('/api/portal/bookings', auth, async (req, res) => {
+  const me = req.admin.id;
+  const room_id = Number(req.body?.room_id), day = String(req.body?.day || '').slice(0, 10);
+  const start_min = Number(req.body?.start_min), end_min = Number(req.body?.end_min);
+  const title = clip(req.body?.title, 200) || 'Встреча';
+  if (!room_id || !day || !(end_min > start_min)) return res.status(400).json({ error: 'Некорректные данные' });
+  try {
+    const conflict = (await db.query(`SELECT 1 FROM bookings WHERE room_id=$1 AND day=$2 AND start_min < $4 AND end_min > $3 LIMIT 1`, [room_id, day, start_min, end_min])).rows.length;
+    if (conflict) return res.status(409).json({ error: 'Это время в переговорной уже занято' });
+    const { rows } = await db.query(`INSERT INTO bookings (room_id,title,day,start_min,end_min,user_id,user_name) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [room_id, title, day, start_min, end_min, me, req.admin.u]);
+    broadcastAll('booking', { day });
+    res.status(201).json({ id: rows[0].id });
+  } catch (e) { console.error('POST bookings:', e.message); res.status(500).json({ error: 'Не удалось забронировать' }); }
+});
+app.delete('/api/portal/bookings/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const b = (await db.query(`SELECT user_id FROM bookings WHERE id=$1`, [id])).rows[0];
+    if (!b) return res.status(404).json({ error: 'Не найдено' });
+    if (b.user_id !== req.admin.id && !['admin', 'manager'].includes(req.admin.role)) return res.status(403).json({ error: 'Нет прав' });
+    await db.query(`DELETE FROM bookings WHERE id=$1`, [id]);
+    broadcastAll('booking', {});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Не удалось' }); }
 });
 
 // ── Рабочие задачи ──
@@ -2333,13 +2436,17 @@ app.post('/api/assistant/ask', auth, async (req, res) => {
   try {
     const hits = await semanticSearch(q, 6);
     const sources = hits.map((h) => ({ kind: h.kind, kindLabel: KIND_LABEL[h.kind] || h.kind, ref_id: h.ref_id, title: h.title, tab: h.tab }));
-    if (!hits.length) return res.json({ answer: 'Не нашёл информации по этому вопросу в базе портала. Попробуйте переформулировать.', sources: [] });
+    const NOINFO = 'Честно — по этому вопросу я ничего не нашёл в базе портала, так что придумывать не буду 🙂 Лучше уточнить у HR или в разделе «Контакты». Могу ещё поискать, если переформулируете.';
+    // Порог релевантности: не отвечаем «из головы», если ничего похожего не нашли.
+    const top = hits[0]?.score;
+    const weak = OPENAI_KEY ? (top == null || top < 0.2) : hits.length === 0;   // редирект только при явной нерелевантности; остальное отсекает промпт
+    if (weak) return res.json({ answer: NOINFO, sources: [] });
     if (!GEMINI_KEYS.length && !OPENAI_KEY) return res.json({ answer: 'Вот что нашлось по вашему запросу:', sources });
     const context = hits.map((h, i) => `[${i + 1}] (${KIND_LABEL[h.kind] || h.kind}) ${h.title}\n${(h.body || h.snippet || '').slice(0, 900)}`).join('\n\n');
-    const prompt = `Ты — ДиДи, дружелюбный ассистент корпоративного портала DDC (Центр цифрового развития). Ответь на вопрос сотрудника ПО-РУССКИ, опираясь ТОЛЬКО на приведённые фрагменты базы портала. Пиши кратко, по делу, человеческим языком. Если в данных нет ответа — честно скажи об этом. Не выдумывай факты.\n\nФрагменты базы:\n${context}\n\nВопрос: ${q}\n\nОтвет:`;
+    const prompt = `Ты — ДиДи, тёплый и дружелюбный внутренний ИИ-помощник сотрудников ЦЦР (Центр цифрового развития). Общайся по-русски живо, по-человечески, дружелюбно (можно на «ты», можно лёгкий эмодзи), как отзывчивый коллега — но по делу и кратко. Отвечай ТОЛЬКО на основе фрагментов базы портала ниже. ЖЁСТКОЕ ПРАВИЛО: если ответа в данных нет — не выдумывай, а ответь ровно так: "${NOINFO}".\n\nФрагменты базы портала:\n${context}\n\nВопрос коллеги: ${q}\n\nОтвет ДиДи:`;
     let answer = '';
     try { answer = cleanAnswer(await aiText(prompt)); } catch { /* фолбэк ниже */ }
-    if (!answer) answer = 'Вот что нашлось по вашему запросу:';
+    if (!answer) answer = NOINFO;
     res.json({ answer, sources });
   } catch (e) { console.error('POST /api/assistant/ask:', e.message); res.status(502).json({ error: 'ИИ недоступен: ' + (e.message || 'ошибка') }); }
 });
@@ -2373,11 +2480,16 @@ app.post('/api/public/ask', publicAskLimiter, async (req, res) => {
       const { rows } = await db.query(`SELECT title, body FROM search_index WHERE kind = 'service' AND (title ILIKE $1 OR body ILIKE $1) LIMIT 5`, [`%${q}%`]);
       hits = rows;
     }
-    const ctx = hits.map((h, i) => `[${i + 1}] ${h.title}\n${(h.body || '').slice(0, 600)}`).join('\n\n') || '(нет данных)';
-    const prompt = `Ты — дружелюбный ассистент сайта Центра цифрового развития (ЦЦР) — дочерней организации Национального Банка Казахстана. Ответь на вопрос посетителя ПО-РУССКИ кратко (2–4 предложения), опираясь на список услуг ниже. Если спрашивают, как заказать услугу, оставить заявку или связаться — предложи оформить заявку через раздел «Контакты» на сайте. Не выдумывай конкретные цены и сроки.\n\nУслуги ЦЦР:\n${ctx}\n\nВопрос: ${q}\n\nОтвет:`;
+    // Порог релевантности: если ничего похожего не нашли — НЕ галлюцинируем, а перенаправляем в «Контакты».
+    const REDIRECT = 'Я отвечаю только по услугам и работе Центра цифрового развития и пока не нашёл точного ответа на ваш вопрос. Лучше уточнить у нас напрямую: оставьте заявку в разделе «Контакты» на сайте или позвоните в контакт-центр 1477.';
+    const top = hits[0]?.score;
+    const weak = OPENAI_KEY ? (top == null || top < 0.2) : hits.length === 0;   // явно нерелевантно → сразу редирект; пограничное отсекает промпт
+    if (weak) return res.json({ answer: REDIRECT });
+    const ctx = hits.map((h, i) => `[${i + 1}] ${h.title}\n${(h.body || '').slice(0, 600)}`).join('\n\n');
+    const prompt = `Ты — виртуальный консультант официального сайта Центра цифрового развития (ЦЦР), дочерней организации Национального Банка Казахстана. Твоя аудитория — клиенты и партнёры. Отвечай ПО-РУССКИ в сдержанном официально-деловом тоне, на «вы», кратко (2–4 предложения), без панибратства и эмодзи. Отвечай СТРОГО по списку услуг ниже. ЖЁСТКОЕ ПРАВИЛО: если в данных нет ответа — НЕ придумывай факты, цены, сроки и названия, а ответь ровно так: "${REDIRECT}". По вопросам заказа услуг и сотрудничества направляй в раздел «Контакты» или к контакт-центру 1477.\n\nУслуги ЦЦР:\n${ctx}\n\nВопрос клиента: ${q}\n\nОтвет консультанта:`;
     let answer = '';
     try { answer = cleanAnswer(await aiText(prompt)); } catch { /* фолбэк ниже */ }
-    if (!answer) answer = 'Уточните, пожалуйста, вопрос — или напишите нам через раздел «Контакты», мы поможем.';
+    if (!answer) answer = REDIRECT;
     res.json({ answer });
   } catch (e) { console.error('POST /api/public/ask:', e.message); res.status(502).json({ error: 'Ассистент недоступен' }); }
 });
@@ -2828,6 +2940,17 @@ async function seedKnowledge() {
   } catch (e) { console.error('seedKnowledge:', e.message); }
 }
 
+async function seedRooms() {
+  try {
+    const { rows } = await db.query(`SELECT count(*)::int c FROM rooms`);
+    if (rows[0].c > 0) return;
+    const rooms = [['Большая переговорная', 12], ['Малая переговорная', 6], ['Переговорная «Астана»', 8], ['Комната для звонков', 2]];
+    let i = 0;
+    for (const [name, cap] of rooms) await db.query(`INSERT INTO rooms (name, capacity, sort_order) VALUES ($1,$2,$3)`, [name, cap, i++]);
+    console.log(`✓ Переговорные: засеяно ${rooms.length}`);
+  } catch (e) { console.error('seedRooms:', e.message); }
+}
+
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`ЦЦР backend слушает на :${PORT} (${PROD ? 'production' : 'development'})`);
   // Лёгкая идемпотентная авто-миграция — чтобы деплой не требовал ручного `npm run init-db`.
@@ -3023,10 +3146,34 @@ const server = app.listen(PORT, '0.0.0.0', () => {
        option_idx INTEGER NOT NULL,
        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
        PRIMARY KEY (poll_id, user_id)
-     );`
+     );
+     -- Профиль сотрудника: контакты/навыки/должность/дата приёма
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS skills TEXT NOT NULL DEFAULT '';
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS position TEXT NOT NULL DEFAULT '';
+     ALTER TABLE users ADD COLUMN IF NOT EXISTS hired_at DATE;
+     -- Онбординг: прогресс чек-листа нового сотрудника
+     CREATE TABLE IF NOT EXISTS onboarding (
+       user_id INTEGER NOT NULL,
+       step    TEXT NOT NULL,
+       done    BOOLEAN NOT NULL DEFAULT FALSE,
+       done_at TIMESTAMPTZ,
+       PRIMARY KEY (user_id, step)
+     );
+     -- Бронирование переговорных
+     CREATE TABLE IF NOT EXISTS rooms (
+       id SERIAL PRIMARY KEY, name TEXT NOT NULL, capacity INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0
+     );
+     CREATE TABLE IF NOT EXISTS bookings (
+       id SERIAL PRIMARY KEY, room_id INTEGER NOT NULL, title TEXT NOT NULL DEFAULT '',
+       day DATE NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL,
+       user_id INTEGER, user_name TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     );
+     CREATE INDEX IF NOT EXISTS idx_bookings_day ON bookings (room_id, day);`
   ).then(() => { console.log('✓ Миграции (services/messages/tasks/departments/chats/files) на месте'); return seedServices(); })
    .then(() => seedDepartments())
    .then(() => seedKnowledge())
+   .then(() => seedRooms())
    .catch((e) => console.error('Авто-миграция:', e.message));
   // Прогрев AI-ленты новостей (не чаще раза в сутки)
   setTimeout(() => refreshFeedIfStale(false).catch(() => {}), 3000);
