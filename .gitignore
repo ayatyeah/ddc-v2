@@ -9,6 +9,9 @@ public/*.gz
 public/sw.js
 public/registerSW.js
 public/workbox-*.js
+# Артефакты сборки пребейка фона (источник — client/bake.html и client/public/bake/)
+public/bake.html
+public/bake/
 *.log
 .DS_Store
 .vscode/
