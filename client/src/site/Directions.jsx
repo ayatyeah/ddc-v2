@@ -49,8 +49,9 @@ export default function Directions() {
             const Ico = SERVICE_ICONS[s.icon] || SERVICE_ICONS.code;
             return (
               <Reveal as="button" type="button" key={s.id} className="dir-card" delay={i * 70}
+                style={{ '--c': s.color }}   /* цвет услуги — на карточке: кромка при ховере + иконка */
                 onClick={() => navigate('/uslugi')} aria-label={s.name}>
-                <div className="dir-ico" style={{ '--c': s.color }}><Ico size={22} /></div>
+                <div className="dir-ico"><Ico size={22} /></div>
                 <h3>{s.name}</h3>
                 <p>{s.desc}</p>
                 <span className="dir-more">{t(lang, 'dir.cta')} <IcoArrow size={14} /></span>

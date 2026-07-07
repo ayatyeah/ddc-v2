@@ -15,9 +15,10 @@ import NotFound from './NotFound.jsx';
 import SectionLanding from './SectionLanding.jsx';
 import LeadForm from './LeadForm.jsx';
 import Vacancies from './Vacancies.jsx';
+import Ribbon from './Ribbon.jsx';
 
 export function HomePage() {
-  return (<><Hero /><Directions /><div className="page-soft"><News /></div></>);
+  return (<><Hero /><Ribbon /><Directions /><div className="page-soft"><News /></div><CtaBand /></>);
 }
 export function ServicesPage() {
   return (<div className="page-top"><Showcase /><Services /><CtaBand /></div>);

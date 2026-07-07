@@ -51,9 +51,10 @@ export default function Services() {
             const Ico = SERVICE_ICONS[s.icon] || SERVICE_ICONS.code;
             return (
               <Reveal as="button" type="button" key={s.id} className="svc svc-btn" delay={i * 70}
+                style={{ '--c': s.color }}   /* цвет услуги — на карточке: кромка при ховере + иконка */
                 onClick={() => setApplyId(s.id)} aria-label={`${t(lang, 'services.apply')}: ${s.name}`}>
                 <span className="num">{String(i + 1).padStart(2, '0')}</span>
-                <div className="svc-ico" style={{ '--c': s.color }}><Ico size={24} /></div>
+                <div className="svc-ico"><Ico size={24} /></div>
                 <h3>{s.name}</h3>
                 <p>{s.desc}</p>
                 <span className="svc-cta">{t(lang, 'services.apply')} <IcoArrow size={15} /></span>

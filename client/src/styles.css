@@ -1936,3 +1936,170 @@ html[data-a11y='on'] .kz-field { display: none; }
 [data-perf-tier="2"] #particles,     [data-perf-tier="3"] #particles { display: none !important; }
 /* На tier 3 замораживаем ещё и декоративные CSS-анимации фона — меньше работы композитору. */
 [data-perf-tier="3"] #scroll-aurora, [data-perf-tier="3"] .hero::before { animation: none !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ПОЛИРОВКА 2026-07 — единый визуальный язык + «вау»-слой.
+   Принципы: один ритм карточек (лифт + фирменная цветная кромка), премиальные
+   кнопки со свечением, живой акцент в герое, лента систем, полный футер.
+   Всё уважает prefers-reduced-motion и режим для слабовидящих (data-a11y).
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Кнопки: глубина и свечение ─────────────────────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, var(--blue-bright), var(--blue) 58%, var(--blue-ink));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--blue) 34%, transparent),
+              inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  transition: transform 0.22s var(--ease), box-shadow 0.25s var(--ease), filter 0.2s;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  filter: none;
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--blue) 44%, transparent),
+              inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.btn-primary:active { transform: translateY(0) scale(0.98); }
+[data-theme='dark'] .btn-primary {
+  background: linear-gradient(135deg, #b9d4ff, var(--blue) 62%, #4d7fe6);
+}
+.btn-ghost {
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+  transition: transform 0.22s var(--ease), border-color 0.2s, background 0.2s, box-shadow 0.25s var(--ease);
+}
+.btn-ghost:hover {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--blue) 8%, var(--card));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--blue) 14%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary:hover, .btn-ghost:hover { transform: none; }
+}
+
+/* ── Карточки: единый ховер с фирменной кромкой (цвет услуги --c) ──────────────
+   Тонкая градиентная линия по верхнему краю «зажигается» при наведении —
+   каждая карточка отвечает своим цветом, ряд остаётся спокойным. */
+.svc::before, .dir-card::before, .ncard::before, .nc-card::before {
+  content: ''; position: absolute; top: 0; left: 22px; right: 22px; height: 3px;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(90deg, var(--c, var(--blue)), color-mix(in srgb, var(--c, var(--blue)) 20%, transparent));
+  transform: scaleX(0); transform-origin: left;
+  transition: transform 0.5s var(--ease);
+  pointer-events: none; z-index: 2;
+}
+.dir-card, .ncard, .nc-card { position: relative; }
+.svc:hover::before, .dir-card:hover::before, .ncard:hover::before, .nc-card:hover::before { transform: scaleX(1); }
+.svc:hover, .dir-card:hover { border-color: color-mix(in srgb, var(--c, var(--blue)) 30%, var(--line)); }
+.dir-ico { transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease); }
+.svc:hover .svc-ico, .dir-card:hover .dir-ico {
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--c, var(--blue)) 28%, transparent);
+}
+/* Фото в карточке новости мягко приближается */
+.nc-card .ph img { transition: transform 0.7s var(--ease); }
+.nc-card:hover .ph img { transform: scale(1.05); }
+@media (prefers-reduced-motion: reduce) {
+  .svc::before, .dir-card::before, .ncard::before, .nc-card::before { transition: none; }
+  .nc-card .ph img { transition: none; }
+  .nc-card:hover .ph img { transform: none; }
+}
+
+/* ── Герой: живой акцент — градиент медленно перетекает по слову ───────────── */
+.hero-h1 .accent {
+  background: linear-gradient(100deg, var(--blue-bright), #7c9dff 34%, var(--blue) 62%, var(--blue-bright));
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent;
+  animation: accentFlow 8s ease-in-out infinite alternate;
+}
+@keyframes accentFlow { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+@media (prefers-reduced-motion: reduce) { .hero-h1 .accent { animation: none; } }
+html[data-a11y='on'] .hero-h1 .accent {
+  background: none; color: var(--blue); -webkit-text-fill-color: currentColor; animation: none;
+}
+/* Числа в герое — как большие статы: бело-циановый градиент в тёмной теме */
+[data-theme='dark'] .hstat-n {
+  background: linear-gradient(180deg, #ffffff, #93d6ff);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent;
+}
+
+/* ── Лента систем (marquee) — «пульс» инфраструктуры под героем ─────────────── */
+.ribbon {
+  position: relative; overflow: hidden; padding: 15px 0;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  /* лёгкая тонировка фоном страницы — текст ленты читается и поверх яркой 3D-сцены */
+  background: color-mix(in srgb, var(--canvas) 44%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+.ribbon-track { display: flex; width: max-content; animation: ribbonFlow 38s linear infinite; }
+.ribbon:hover .ribbon-track { animation-play-state: paused; }
+.ribbon-item {
+  display: inline-flex; align-items: center; flex: none;
+  font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-faint); white-space: nowrap;
+}
+.ribbon-item::after {
+  content: ''; width: 6px; height: 6px; margin: 0 26px; border-radius: 1px; flex: none;
+  background: var(--blue); opacity: 0.55; transform: rotate(45deg);
+}
+@keyframes ribbonFlow { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .ribbon-track { animation: none; } }
+html[data-a11y='on'] .ribbon { display: none; }
+
+/* ── CTA-бэнд: аврора внутри + читаемость в обеих темах ────────────────────── */
+.cta-band { position: relative; overflow: hidden; color: #f2f6ff; border-color: rgba(125, 195, 255, 0.26); }
+.cta-band .h2 { color: #ffffff; }
+.cta-band .lede { color: #ccdcfa; }
+.cta-band::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(58% 130% at 10% 0%, rgba(78, 148, 255, 0.26), transparent 62%),
+    radial-gradient(48% 120% at 90% 100%, rgba(216, 178, 90, 0.16), transparent 60%);
+}
+.cta-band > * { position: relative; z-index: 1; }
+/* В светлой теме бэнд — глубокий синий «остров» на светлом фоне */
+[data-theme='light'] .cta-band {
+  background: linear-gradient(135deg, #10264f, #0a1730 60%, #091326);
+  border-color: rgba(45, 111, 224, 0.30);
+  box-shadow: 0 22px 60px rgba(16, 38, 79, 0.28);
+}
+
+/* ── Футер: полноценный фирменный ──────────────────────────────────────────── */
+.footer2 {
+  margin-top: clamp(30px, 6vw, 70px);
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--blue) 5%, transparent));
+}
+.footer2-grid {
+  display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 36px;
+  padding: clamp(40px, 6vw, 64px) 0 34px;
+}
+.footer2-brand .f2-logo { display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 17px; letter-spacing: 0.01em; color: var(--ink); }
+.footer2-brand .f2-logo img { width: 38px; height: 38px; object-fit: contain; }
+.footer2-brand p { margin-top: 14px; font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); max-width: 34ch; }
+.f2-addr { margin-top: 14px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.f2-col b { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 14px; }
+.f2-col a { display: block; padding: 5px 0; font-size: 14px; color: var(--ink-soft); transition: color 0.15s, transform 0.2s var(--ease); }
+.f2-col a:hover { color: var(--blue); transform: translateX(3px); }
+.footer2-bottom {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px;
+  padding: 18px 0 26px; border-top: 1px solid var(--line);
+  font-size: 12.5px; color: var(--ink-faint);
+}
+.footer2-bottom .sp { flex: 1; }
+.footer2-bottom a:hover { color: var(--ink); }
+@media (max-width: 880px) { .footer2-grid { grid-template-columns: 1fr 1fr; gap: 30px; } }
+@media (max-width: 480px) { .footer2-grid { grid-template-columns: 1fr; gap: 26px; } }
+
+/* ── Прогресс чтения страницы — тонкая линия над навбаром ──────────────────── */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 130;
+  background: linear-gradient(90deg, var(--blue-bright), var(--blue) 60%, var(--gold-soft));
+  transform: scaleX(var(--sp, 0)); transform-origin: left;
+  pointer-events: none;
+}
+html[data-a11y='on'] .scroll-progress { display: none; }
+
+/* ── Выделение текста и видимый фокус — фирменные ──────────────────────────── */
+::selection { background: color-mix(in srgb, var(--blue) 26%, transparent); }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }

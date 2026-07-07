@@ -72,12 +72,29 @@ export default function Site() {
   useEffect(() => {
     const root = document.documentElement;
     let raf = 0;
-    const apply = () => { raf = 0; root.style.setProperty('--sy', window.scrollY + 'px'); };
+    // Высоту прокрутки кэшируем (не читаем scrollHeight на каждом кадре — reflow);
+    // пересчёт при смене страницы/resize. Небольшая неточность после подгрузки данных
+    // не критична — --sp питает только тонкий прогресс-бар.
+    let maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
+    const recalc = () => { maxScroll = Math.max(1, root.scrollHeight - window.innerHeight); };
+    const apply = () => {
+      raf = 0;
+      root.style.setProperty('--sy', window.scrollY + 'px');
+      if (window.scrollY > maxScroll) recalc();   // контент дорос (ленивые данные) — обновляем базу
+      root.style.setProperty('--sp', Math.min(1, window.scrollY / maxScroll).toFixed(4));
+    };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-    apply();
+    const t = setTimeout(recalc, 1200);   // после первичной загрузки данных высота устаканилась
+    recalc(); apply();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
-  }, []);
+    window.addEventListener('resize', recalc, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', recalc);
+      clearTimeout(t);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [path]);
 
   // Параллакс мыши: публикуем --mx/--my (−1…1) — слои глубины смещаются на разную величину
   // (calc(var(--mx) * Npx)), создавая ощущение объёма. Только десктоп (на мобиле мыши нет).
@@ -205,6 +222,7 @@ export default function Site() {
       {/* HUD-оверлей (передний план) — техно-элементы вокруг сцены, только на главной, гаснут при скролле. */}
       {!isMobile && !lowPower && !a11y && path === '/' && <HudLayer />}
       <div id="scroll-grain" aria-hidden="true" />
+      <div className="scroll-progress" aria-hidden="true" />
       <Nav />
       <Brand />
       <main key={path} id="main" className="page-tx">
