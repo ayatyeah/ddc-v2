@@ -16,12 +16,19 @@ function fmtDate(iso) {
 function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onAssign, showAssignee, expanded, onToggle, onOpenEval, colCount }) {
   const [comment, setComment] = useState(row.admin_comment || '');
   const [saved, setSaved] = useState(false);
+  const [reason, setReason] = useState(row.reject_reason || '');
+  const [reasonSaved, setReasonSaved] = useState(false);
   useEffect(() => { setComment(row.admin_comment || ''); }, [row.admin_comment]);
+  useEffect(() => { setReason(row.reject_reason || ''); }, [row.reject_reason]);
 
   const patch = (body) => onPatch(row.id, body);
   const saveComment = async () => {
     await patch({ admin_comment: comment });
     setSaved(true); setTimeout(() => setSaved(false), 1500);
+  };
+  const saveReason = async () => {
+    await patch({ reject_reason: reason });
+    setReasonSaved(true); setTimeout(() => setReasonSaved(false), 1500);
   };
 
   return (
@@ -37,7 +44,12 @@ function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onA
           <div className="lead-subject">{row.subject || '—'}</div>
           {row.message && <div className="who-sub lead-msg-1">{row.message}</div>}
         </td>
-        <td data-label="Статус"><span className={`st-badge st-${row.status}`}>{STATUS_LABELS[row.status]}</span></td>
+        <td data-label="Статус">
+          <span className={`st-badge st-${row.status}`}>{STATUS_LABELS[row.status]}</span>
+          {row.status === 'rejected' && row.reject_reason && (
+            <div className="who-sub lead-msg-1" title={row.reject_reason}>{row.reject_reason}</div>
+          )}
+        </td>
         {showAssignee && (
           <td data-label="Исполнитель">
             <span className={row.assignee_name || row.assignee_username ? 'who-name' : 'who-sub'}>
@@ -98,6 +110,22 @@ function Row({ row, onPatch, canEdit, highlight, onDelete, canAssign, staff, onA
                   ))}
                 </div>
               </div>
+
+              {/* Причина отказа: появляется при статусе «Отказ» — фиксируем, почему не взяли в работу */}
+              {row.status === 'rejected' && (
+                <div className="ld-block ld-full ld-reject">
+                  <div className="ld-lab">Причина отказа</div>
+                  <textarea className="adm-input" value={reason} readOnly={!canEdit}
+                    placeholder="Почему по заявке отказано: вне компетенции ЦЦР, дубль, спам, недостаточно данных…"
+                    onChange={(e) => setReason(e.target.value)} />
+                  {canEdit && (
+                    <div className="save-row">
+                      <button className="btn-sm" onClick={saveReason}>Сохранить причину</button>
+                      <span className={`saved-tag ${reasonSaved ? 'show' : ''}`}>Сохранено ✓</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="ld-block ld-full">
                 <div className="ld-lab">Комментарий менеджера</div>
@@ -235,6 +263,7 @@ export default function Leads({ onAuthLost, canEdit = true, canAssign = false, i
         <div className="adm-stat s-prog"><div className="k">В процессе</div><div className="v">{stats?.in_progress ?? '—'}</div></div>
         <div className="adm-stat s-hold"><div className="k">Отложены</div><div className="v">{stats?.on_hold ?? '—'}</div></div>
         <div className="adm-stat s-served"><div className="k">Обслужены</div><div className="v">{stats?.served ?? '—'}</div></div>
+        <div className="adm-stat s-rej"><div className="k">Отказ</div><div className="v">{stats?.rejected ?? '—'}</div></div>
       </div>
 
       <div className="adm-toolbar">

@@ -75,6 +75,7 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .adm-stat.s-prog::before { background: var(--blue); }
 .adm-stat.s-hold::before { background: #7a8aa8; }
 .adm-stat.s-served::before { background: #1f9d57; }
+.adm-stat.s-rej::before { background: #c0455a; }
 .adm-stat.s-total::before { background: linear-gradient(180deg, var(--blue), var(--gold)); }
 .adm-stat .k { font-size: 12px; color: var(--ink-soft); }
 .adm-stat .v { font-size: 1.9rem; font-weight: 700; margin-top: 6px; }
@@ -858,6 +859,9 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
 .lead-detail > td { background: color-mix(in srgb, var(--blue) 4%, transparent); padding: 0 !important; border-bottom: 1px solid var(--line); }
 .ld-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 22px; padding: 20px 22px; animation: admPage 0.24s ease both; }
 .ld-block { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* Причина отказа — акцентная красная рамка, чтобы блок читался как важный */
+.ld-reject textarea.adm-input { border-color: color-mix(in srgb, #c0455a 45%, var(--line)); background: color-mix(in srgb, #c0455a 5%, var(--card)); }
+.ld-reject .ld-lab { color: #c0455a; font-weight: 700; }
 .ld-full { grid-column: 1 / -1; }
 .ld-lab { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; }
 .ld-subject { font-weight: 600; font-size: 14px; }

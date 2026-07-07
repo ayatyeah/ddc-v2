@@ -18,7 +18,7 @@ const ALLOWED_STATUSES = ['new', 'in_progress', 'on_hold', 'served', 'rejected']
 async function fetchLeadRow(id) {
   const { rows } = await db.query(
     `SELECT l.id, l.full_name, l.email, l.phone, l.subject, l.message, l.status,
-            l.admin_comment, l.rating, l.assignee_id, l.assigned_by, l.assigned_at,
+            l.admin_comment, l.rating, l.reject_reason, l.assignee_id, l.assigned_by, l.assigned_at,
             u.username AS assignee_username, u.full_name AS assignee_name,
             (e.lead_id IS NOT NULL) AS has_evaluation,
             l.created_at, l.updated_at
@@ -90,7 +90,7 @@ router.get('/api/leads', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT l.id, l.full_name, l.email, l.phone, l.subject, l.message, l.status,
-              l.admin_comment, l.rating, l.assignee_id, l.assigned_by, l.assigned_at,
+              l.admin_comment, l.rating, l.reject_reason, l.assignee_id, l.assigned_by, l.assigned_at,
               u.username AS assignee_username, u.full_name AS assignee_name,
               (e.lead_id IS NOT NULL) AS has_evaluation,
               l.created_at, l.updated_at
@@ -148,7 +148,7 @@ router.patch('/api/leads/:id', auth, requireRole('admin', 'editor', 'manager', '
 
   const sets = [];
   const params = [];
-  const { status, admin_comment, rating } = req.body || {};
+  const { status, admin_comment, rating, reject_reason } = req.body || {};
 
   if (status !== undefined) {
     if (!ALLOWED_STATUSES.includes(status)) {
@@ -159,6 +159,10 @@ router.patch('/api/leads/:id', auth, requireRole('admin', 'editor', 'manager', '
   if (admin_comment !== undefined) {
     params.push(String(admin_comment).slice(0, 4000));
     sets.push(`admin_comment = $${params.length}`);
+  }
+  if (reject_reason !== undefined) {
+    params.push(String(reject_reason).slice(0, 2000));
+    sets.push(`reject_reason = $${params.length}`);
   }
   if (rating !== undefined) {
     const r = Number(rating);
@@ -180,6 +184,7 @@ router.patch('/api/leads/:id', auth, requireRole('admin', 'editor', 'manager', '
     if (status !== undefined) ch.push(`статус → ${status}`);
     if (rating !== undefined) ch.push(`оценка → ${rating}`);
     if (admin_comment !== undefined) ch.push('комментарий изменён');
+    if (reject_reason !== undefined) ch.push('указана причина отказа');
     logAudit(req, 'lead', id, status !== undefined ? 'status' : 'update', `Заявка #${id}: ${ch.join(', ')}`);
     res.json(await fetchLeadRow(id));
   } catch (e) {

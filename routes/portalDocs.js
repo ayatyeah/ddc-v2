@@ -21,9 +21,10 @@ router.post('/api/portal/docs/generate', auth, async (req, res) => {
   if (!subject && !details) return res.status(400).json({ error: 'Укажите тему или суть документа' });
   try {
     const prompt = `Ты — помощник делопроизводителя ЦЦР (Центр цифрового развития Нацбанка Казахстана).
-Составь официальный документ на русском языке в деловом стиле. Тип: ${DOC_TYPES[type]}.
+Составь официальный документ на русском языке в деловом стиле, как настоящий документ организации. Тип: ${DOC_TYPES[type]}.
+Требования к тексту: обращение к адресату (если уместно); основной текст; если содержание позволяет — нумерованные пункты вида «1. …», «1.1. …» (заголовки разделов с новой строки); без строк даты и подписи в конце — их добавляет фирменный бланк автоматически. Не выдумывай номера приказов и фамилии, которых нет в данных.
 Верни СТРОГО валидный JSON без пояснений:
-{"title": "<краткий заголовок документа>", "body": "<готовый текст: обращение, основной текст, при необходимости пункты; в конце строки [дата] и [подпись]>"}
+{"title": "<краткий заголовок документа>", "body": "<готовый текст документа>"}
 Данные:
 - От кого: ${req.admin.u}
 - Кому (адресат): ${to || '—'}
@@ -96,7 +97,7 @@ router.get('/api/portal/docs/:id(\\d+)/pdf', auth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Документ не найден' });
     if (!fontsAvailable()) return res.status(500).json({ error: 'Шрифты для PDF не найдены (assets/fonts)' });
     const d = rows[0];
-    const pdf = await buildDocPDF({ title: d.title, body: d.body, author: d.author_name, date: new Date(d.created_at).toLocaleDateString('ru-RU') });
+    const pdf = await buildDocPDF({ id: d.id, title: d.title, body: d.body, author: d.author_name, createdAt: d.created_at, docType: d.doc_type });
     const dl = req.query.download === '1';
     const safe = String(d.title || 'Документ').replace(/[\r\n"]+/g, '_').slice(0, 80);
     res.setHeader('Content-Type', 'application/pdf');
