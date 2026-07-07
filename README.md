@@ -12,16 +12,26 @@
 
 ```
 .
-├── server.js           бэкенд: заявки, авторизация, статистика, НОВОСТИ (CRUD)
+├── server.js           точка входа: middleware, статика, монтирование роутеров, запуск
+├── lib/                инфраструктура бэкенда
+│   ├── config.js       env/секреты/пути          ├── ai.js      OpenAI + Gemini (пул ключей)
+│   ├── auth.js         JWT, роли, TOTP, аудит    ├── rag.js     ИИ-поиск / RAG-индекс
+│   ├── sse.js          realtime (SSE, notify)    ├── feed.js    AI-лента новостей (RSS)
+│   ├── uploads.js      безопасные загрузки       ├── health.js  пинги ИТ-систем
+│   ├── migrate.js      авто-миграция схемы       └── seeds.js   стартовые/демо-данные
+├── routes/             эндпоинты по доменам: auth, leads (CRM), news, services,
+│                       vacancies, notifications, analytics, monitoring, adminUsers,
+│                       adminOps, assistant (ИИ), portalPeople, portalChats,
+│                       portalDocs, portalWork, portalLife
 ├── db.js               пул pg (SSL для DigitalOcean)
-├── init-db.js          применение schema.sql
-├── schema.sql          таблицы leads + news (+ сиды новостей)
+├── init-db.js          применение schema.sql (устаревшее ядро; актуальная схема — lib/migrate.js)
 ├── .env                тестовые креды БД и админа
 ├── public/             собранный фронт (генерируется из client/)
 └── client/             исходники React-приложения (Vite)
     └── src/
-        ├── site/       лендинг (Nav, Hero, Services, Showcase 3D, Stats, About, News, Contact, Footer, Assistant)
-        └── admin/      админка (вход, вкладки «Заявки» и «Новости»)
+        ├── site/       публичный сайт (лендинг, 3D-фон, ассистент)
+        ├── admin/      админ-панель (CRM, CMS, мониторинг, безопасность)
+        └── portal/     портал сотрудников (чаты, задачи, календарь, ДиДи)
 ```
 
 Сайт и админка — одно SPA. `/admin` открывает панель, остальные пути — лендинг.
