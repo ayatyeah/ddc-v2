@@ -123,20 +123,23 @@ html[data-a11y='on'] #scroll-bg::after { display: none; }  /* в версии д
 #scroll-aurora { display: none; }
 [data-theme='dark'] #scroll-aurora {
   display: block; position: fixed; inset: -12%; z-index: -4; pointer-events: none; opacity: 0.9;
-  /* Фирменная палитра DDC: синий → фиолетовый → золотой акцент. */
+  /* Фирменная палитра DDC: синий → фиолетовый → золотой акцент.
+     БЕЗ filter:blur — мягкость дают сами radial-gradient (плавный спад к 78-80%),
+     GPU не держит и не пересчитывает полноэкранное размытие. */
   background:
-    radial-gradient(38% 34% at 22% 26%, rgba(46, 96, 190, 0.24), transparent 70%),
-    radial-gradient(34% 30% at 82% 30%, rgba(90, 63, 214, 0.18), transparent 70%),
-    radial-gradient(46% 42% at 64% 84%, rgba(28, 66, 146, 0.20), transparent 72%),
-    radial-gradient(26% 24% at 12% 78%, rgba(176, 125, 18, 0.10), transparent 72%),
-    radial-gradient(30% 28% at 48% 54%, rgba(47, 111, 224, 0.14), transparent 72%);
-  filter: blur(32px);
+    radial-gradient(44% 40% at 22% 26%, rgba(46, 96, 190, 0.22), rgba(46, 96, 190, 0.07) 55%, transparent 80%),
+    radial-gradient(40% 36% at 82% 30%, rgba(90, 63, 214, 0.16), rgba(90, 63, 214, 0.05) 55%, transparent 80%),
+    radial-gradient(52% 48% at 64% 84%, rgba(28, 66, 146, 0.18), rgba(28, 66, 146, 0.06) 55%, transparent 80%),
+    radial-gradient(32% 30% at 12% 78%, rgba(176, 125, 18, 0.09), rgba(176, 125, 18, 0.03) 55%, transparent 78%),
+    radial-gradient(36% 34% at 48% 54%, rgba(47, 111, 224, 0.13), rgba(47, 111, 224, 0.04) 55%, transparent 80%);
+  will-change: transform;
   animation: auroraDrift 42s ease-in-out infinite alternate;
 }
+/* Только translate (без scale) — композитор двигает готовую текстуру, не ре-растеризуя слой. */
 @keyframes auroraDrift {
-  0%   { transform: translate3d(-2%, -1%, 0) scale(1.02); }
-  50%  { transform: translate3d(2%, 1.6%, 0) scale(1.09); }
-  100% { transform: translate3d(-1%, 2%, 0) scale(1.04); }
+  0%   { transform: translate3d(-2%, -1%, 0); }
+  50%  { transform: translate3d(2%, 1.6%, 0); }
+  100% { transform: translate3d(-1%, 2%, 0); }
 }
 @media (prefers-reduced-motion: reduce) { [data-theme='dark'] #scroll-aurora { animation: none; } }
 
@@ -258,16 +261,17 @@ html[data-a11y='on'] .fog-shader { display: none; }
           mask-image: linear-gradient(to top, #000 35%, transparent 100%);
 }
 #fog .cloud {
-  position: absolute; bottom: -14vh; width: 60vh; height: 38vh; border-radius: 50%;
-  filter: blur(42px); opacity: 0.5;
-  background: radial-gradient(circle at 50% 60%, rgba(180,205,255,0.85), rgba(180,205,255,0) 70%);
+  position: absolute; bottom: -14vh; width: 66vh; height: 42vh; border-radius: 50%;
+  opacity: 0.5;
+  /* без filter:blur(42px) — 4 дрейфующих размытых слоя стоили дорого; спад градиента мягче */
+  background: radial-gradient(circle at 50% 60%, rgba(180,205,255,0.7), rgba(180,205,255,0.22) 45%, rgba(180,205,255,0) 78%);
   animation: drift 26s ease-in-out infinite;
 }
 #fog .c1 { left: -10vh; animation-delay: 0s; }
 #fog .c2 { left: 28vw; width: 72vh; animation-delay: -8s; }
 #fog .c3 { left: 60vw; animation-delay: -16s; }
 #fog .c4 { right: -8vh; width: 64vh; animation-delay: -4s; }
-[data-theme='dark'] #fog .cloud { background: radial-gradient(circle at 50% 60%, rgba(120,150,210,0.6), rgba(120,150,210,0) 70%); }
+[data-theme='dark'] #fog .cloud { background: radial-gradient(circle at 50% 60%, rgba(120,150,210,0.5), rgba(120,150,210,0.16) 45%, rgba(120,150,210,0) 78%); }
 @keyframes drift { 0%, 100% { transform: translateX(0) translateY(0); } 50% { transform: translateX(4vw) translateY(-3vh); } }
 @media (prefers-reduced-motion: reduce) { #fog .cloud { animation: none; } }
 
@@ -553,10 +557,12 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .hero-orbs { transform: translate3d(0, calc(var(--sy, 0px) * 0.18), 0); will-change: transform; }
 .hero-inner { transform: translate3d(0, calc(var(--sy, 0px) * -0.045), 0); }
 @media (prefers-reduced-motion: reduce) { .hero-orbs, .hero-inner { transform: none; } }
-.orb { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.5; }
-.orb.o1 { width: 460px; height: 460px; left: -120px; top: 6%; background: radial-gradient(circle, var(--blue), transparent 70%); }
-.orb.o2 { width: 380px; height: 380px; right: -100px; top: 30%; background: radial-gradient(circle, #2f9fd6, transparent 70%); opacity: 0.3; }
-.orb.o3 { width: 520px; height: 520px; left: 30%; bottom: -180px; background: radial-gradient(circle, var(--blue-bright), transparent 70%); opacity: 0.3; }
+/* Орбы БЕЗ filter:blur(60px): слой ездит параллаксом на каждом кадре скролла, и размытие
+   заставляло GPU таскать тяжёлую фильтрованную текстуру. Мягкость — многоступенчатым градиентом. */
+.orb { position: absolute; border-radius: 50%; opacity: 0.5; }
+.orb.o1 { width: 560px; height: 560px; left: -170px; top: 3%; background: radial-gradient(circle, color-mix(in srgb, var(--blue) 62%, transparent), color-mix(in srgb, var(--blue) 22%, transparent) 45%, transparent 72%); }
+.orb.o2 { width: 470px; height: 470px; right: -145px; top: 27%; background: radial-gradient(circle, rgba(47,159,214,0.62), rgba(47,159,214,0.2) 45%, transparent 72%); opacity: 0.3; }
+.orb.o3 { width: 620px; height: 620px; left: 28%; bottom: -230px; background: radial-gradient(circle, color-mix(in srgb, var(--blue-bright) 62%, transparent), color-mix(in srgb, var(--blue-bright) 22%, transparent) 45%, transparent 72%); opacity: 0.3; }
 .hero-inner { position: relative; z-index: 1; max-width: 920px; }
 .hero h1 {
   /* Размер подобран так, чтобы самое длинное слово («инфраструктуру») помещалось в колонку
@@ -921,7 +927,7 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .nc-arrow.next { right: -14px; }
 .nc-dots { display: flex; gap: 8px; justify-content: center; margin-top: 18px; }
 .nc-dot { width: 8px; height: 8px; border-radius: 50%; border: none; cursor: pointer; padding: 0;
-  background: var(--line-2); transition: all 0.25s var(--ease); }
+  background: var(--line-2); transition: width 0.25s var(--ease), background 0.25s var(--ease); }
 .nc-dot.on { background: var(--blue); width: 22px; border-radius: 6px; }
 
 @media (max-width: 860px) { .nc-card { flex-basis: calc((100% - 18px) / 2); } .nc-arrow { display: none; } }
@@ -1727,6 +1733,10 @@ html.lenis, html.lenis body { height: auto; }
   .hero-h1 .accent { animation: none !important; }
   [data-theme='dark'] .hero::before { animation: none !important; }
   .ribbon { -webkit-mask-image: none !important; mask-image: none !important; }
+
+  /* «Парение» карточек команды (страница «О нас»): до 8 вечных transform-слоёв разом —
+     на телефоне замораживаем, карточки статичны. */
+  .tcard-wrap { animation: none !important; }
 }
 
 /* ════════════════ UX: 404, CTA-бэнд, скелетоны загрузки ════════════════ */
@@ -2015,16 +2025,23 @@ html[data-a11y='on'] .kz-field { display: none; }
   .nc-card:hover .ph img { transform: none; }
 }
 
-/* ── Герой: живой акцент — градиент медленно перетекает по слову ───────────── */
+/* ── Герой: живой акцент — градиент медленно перетекает по слову ─────────────
+   background-position на clip:text = перерисовка текста каждый кадр. Чтобы это не
+   трогало всю страницу, слово вынесено в СВОЙ композит-слой (inline-block + will-change):
+   репейнт ограничен маленькой текстурой размером со слово — копейки для растеризатора. */
 .hero-h1 .accent {
+  display: inline-block;
   background: linear-gradient(100deg, var(--blue-bright), #7c9dff 34%, var(--blue) 62%, var(--blue-bright));
   background-size: 220% 100%;
   -webkit-background-clip: text; background-clip: text;
   color: transparent; -webkit-text-fill-color: transparent;
+  will-change: background-position;
   animation: accentFlow 8s ease-in-out infinite alternate;
 }
 @keyframes accentFlow { from { background-position: 0% 0; } to { background-position: 100% 0; } }
 @media (prefers-reduced-motion: reduce) { .hero-h1 .accent { animation: none; } }
+/* при просадке FPS (tier≥2) переливы отключаем — статичный градиент */
+[data-perf-tier="2"] .hero-h1 .accent, [data-perf-tier="3"] .hero-h1 .accent { animation: none; }
 html[data-a11y='on'] .hero-h1 .accent {
   background: none; color: var(--blue); -webkit-text-fill-color: currentColor; animation: none;
 }

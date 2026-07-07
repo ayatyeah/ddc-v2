@@ -85,7 +85,9 @@ export default function Background3D({ onReady }) {
       }).catch(() => {});
     };
 
-    // Живой WebGL-рендер: воркер (offthread) либо главный поток.
+    // Живой WebGL-рендер: воркер (offthread) либо главный поток. На телефоне — та же
+    // живая сцена с мобильными капами (DPR 1.5, ~30 fps): пребейк-скраббер убран по
+    // решению владельца (rollback скраббера, см. rollback-2026-07-08).
     const startLive = () => {
       if (offthread) {
         worker = new Worker(new URL('./scene.worker.js', import.meta.url), { type: 'module' });
@@ -115,28 +117,7 @@ export default function Background3D({ onReady }) {
       }
     };
 
-    // ТЕЛЕФОН: пребейк — скраббинг по запечённым кадрам пролёта (bakedScene.js).
-    // three.js вообще не загружается; в покое ноль работы GPU/CPU (не греем телефон).
-    // Если кадров нет (манифест не собран) — тихо откатываемся на живую сцену как раньше.
-    const startBaked = () => {
-      import('./bakedScene.js')
-        .then(({ initBaked }) => initBaked(canvas, mkEnv()))
-        .then((i) => {
-          if (disposed) { i.dispose(); return; }
-          inst = i;
-          onTier(0);
-          for (const [m, a] of queue.splice(0)) inst[m]?.(...a);
-        })
-        .catch(() => {
-          if (disposed) return;
-          try { host.removeChild(canvas); } catch { /* уже снят */ }
-          canvas = makeCanvas();
-          requestAnimationFrame(() => { canvas.style.opacity = ''; });
-          startLive();
-        });
-    };
-
-    if (mobile) startBaked(); else startLive();
+    startLive();
 
     // ── DOM-события → сцена ──────────────────────────────────────────────────
     let lastW = vw();

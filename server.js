@@ -83,9 +83,9 @@ app.use(expressStaticGzip(STATIC_DIR, {
   serveStatic: {
     maxAge: PROD ? '1y' : 0,
     setHeaders: (res, filePath) => {
-      // HTML, сервис-воркер и манифест пребейка НЕ кешируем надолго — иначе PWA/фон
-      // не получат обновление после деплоя. Остальные ассеты хешированы → можно 1 год.
-      if (/\.html$/.test(filePath) || /[\\/](sw|registerSW)\.js$/.test(filePath) || /[\\/]bake[\\/]manifest\.json$/.test(filePath)) {
+      // HTML и сервис-воркер (sw.js/registerSW.js) НЕ кешируем надолго — иначе PWA
+      // не получит обновление после деплоя. Остальные ассеты хешированы → можно 1 год.
+      if (/\.html$/.test(filePath) || /[\\/](sw|registerSW)\.js$/.test(filePath)) {
         res.setHeader('Cache-Control', 'no-cache');
       } else if (/[\\/]assets[\\/]/.test(filePath)) {
         // Хешированные ассеты Vite (имя меняется при изменении) — вечный кеш без ревалидации.
@@ -125,7 +125,6 @@ app.use(require('./routes/portalChats'));    // портал: чаты, ЛС, г
 app.use(require('./routes/portalDocs'));     // портал: документы (ИИ-генерация, перевод, PDF)
 app.use(require('./routes/portalWork'));     // портал: заявки сотрудников + задачи
 app.use(require('./routes/portalLife'));     // портал: опросы, переговорные, календарь, внутренние новости
-if (!PROD) app.use(require('./routes/bakeDev'));   // только dev: приём кадров пребейка фона от /bake.html
 
 // Неизвестные API-маршруты — честный 404 JSON (а не SPA-страница)
 app.use('/api', (req, res) => res.status(404).json({ error: 'Не найдено' }));
