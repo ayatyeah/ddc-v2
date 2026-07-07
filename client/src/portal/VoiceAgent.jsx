@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { sendJSON } from '../api.js';
+import { getJSON, sendJSON } from '../api.js';
 import { parseVoice } from './voiceNlu.js';
 
 // ДиДи — текст-первый ассистент портала (чат как основной путь, голос — бонус).
-//  • Текст: команды разбирает ЛОКАЛЬНЫЙ парсер (voiceNlu) — мгновенно, без ИИ и сети;
-//    незнакомые фразы тихо уходят в ИИ (/api/assistant/command). Вопросы — RAG по базе портала.
+//  • Текст: команды разбирает ИИ (/api/assistant/command) — свободные формулировки,
+//    перенос встреч, несколько действий за фразу. Локальный парсер (voiceNlu) — страховка,
+//    когда ИИ недоступен. Вопросы — RAG по базе портала.
 //    ИИ БЕЗ истории диалога: каждый запрос независим (диалог хранится только в UI/sessionStorage) —
 //    предсказуемые ответы и минимальный расход токенов.
 //  • Голос: Chrome/Edge/Safari — нативный SpeechRecognition; Firefox — запись → WAV → сервер.
@@ -175,6 +176,32 @@ export default function VoiceAgent({ onGo, me }) {
           await sendJSON('/api/portal/requests', 'POST', { kind: a.kind || 'other', title: a.title, body: a.body || '' });
           done.push(`Заявка (${REQ_LABEL[a.kind] || 'Заявка'}): «${a.title}»`); onGo?.('requests');
         }
+        else if (a.type === 'move_event') {
+          // Перенос встречи: находим событие по дате/времени/словам из названия → PATCH.
+          // ВАЖНО: сервер отдаёт starts_at в UTC — дату/время сравниваем в ЛОКАЛЬНЫХ
+          // координатах пользователя (как их видит календарь), иначе «в 10:00» не совпадёт.
+          const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+          const hhmm = (s) => { const d0 = new Date(s); return `${String(d0.getHours()).padStart(2, '0')}:${String(d0.getMinutes()).padStart(2, '0')}`; };
+          const from = a.date || iso(new Date());
+          const to = a.date || iso(new Date(Date.now() + 60 * 864e5));   // без даты ищем на 2 месяца вперёд
+          const evs = await getJSON(`/api/portal/events?from=${from}&to=${to}`);
+          let cand = (Array.isArray(evs) ? evs : []).filter((e) => e.source === 'event');
+          if (a.date) cand = cand.filter((e) => iso(new Date(e.starts_at)) === a.date);
+          if (a.time) cand = cand.filter((e) => hhmm(e.starts_at) === a.time);
+          if (a.query) {
+            const q = String(a.query).toLowerCase();
+            const byQ = cand.filter((e) => (e.title || '').toLowerCase().includes(q));
+            if (byQ.length) cand = byQ;
+          }
+          if (!cand.length) done.push('⚠ Не нашла такую встречу в календаре — уточните название или дату');
+          else {
+            const ev = cand[0];   // ближайший подходящий кандидат (список отсортирован по времени)
+            const d = a.new_date || iso(new Date(ev.starts_at));
+            const t2 = a.new_time || (ev.all_day ? null : hhmm(ev.starts_at));
+            await sendJSON(`/api/portal/events/${ev.id}`, 'PATCH', { starts_at: t2 ? `${d}T${t2}:00` : `${d}T00:00:00`, all_day: !t2 });
+            done.push(`Встреча «${ev.title}» перенесена: ${humanDate(d)}${t2 ? ' в ' + t2 : ''}`); onGo?.('calendar');
+          }
+        }
       } catch (e) { done.push(`⚠ ${e.message || 'не удалось выполнить'}`); }
     }
     const reply = say || (done.length ? done.join('; ') : 'Не понял команду');
@@ -185,22 +212,22 @@ export default function VoiceAgent({ onGo, me }) {
     if (voice) speak(reply);
   }, [onGo, me, speak]);
 
-  // Разбор → исполнение. Сначала локальный парсер (без ИИ, мгновенно). Если он не понял —
-  // тихий фолбэк на ИИ. Если и ИИ недоступен — не пугаем ошибкой, а подсказываем формат команд.
+  // Разбор → исполнение. ИИ-первый: модель понимает свободные формулировки
+  // («перенеси встречу с 10 на 12», «задача на послезавтра…») сильно лучше
+  // локальных правил. Локальный парсер — только страховка, когда ИИ недоступен:
+  // прямые команды продолжают работать даже без сети к провайдерам.
   const runText = useCallback(async (text, voice) => {
     const t = (text || '').trim(); if (!t) return;
     addLog('me', t); setPhase('processing');
     try {
-      const local = parseVoice(t);
-      if (local.length) { await execute(local, undefined, voice); }
-      else {
-        try {
-          const r = await sendJSON('/api/assistant/command', 'POST', { text: t });
-          await execute(r.actions, r.say, voice);
-        } catch {
-          // ИИ недоступен — локальный парсер остаётся рабочим путём, подсказываем формат.
-          addLog('bot', 'Эту фразу я не разобрала, а ИИ сейчас недоступен. Я понимаю прямые команды, например: «создай задачу подготовить отчёт к пятнице», «встреча завтра в 10», «оформи заявку на отпуск», «открой календарь».');
-        }
+      try {
+        const r = await sendJSON('/api/assistant/command', 'POST', { text: t });
+        await execute(r.actions, r.say, voice);
+      } catch {
+        // ИИ недоступен — пробуем локальный парсер (мгновенно, 0 токенов).
+        const local = parseVoice(t);
+        if (local.length) await execute(local, undefined, voice);
+        else addLog('bot', 'Эту фразу я не разобрала, а ИИ сейчас недоступен. Я понимаю прямые команды, например: «создай задачу подготовить отчёт к пятнице», «встреча завтра в 10», «оформи заявку на отпуск», «открой календарь».');
       }
     } catch (e) { addLog('bot', e.message || 'Не получилось выполнить'); }
     finally { setPhase('idle'); }

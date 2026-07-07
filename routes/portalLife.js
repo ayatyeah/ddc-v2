@@ -183,6 +183,35 @@ router.post('/api/portal/events', auth, async (req, res) => {
     res.status(201).json({ ...rows[0], source: 'event', can_delete: true });
   } catch (e) { console.error('POST /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось создать событие' }); }
 });
+// Перенос/правка события: ассистент («перенеси встречу с 10 на 12») и календарь.
+// Права как у удаления: автор события либо admin/manager.
+router.patch('/api/portal/events/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const ev = await db.query(`SELECT created_by FROM events WHERE id = $1`, [id]);
+    if (!ev.rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (ev.rows[0].created_by !== req.admin.id && !['admin', 'manager'].includes(req.admin.role))
+      return res.status(403).json({ error: 'Нет прав' });
+    const sets = [], vals = [];
+    if (req.body?.starts_at !== undefined) {
+      const d = new Date(req.body.starts_at);
+      if (isNaN(+d)) return res.status(400).json({ error: 'Некорректная дата' });
+      vals.push(d); sets.push(`starts_at = $${vals.length}`);
+    }
+    if (req.body?.title !== undefined) {
+      const t = clip(req.body.title, 200);
+      if (!t) return res.status(400).json({ error: 'Пустое название' });
+      vals.push(t); sets.push(`title = $${vals.length}`);
+    }
+    if (req.body?.all_day !== undefined) { vals.push(!!req.body.all_day); sets.push(`all_day = $${vals.length}`); }
+    if (!sets.length) return res.status(400).json({ error: 'Нечего обновлять' });
+    vals.push(id);
+    const { rows } = await db.query(
+      `UPDATE events SET ${sets.join(', ')} WHERE id = $${vals.length}
+       RETURNING id, kind, title, descr, starts_at, ends_at, all_day, department, created_by, created_by_name`, vals);
+    res.json({ ...rows[0], source: 'event', can_delete: true });
+  } catch (e) { console.error('PATCH /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
+});
 router.delete('/api/portal/events/:id(\\d+)', auth, async (req, res) => {
   const id = Number(req.params.id);
   try {
