@@ -764,3 +764,8 @@
 .va-fab.wake { animation: vaWake 2.4s ease-in-out infinite; }
 @keyframes vaWake { 0%,100% { box-shadow: 0 8px 24px rgba(47,111,224,0.45), 0 0 0 0 rgba(90,63,214,0.45); } 50% { box-shadow: 0 8px 24px rgba(47,111,224,0.45), 0 0 0 7px rgba(90,63,214,0); } }
 @media (prefers-reduced-motion: reduce) { .va-fab.wake, .va-fab.live { animation: none; } }
+
+/* Шапка ДиДи — ручка для перетаскивания панели (десктоп) */
+.va-head { cursor: grab; user-select: none; touch-action: none; }
+.va-head:active { cursor: grabbing; }
+@media (max-width: 760px) { .va-head { cursor: default; } }

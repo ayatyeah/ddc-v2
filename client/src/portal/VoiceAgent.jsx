@@ -71,6 +71,9 @@ export default function VoiceAgent({ onGo, me }) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState('idle');    // idle | listening | processing
   const [level, setLevel] = useState(0);
+  // Позиция перетащенной панели ({x,y} в px) или null — стандартный угол.
+  const [panelPos, setPanelPos] = useState(() => { try { return JSON.parse(localStorage.getItem('dd_pos') || 'null'); } catch { return null; } });
+  const panelRef = useRef(null);
   // Диалог живёт в sessionStorage: перезагрузка страницы не стирает демо-переписку.
   // На сервер при этом уходит ТОЛЬКО текущая фраза (ИИ без истории — stateless).
   const [log, setLog] = useState(() => { try { return (JSON.parse(sessionStorage.getItem('dd_chat') || '[]') || []).slice(-40); } catch { return []; } });
@@ -395,11 +398,41 @@ export default function VoiceAgent({ onGo, me }) {
   const stopRec = () => { clearTimeout(vadRef.current); try { if (mrRef.current && mrRef.current.state !== 'inactive') mrRef.current.stop(); } catch {} try { recRef.current?.stop(); } catch {} };
 
   const listening = phase === 'listening', processing = phase === 'processing';
+
+  // Перетаскивание панели за шапку (только десктоп; телефон — фикс у края).
+  // Позиция запоминается в localStorage; двойной клик по шапке возвращает на место.
+  const startDrag = (e) => {
+    if (e.target.closest('button')) return;                              // крестик и т.п. — не драг
+    if (window.matchMedia('(max-width: 760px)').matches) return;
+    const el = panelRef.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    const sx = e.clientX - r.left, sy = e.clientY - r.top;
+    const move = (ev) => {
+      const x = Math.min(window.innerWidth - 70, Math.max(8 - r.width + 70, ev.clientX - sx));
+      const y = Math.min(window.innerHeight - 56, Math.max(8, ev.clientY - sy));
+      setPanelPos({ x, y });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      setPanelPos((p) => { try { if (p) localStorage.setItem('dd_pos', JSON.stringify(p)); } catch {} return p; });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    e.preventDefault();
+  };
+  const resetPos = () => { setPanelPos(null); try { localStorage.removeItem('dd_pos'); } catch {} };
+  // Сохранённая позиция применяется только на десктопе и мягко зажимается в экран.
+  const dragPos = panelPos && typeof window !== 'undefined' && window.innerWidth > 760
+    ? { x: Math.min(panelPos.x, window.innerWidth - 70), y: Math.min(panelPos.y, window.innerHeight - 56) }
+    : null;
+
   return (
     <div className={`va ${open ? 'open' : ''}`}>
       {open && (
-        <div className="va-panel">
-          <div className="va-head">
+        <div className="va-panel" ref={panelRef}
+          style={dragPos ? { position: 'fixed', left: dragPos.x, top: dragPos.y, right: 'auto', bottom: 'auto', zIndex: 95 } : undefined}>
+          <div className="va-head" onPointerDown={startDrag} onDoubleClick={resetPos}
+            title="Перетащите панель за шапку · двойной клик — вернуть на место">
             <b>💬 ДиДи <span className="va-sub">— ассистент ЦЦР</span></b>
             <button className="va-x" onClick={() => setOpen(false)} aria-label="Закрыть">×</button>
           </div>

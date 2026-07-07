@@ -180,6 +180,7 @@ router.post('/api/portal/events', auth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING id, kind, title, descr, starts_at, ends_at, all_day, department, created_by, created_by_name`,
       [kind, title, descr, starts_at, ends_at && !isNaN(+ends_at) ? ends_at : null, all_day, department, req.admin.id, name]);
+    broadcastAll('event', { id: rows[0].id });   // календарь у всех обновится мгновенно (в т.ч. после ДиДи)
     res.status(201).json({ ...rows[0], source: 'event', can_delete: true });
   } catch (e) { console.error('POST /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось создать событие' }); }
 });
@@ -209,6 +210,7 @@ router.patch('/api/portal/events/:id(\\d+)', auth, async (req, res) => {
     const { rows } = await db.query(
       `UPDATE events SET ${sets.join(', ')} WHERE id = $${vals.length}
        RETURNING id, kind, title, descr, starts_at, ends_at, all_day, department, created_by, created_by_name`, vals);
+    broadcastAll('event', { id });   // перенос встречи виден всем сразу
     res.json({ ...rows[0], source: 'event', can_delete: true });
   } catch (e) { console.error('PATCH /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
 });
@@ -220,6 +222,7 @@ router.delete('/api/portal/events/:id(\\d+)', auth, async (req, res) => {
     if (ev.rows[0].created_by !== req.admin.id && !['admin', 'manager'].includes(req.admin.role))
       return res.status(403).json({ error: 'Нет прав' });
     await db.query(`DELETE FROM events WHERE id = $1`, [id]);
+    broadcastAll('event', { id, deleted: true });
     res.json({ ok: true });
   } catch (e) { console.error('DELETE /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });

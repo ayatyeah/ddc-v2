@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getJSON, sendJSON } from '../api.js';
+import { on as rtOn } from './realtime.js';
 
 // Типы событий календаря + цвет/подпись. birthday/task/holiday вычисляются на сервере;
 // meeting/presentation создаёт сотрудник, holiday — только админ.
+// label — для фильтров (мн. число), one — подпись в карточке события (ед. число).
 const KINDS = {
-  birthday: { label: 'Дни рождения', color: '#b07d12' },
-  meeting: { label: 'Встречи', color: '#2f6fe0' },
-  presentation: { label: 'Презентации', color: '#5a3fd6' },
-  task: { label: 'Мои задачи', color: '#0a8a5a' },
-  holiday: { label: 'Праздники', color: '#c0455a' },
-  other: { label: 'Другое', color: '#0a7aa8' },
+  birthday: { label: 'Дни рождения', one: 'День рождения', color: '#b07d12' },
+  meeting: { label: 'Встречи', one: 'Встреча', color: '#2f6fe0' },
+  presentation: { label: 'Презентации', one: 'Презентация', color: '#5a3fd6' },
+  task: { label: 'Мои задачи', one: 'Задача', color: '#0a8a5a' },
+  holiday: { label: 'Праздники', one: 'Праздник', color: '#c0455a' },
+  other: { label: 'Другое', one: 'Событие', color: '#0a7aa8' },
 };
+// Имя автора в карточке: техническую учётку admin показываем по-человечески.
+const authorLabel = (n) => (n === 'admin' ? 'Администратор' : n);
 const FILTERS = ['birthday', 'meeting', 'presentation', 'task', 'holiday'];
 const WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MON = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
@@ -39,6 +43,7 @@ export default function Calendar({ me, onAuthLost }) {
     catch (e) { if (e.status === 401) onAuthLost?.(); }
   }, [range.from, range.to, onAuthLost]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => rtOn('event', () => load()), [load]);   // живое обновление: ДиДи/коллега изменил календарь
 
   // События по дню (YYYY-MM-DD), уже отфильтрованные активными типами.
   const byDay = useMemo(() => {
@@ -143,9 +148,9 @@ export default function Calendar({ me, onAuthLost }) {
                 <div className="cal-item-b">
                   <div className="cal-item-t">{e.title}</div>
                   <div className="cal-item-m">
-                    {KINDS[e.kind]?.label || e.kind}
+                    {KINDS[e.kind]?.one || e.kind}
                     {!e.all_day && e.starts_at && ` · ${new Date(e.starts_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
-                    {e.created_by_name && ` · ${e.created_by_name}`}
+                    {e.created_by_name && ` · ${authorLabel(e.created_by_name)}`}
                   </div>
                   {e.descr && <div className="cal-item-d">{e.descr}</div>}
                 </div>
