@@ -317,76 +317,47 @@
   .pt-modal { border-radius: 16px; padding: 18px; }
 }
 
-/* ═══════════════ Mission Control — «центр управления» ═══════════════ */
-/* Всегда тёмная палитра (NASA-эстетика), независимо от темы портала. */
-.mc { background: #05080f; color: #cde6ff; }
-.mc.pt-view { padding: 20px 22px 28px; }
-.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(80,200,255,0.14); }
-.mc-title { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-weight: 700; font-size: 1.05rem; letter-spacing: 0.14em; color: #eaf6ff; }
-.mc-led { width: 10px; height: 10px; border-radius: 50%; background: #37e0a0; box-shadow: 0 0 10px #37e0a0; animation: mcPulse 1.6s ease-in-out infinite; }
-@keyframes mcPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-.mc-clock { font-family: var(--mono); font-size: 13px; letter-spacing: 0.1em; color: #7fb2d6; display: flex; align-items: center; gap: 10px; }
-.mc-status { font-size: 10.5px; letter-spacing: 0.16em; padding: 3px 9px; border-radius: 6px; }
-.mc-status.ok { color: #37e0a0; background: rgba(55,224,160,0.12); }
-.mc-status.bad { color: #ff6b6b; background: rgba(255,80,80,0.14); }
+/* ═══════════════ Mission Control — живая сводка портала ═══════════════ */
+/* В стиле остального портала: карточки var(--card) с цветной полосой слева
+   (как статистика в CRM), обе темы через токены. «Живость» — мягкий пульс
+   индикатора и автообновление каждые 5 секунд. */
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 2px; }
+.mc-title { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 700; font-size: 1.4rem; letter-spacing: -0.01em; color: var(--ink); }
+.mc-led { width: 9px; height: 9px; border-radius: 50%; background: #1f9d57; box-shadow: 0 0 0 3px color-mix(in srgb, #1f9d57 20%, transparent); animation: mcPulse 1.8s ease-in-out infinite; }
+@keyframes mcPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .mc-led { animation: none; } }
+.mc-clock { font-family: var(--mono); font-size: 12.5px; color: var(--ink-faint); display: flex; align-items: center; gap: 10px; }
+.mc-status { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; padding: 3px 10px; border-radius: 980px; }
+.mc-status.ok { color: #1f9d57; background: color-mix(in srgb, #1f9d57 12%, transparent); }
+.mc-status.bad { color: #c0455a; background: color-mix(in srgb, #c0455a 12%, transparent); }
+.mc-sub { font-size: 13px; color: var(--ink-soft); margin: 4px 0 18px; }
 
 .mc-grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
-.mc-kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.mc-online { grid-column: 1 / -1; }
-.mc-online-list { flex-direction: row; flex-wrap: wrap; gap: 12px; max-height: none; }
-.mc-online-list .mc-person { flex: 0 1 auto; min-width: 180px; background: #0c1424; border: 1px solid rgba(90,150,210,0.14); border-radius: 12px; padding: 8px 12px 8px 8px; }
+.mc-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
-.mc-stat { position: relative; background: #0a1120; border: 1px solid rgba(90,150,210,0.18); border-radius: 14px; padding: 14px 14px 12px; overflow: hidden; }
-.mc-stat::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c, #3fe7ff); box-shadow: 0 0 12px var(--c, #3fe7ff); }
-.mc-stat.t-green { --c: #37e0a0; } .mc-stat.t-cyan { --c: #3fe7ff; } .mc-stat.t-amber { --c: #ffd24a; } .mc-stat.t-blue { --c: #6ea0ff; } .mc-stat.t-red { --c: #ff6b6b; }
-.mc-stat-k { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7fa6c6; }
-.mc-stat-v { font-family: var(--mono); font-weight: 700; font-size: 2rem; line-height: 1.1; color: #fff; margin-top: 4px; text-shadow: 0 0 16px color-mix(in srgb, var(--c) 45%, transparent); }
-.mc-stat-s { font-size: 11.5px; color: #6d90ae; margin-top: 2px; }
+.mc-stat { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px 16px 13px; overflow: hidden; box-shadow: var(--shadow-card); }
+.mc-stat::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, var(--blue)); }
+.mc-stat.t-green { --c: #1f9d57; } .mc-stat.t-cyan { --c: #0a7aa8; } .mc-stat.t-amber { --c: #c8960c; } .mc-stat.t-blue { --c: var(--blue); } .mc-stat.t-red { --c: #c0455a; }
+.mc-stat-k { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+.mc-stat-v { font-family: var(--display); font-weight: 700; font-size: 1.9rem; line-height: 1.1; color: var(--ink); margin-top: 5px; }
+.mc-stat-s { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
 
-.mc-panel { background: #0a1120; border: 1px solid rgba(90,150,210,0.18); border-radius: 14px; padding: 16px; min-width: 0; }
-.mc-panel-h { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: #6fa8cf; margin-bottom: 14px; }
+.mc-panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; min-width: 0; box-shadow: var(--shadow-card); }
+.mc-panel-h { font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 12px; }
 
-/* Круговой индикатор нагрузки */
-.mc-load { display: flex; flex-direction: column; align-items: center; }
-.mc-gauge { width: 152px; height: 152px; border-radius: 50%; display: grid; place-items: center; position: relative;
-  background: conic-gradient(var(--g, #37e0a0) calc(var(--p, 0) * 1%), rgba(120,170,220,0.08) 0); transition: background 0.6s; }
-.mc-gauge::before { content: ''; position: absolute; inset: 13px; border-radius: 50%; background: #0a1120; }
-.mc-gauge-v { position: relative; font-family: var(--mono); font-weight: 700; font-size: 2.2rem; color: #fff; }
-.mc-gauge-v small { font-size: 0.9rem; color: #7fa6c6; }
-.mc-metrics { display: flex; gap: 16px; margin-top: 16px; width: 100%; justify-content: space-around; }
-.mc-metrics div { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.mc-metrics span { font-size: 9.5px; letter-spacing: 0.1em; color: #6d90ae; }
-.mc-metrics b { font-family: var(--mono); font-size: 14px; color: #d6ecff; }
-
-/* Онлайн-сотрудники */
-.mc-online-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
-.mc-person { display: flex; align-items: center; gap: 10px; }
-.mc-av { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #04121f; background: linear-gradient(135deg, #37e0a0, #3fe7ff); }
-.mc-av i { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: #37e0a0; border: 2px solid #0a1120; box-shadow: 0 0 6px #37e0a0; }
+/* Онлайн-сотрудники — чипы в тон остальных списков портала */
+.mc-online-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.mc-person { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 180px; background: var(--canvas); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 8px 8px; }
+.mc-av { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--blue), var(--gold-soft, #c9a14a)); }
+[data-theme='dark'] .mc-av { color: #04122e; }
+.mc-av i { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: #1f9d57; border: 2px solid var(--card); }
 .mc-person-t { display: flex; flex-direction: column; min-width: 0; }
-.mc-person-t b { font-size: 13.5px; color: #eaf6ff; }
-.mc-person-t small { font-size: 11px; color: #6d90ae; }
+.mc-person-t b { font-size: 13.5px; color: var(--ink); }
+.mc-person-t small { font-size: 11px; color: var(--ink-faint); }
 
-/* Лента последних изменений */
-.mc-feed-list { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; }
-.mc-ev { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px solid rgba(90,150,210,0.08); }
-.mc-ev-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #3fe7ff; box-shadow: 0 0 8px currentColor; color: #3fe7ff; }
-.mc-ev.e-task .mc-ev-dot { background: #ffd24a; color: #ffd24a; }
-.mc-ev.e-file .mc-ev-dot { background: #6ea0ff; color: #6ea0ff; }
-.mc-ev.e-audit .mc-ev-dot { background: #37e0a0; color: #37e0a0; }
-.mc-ev-t { flex: 1; min-width: 0; font-size: 13px; color: #b9d6ee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mc-ev time { font-family: var(--mono); font-size: 11px; color: #6d90ae; flex: none; }
-
-@media (max-width: 1080px) {
-  .mc-grid { grid-template-columns: 1fr 1fr; }
-  .mc-feed { grid-column: 1 / -1; }
-  .mc-kpis { grid-template-columns: repeat(3, 1fr); }
-}
 @media (max-width: 760px) {
-  .mc.pt-view { padding: 16px 14px 24px; }
-  .mc-grid { grid-template-columns: 1fr; }
   .mc-kpis { grid-template-columns: repeat(2, 1fr); }
-  .mc-stat-v { font-size: 1.7rem; }
+  .mc-stat-v { font-size: 1.6rem; }
 }
 
 /* ═══════════════ Новые разделы: календарь, новости, задачи, уведомления ═══════════════ */

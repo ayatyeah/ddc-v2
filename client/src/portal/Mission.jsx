@@ -33,9 +33,10 @@ export default function Mission({ onAuthLost }) {
   return (
     <div className="pt-view mc">
       <div className="mc-head">
-        <div className="mc-title"><span className="mc-led" aria-hidden="true" /> MISSION CONTROL</div>
-        <div className="mc-clock">{clock} <span className={`mc-status ${err ? 'bad' : 'ok'}`}>{err ? 'СВЯЗЬ ПОТЕРЯНА' : 'SYSTEMS NOMINAL'}</span></div>
+        <div className="mc-title"><span className="mc-led" aria-hidden="true" /> Mission Control</div>
+        <div className="mc-clock">{clock} <span className={`mc-status ${err ? 'bad' : 'ok'}`}>{err ? 'Связь потеряна' : 'Все системы в норме'}</span></div>
       </div>
+      <div className="mc-sub">Живая сводка портала · обновляется каждые 5 секунд</div>
 
       {!d ? <div className="pt-empty">Загрузка телеметрии…</div> : (
         <div className="mc-grid">
@@ -50,7 +51,7 @@ export default function Mission({ onAuthLost }) {
           </div>
 
           <div className="mc-panel mc-online">
-            <div className="mc-panel-h">ОНЛАЙН · {d.onlineCount}</div>
+            <div className="mc-panel-h">Онлайн · {d.onlineCount}</div>
             <div className="mc-online-list">
               {d.online.length === 0 && <div className="pt-empty sm">Сейчас никого нет в сети.</div>}
               {d.online.map((u) => (
