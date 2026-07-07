@@ -15,9 +15,11 @@ const router = express.Router();
 router.get('/api/admin/dashboard', auth, async (req, res) => {
   try {
     const [lt, ln, lw, nt, np, fc, au] = await Promise.all([
-      db.query(`SELECT count(*)::int c FROM leads`),
-      db.query(`SELECT count(*)::int c FROM leads WHERE status='new'`),
-      db.query(`SELECT count(*)::int c FROM leads WHERE status='in_progress'`),
+      // Отклики на вакансии (kind='career') не считаем — они в разделе «Карьера»,
+      // иначе цифры дашборда расходятся со списком CRM (/api/leads их тоже исключает).
+      db.query(`SELECT count(*)::int c FROM leads WHERE COALESCE(kind,'') <> 'career'`),
+      db.query(`SELECT count(*)::int c FROM leads WHERE status='new' AND COALESCE(kind,'') <> 'career'`),
+      db.query(`SELECT count(*)::int c FROM leads WHERE status='in_progress' AND COALESCE(kind,'') <> 'career'`),
       db.query(`SELECT count(*)::int c FROM news`),
       db.query(`SELECT count(*)::int c FROM news WHERE published=true`),
       db.query(`SELECT content, fetched_at FROM feed_cache ORDER BY id DESC LIMIT 1`),
@@ -28,7 +30,7 @@ router.get('/api/admin/dashboard', auth, async (req, res) => {
     let by_status = [];
     let by_day = [];
     try {
-      const bs = await db.query(`SELECT status, count(*)::int AS c FROM leads GROUP BY status`);
+      const bs = await db.query(`SELECT status, count(*)::int AS c FROM leads WHERE COALESCE(kind,'') <> 'career' GROUP BY status`);
       by_status = bs.rows;
     } catch (e) { console.error('dashboard by_status:', e.message); }
     try {
@@ -43,6 +45,7 @@ router.get('/api/admin/dashboard', auth, async (req, res) => {
         LEFT JOIN leads l
           ON l.created_at >= gs.d
          AND l.created_at <  gs.d + interval '1 day'
+         AND COALESCE(l.kind,'') <> 'career'
         GROUP BY gs.d
         ORDER BY gs.d
       `);
@@ -105,7 +108,7 @@ router.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor', 'manag
     // по ВСЕМ заявкам. DDC ничего не продаёт — воронку/конверсию здесь не считаем.
     const { rows: leads } = await db.query(
       `SELECT id, full_name, email, phone, subject, message, status, admin_comment, rating, created_at, updated_at
-       FROM leads ORDER BY created_at DESC LIMIT 200`
+       FROM leads WHERE COALESCE(kind,'') <> 'career' ORDER BY created_at DESC LIMIT 200`
     );
     const sig = leadsSignature(leads);
 
