@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import viteCompression from 'vite-plugin-compression';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -24,7 +25,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/],
+        navigateFallbackDenylist: [/^\/api/, /^\/bake/],   // bake.html и кадры — мимо SPA-фолбэка
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
@@ -32,7 +33,18 @@ export default defineConfig({
         // Кросс-домен (шрифты gstatic) НЕ трогаем: SW-фетч упёрся бы в CSP connect-src 'self'.
         runtimeCaching: [
           {
-            urlPattern: ({ request, sameOrigin }) => sameOrigin && request.destination === 'image',
+            // Кадры пребейка фона: неизменяемые, их ~50 на тему — отдельный CacheFirst-кэш,
+            // чтобы их не вытесняло из общего образного кэша (maxEntries 60) и наоборот.
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/bake/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'ddc-bake',
+              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: ({ request, sameOrigin, url }) => sameOrigin && request.destination === 'image' && !url.pathname.startsWith('/bake/'),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'ddc-images',
@@ -57,6 +69,11 @@ export default defineConfig({
     outDir: '../public',
     emptyOutDir: true,
     rollupOptions: {
+      // Второй вход — служебная страница пребейка фона (не линкуется с сайта).
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        bake: fileURLToPath(new URL('./bake.html', import.meta.url)),
+      },
       output: {
         // Стабильные vendor-чанки кэшируются браузером между деплоями: при обновлении
         // нашего кода большие библиотеки (three/react) повторно не качаются.

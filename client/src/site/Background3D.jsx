@@ -85,32 +85,58 @@ export default function Background3D({ onReady }) {
       }).catch(() => {});
     };
 
-    if (offthread) {
-      worker = new Worker(new URL('./scene.worker.js', import.meta.url), { type: 'module' });
-      // Сбой воркера (нет WebGL в воркере, упал чанк) → пересоздаём канвас (старый уже
-      // отдан воркеру навсегда) и поднимаем сцену на главном потоке. Один раз.
-      const fallback = () => {
-        if (disposed || fellBack) return;
-        fellBack = true;
-        try { worker.terminate(); } catch { /* уже мёртв */ }
-        worker = null;
-        try { host.removeChild(canvas); } catch { /* уже снят */ }
-        canvas = makeCanvas();
-        requestAnimationFrame(() => { canvas.style.opacity = ''; });
+    // Живой WebGL-рендер: воркер (offthread) либо главный поток.
+    const startLive = () => {
+      if (offthread) {
+        worker = new Worker(new URL('./scene.worker.js', import.meta.url), { type: 'module' });
+        // Сбой воркера (нет WebGL в воркере, упал чанк) → пересоздаём канвас (старый уже
+        // отдан воркеру навсегда) и поднимаем сцену на главном потоке. Один раз.
+        const fallback = () => {
+          if (disposed || fellBack) return;
+          fellBack = true;
+          try { worker.terminate(); } catch { /* уже мёртв */ }
+          worker = null;
+          try { host.removeChild(canvas); } catch { /* уже снят */ }
+          canvas = makeCanvas();
+          requestAnimationFrame(() => { canvas.style.opacity = ''; });
+          startInline();
+        };
+        worker.onmessage = (e) => {
+          const d = e.data || {};
+          if (d.type === 'tier') onTier(d.tier);
+          else if (d.type === 'error') fallback();
+        };
+        worker.onerror = fallback;
+        const off = canvas.transferControlToOffscreen();
+        worker.postMessage({ type: 'init', canvas: off, env: mkEnv() }, [off]);
+        sendLogo();
+      } else {
         startInline();
-      };
-      worker.onmessage = (e) => {
-        const d = e.data || {};
-        if (d.type === 'tier') onTier(d.tier);
-        else if (d.type === 'error') fallback();
-      };
-      worker.onerror = fallback;
-      const off = canvas.transferControlToOffscreen();
-      worker.postMessage({ type: 'init', canvas: off, env: mkEnv() }, [off]);
-      sendLogo();
-    } else {
-      startInline();
-    }
+      }
+    };
+
+    // ТЕЛЕФОН: пребейк — скраббинг по запечённым кадрам пролёта (bakedScene.js).
+    // three.js вообще не загружается; в покое ноль работы GPU/CPU (не греем телефон).
+    // Если кадров нет (манифест не собран) — тихо откатываемся на живую сцену как раньше.
+    const startBaked = () => {
+      import('./bakedScene.js')
+        .then(({ initBaked }) => initBaked(canvas, mkEnv()))
+        .then((i) => {
+          if (disposed) { i.dispose(); return; }
+          inst = i;
+          onTier(0);
+          for (const [m, a] of queue.splice(0)) inst[m]?.(...a);
+        })
+        .catch(() => {
+          if (disposed) return;
+          try { host.removeChild(canvas); } catch { /* уже снят */ }
+          canvas = makeCanvas();
+          requestAnimationFrame(() => { canvas.style.opacity = ''; });
+          startLive();
+        });
+    };
+
+    if (mobile) startBaked(); else startLive();
 
     // ── DOM-события → сцена ──────────────────────────────────────────────────
     let lastW = vw();

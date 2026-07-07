@@ -45,7 +45,8 @@ export function initScene(canvas, env) {
   let curDpr = Math.min(env.dpr || 1, DPR_CAP);
   const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: perf.antialias, alpha: true, powerPreference: 'high-performance' });
+  // env.bake — режим пребейка (bake.html): preserveDrawingBuffer нужен для toDataURL кадров.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: perf.antialias, alpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: !!env.bake });
   renderer.setPixelRatio(curDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -566,6 +567,17 @@ export function initScene(canvas, env) {
   scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
 
   const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, prevT = 0;
+  // Пребейк: bakeT ≥ 0 «замораживает» время сцены — дрейф камеры/пульсы/мерцание одинаковы
+  // во всех кадрах, иначе при скраббинге по кадрам фон бы дрожал.
+  let bakeT = -1;
+  // «Сон в покое»: когда всё доехало и пользователь не трогает страницу несколько секунд,
+  // rAF-цикл останавливается ПОЛНОСТЬЮ (GPU/CPU = 0 — не греем ноутбук и телефон-фолбэк).
+  // Любой внешний вызов (скролл/тач/тема/resize) — kick() — мгновенно будит цикл.
+  let lastKick = 0, slept = false;
+  const kick = () => {
+    lastKick = clock.getElapsedTime();
+    if (slept && running) { slept = false; prevT = lastKick; if (!raf) raf = requestAnimationFrame(loop); }
+  };
   let perfAcc = 0, perfN = 0, perfT = 0;   // окно измерения fps
   // Адаптивный губернатор качества: 0 = полное, 1 = без параллакса мыши, 2 = без DOM-слоёв глубины,
   // 3 = + облегчённые материалы/additive-слои. Разрешение (DPR) НЕ трогаем — без «мыла».
@@ -588,9 +600,10 @@ export function initScene(canvas, env) {
     if (running) raf = requestAnimationFrame(loop);
     // Разовое применение старт-качества для слабых устройств (когда сцена уже собрана).
     if (!tierInit) { tierInit = true; if (perf.lite) { applyHeavy(true); try { env.onTier?.(perfTier); } catch { /* необязательно */ } } }
-    const t = clock.getElapsedTime();
+    const t = bakeT >= 0 ? bakeT : clock.getElapsedTime();   // в бейке время заморожено
     // Кадровый лимитер телефона: rAF уже запланирован — просто пропускаем ранний кадр.
-    if (FRAME_MIN && t - prevT < FRAME_MIN) return;
+    // В бейке t не движется — лимитер отключаем, иначе после первого кадра всё бы замерло.
+    if (FRAME_MIN && bakeT < 0 && t - prevT < FRAME_MIN) return;
     // Сглаживание по реальному времени кадра (а не фикс-шаг): переходы одинаково
     // плавные на 60/90/120 Гц и не «дёргаются» при просадках fps. dt ограничен,
     // чтобы после возврата из фоновой вкладки не было рывка.
@@ -763,6 +776,17 @@ export function initScene(canvas, env) {
       }
     }
 
+    // «Сон в покое»: всё доехало (прогресс/угол/инерция) и ≥6с не было внешних событий —
+    // рендерим этот финальный кадр и снимаем rAF. kick() (скролл/тач/тема/resize) разбудит.
+    if (bakeT < 0 && introDone && !dragging && t - lastKick > 6
+      && Math.abs(progress - disp) < 0.0008
+      && Math.abs(viewYaw - dispYaw) < 0.0008
+      && Math.abs(heroBiasT - heroBiasD) < 0.002
+      && Math.abs(yawVel) < 0.00001) {
+      slept = true;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    }
+
     renderer.render(scene, camera);
   }
 
@@ -793,20 +817,28 @@ export function initScene(canvas, env) {
   start();
 
   return {
-    setTarget(p) { progress = Math.min(1, Math.max(0, p)); wake(); },
+    setTarget(p) { progress = Math.min(1, Math.max(0, p)); kick(); wake(); },
     // Включить мягкий замедленный доезд фона (~1.1с) — вызывается при переходе между разделами.
-    navEase() { navEaseUntil = clock.getElapsedTime() + 1.1; wake(); },
-    setTheme(th) { scene.fog.color.setHex(fogColor(th)); wake(); },
-    setHeroBias(v) { heroBiasT = Math.min(1, Math.max(0, v || 0)); wake(); },
-    setYaw(y) { viewYaw = y || 0; wake(); },
-    setPage() { wake(); },
-    setVisible(v) { visible = !!v; if (visible) start(); else stop(); },
-    resize(w, h, dpr) { doResize(w, h, dpr); wake(); },
-    setLogo(img) { drawLogo?.(img); },
+    navEase() { navEaseUntil = clock.getElapsedTime() + 1.1; kick(); wake(); },
+    setTheme(th) { scene.fog.color.setHex(fogColor(th)); kick(); wake(); },
+    setHeroBias(v) { heroBiasT = Math.min(1, Math.max(0, v || 0)); kick(); wake(); },
+    setYaw(y) { viewYaw = y || 0; kick(); wake(); },
+    setPage() { kick(); wake(); },
+    setVisible(v) { visible = !!v; if (visible) { kick(); start(); } else stop(); },
+    resize(w, h, dpr) { doResize(w, h, dpr); kick(); wake(); },
+    setLogo(img) { drawLogo?.(img); kick(); wake(); },
     // Перетаскивание здания (рыскание). Фильтрация по UI/кнопке мыши — на мосте.
-    pointerDown(x) { if (progress > 0.4) return; dragging = true; lastX = x; yawVel = 0; },   // только когда здание видно
-    pointerMove(x) { if (!dragging) return; const d = (x - lastX) * 0.006; lastX = x; dragYaw += d; yawVel = d; },
-    pointerUp() { dragging = false; },
+    pointerDown(x) { if (progress > 0.4) return; dragging = true; lastX = x; yawVel = 0; kick(); },   // только когда здание видно
+    pointerMove(x) { if (!dragging) return; const d = (x - lastX) * 0.006; lastX = x; dragYaw += d; yawVel = d; kick(); },
+    pointerUp() { dragging = false; kick(); },
+    // Пребейк (bake.html): мгновенный «телепорт» сцены в прогресс p с замороженным временем —
+    // кадры детерминированы и сшиваются в плавный скраббинг без дрожи дрейфа/пульсов.
+    snap(p) {
+      bakeT = 10; introDone = true;
+      progress = disp = Math.min(1, Math.max(0, p));
+      dispYaw = viewYaw = 0; heroBiasT = heroBiasD = 0;
+      kick(); wake();
+    },
     dispose() {
       stop();
       [facadeA, facadeB].forEach((x) => x.dispose());

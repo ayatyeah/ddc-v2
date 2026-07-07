@@ -7,7 +7,6 @@ import Nav from './Nav.jsx';
 import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
-import InstallPrompt from './InstallPrompt.jsx';
 import Fog from './Fog.jsx';
 import CircuitField from './CircuitField.jsx';
 import DepthFog from './DepthFog.jsx';
@@ -230,7 +229,7 @@ export default function Site() {
       </main>
       <Footer />
       <Assistant />
-      <InstallPrompt />
+      {/* Плашка «Установить приложение» с сайта убрана: установка — в портале (Профиль). */}
     </>
   );
 }

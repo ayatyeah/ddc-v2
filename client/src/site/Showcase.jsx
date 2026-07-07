@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useLang } from '../store.js';
 import { t } from '../i18n.js';
 import Reveal from './Reveal.jsx';
-import { initBuilding } from './Building3D.js';
+// Building3D тянет three.js — грузим ЛЕНИВО при инициализации (см. init ниже),
+// иначе three попадал в главный бандл и качался даже на телефоне с пребейк-фоном.
 
 const CHIPS = [
   { k: 'c1', c: '#2f6fe0', style: { top: '8%', left: '5%' } },
@@ -35,10 +36,13 @@ export default function Showcase() {
       if (cancelled || !canvasRef.current) return;
       const cv = canvasRef.current;
       cv.style.transition = 'opacity 0.6s ease'; cv.style.opacity = '0';
-      inst = initBuilding(cv);
-      apply();
-      requestAnimationFrame(() => { cv.style.opacity = '1'; });
-      window.addEventListener('scroll', onScroll, { passive: true });
+      import('./Building3D.js').then(({ initBuilding }) => {
+        if (cancelled || !canvasRef.current) return;
+        inst = initBuilding(cv);
+        apply();
+        requestAnimationFrame(() => { cv.style.opacity = '1'; });
+        window.addEventListener('scroll', onScroll, { passive: true });
+      }).catch(() => { /* 3D-витрина необязательна */ });
     };
     // setTimeout (а не requestIdleCallback) — гарантированно ПОСЛЕ первой отрисовки страницы:
     // плашки/текст видны сразу, тяжёлая 3D-модель инициализируется следом (без «пустого экрана»).

@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useLang } from '../store.js';
 import { t, WORK_FACTS } from '../i18n.js';
 import Reveal from './Reveal.jsx';
-import { initComputer } from './Computer3D.js';
+// Computer3D тянет three.js — грузим ЛЕНИВО при инициализации (см. init ниже),
+// чтобы three не попадал в главный бандл (телефон с пребейк-фоном его не качает вовсе).
 
 export default function Workstation() {
   const lang = useLang();
@@ -26,11 +27,14 @@ export default function Workstation() {
       if (cancelled || !canvasRef.current) return;
       const cv = canvasRef.current;
       cv.style.transition = 'opacity 0.6s ease'; cv.style.opacity = '0';
-      inst = initComputer(cv, { facts: WORK_FACTS[lang] || WORK_FACTS.ru, brand: 'DDC · ЦЦР' });
-      apiRef.current = inst;
-      apply();
-      requestAnimationFrame(() => { cv.style.opacity = '1'; });
-      window.addEventListener('scroll', onScroll, { passive: true });
+      import('./Computer3D.js').then(({ initComputer }) => {
+        if (cancelled || !canvasRef.current) return;
+        inst = initComputer(cv, { facts: WORK_FACTS[lang] || WORK_FACTS.ru, brand: 'DDC · ЦЦР' });
+        apiRef.current = inst;
+        apply();
+        requestAnimationFrame(() => { cv.style.opacity = '1'; });
+        window.addEventListener('scroll', onScroll, { passive: true });
+      }).catch(() => { /* 3D-станция необязательна */ });
     };
     // setTimeout (а не requestIdleCallback) — гарантированно ПОСЛЕ первой отрисовки страницы:
     // плашки/текст видны сразу, тяжёлая 3D-модель инициализируется следом (без «пустого экрана»).

@@ -19,6 +19,11 @@ if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && !perf.lite
   window.__lenis = lenis;   // для программного скролла (router.navigate)
 }
 
+// PWA: ловим beforeinstallprompt ЗДЕСЬ (событие стреляет один раз при загрузке,
+// раньше, чем смонтируется портал) — кнопка установки живёт в портале (Профиль).
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__ddcInstall = e; });
+window.addEventListener('appinstalled', () => { window.__ddcInstall = null; });
+
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>

@@ -348,6 +348,36 @@ function Profile({ me, onAuthLost }) {
         )}
 
         <TwoFA onAuthLost={onAuthLost} />
+        <InstallApp />
+      </div>
+    </div>
+  );
+}
+
+/* ── Установка портала как приложения (PWA). Скромная карточка в Профиле —
+      с публичного сайта плашка убрана по решению владельца. beforeinstallprompt
+      ловится в main.jsx (window.__ddcInstall), здесь только кнопка. ── */
+function InstallApp() {
+  const [canPrompt, setCanPrompt] = useState(() => !!window.__ddcInstall);
+  const [iosHint, setIosHint] = useState(false);
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (standalone || (!canPrompt && !isIOS)) return null;   // уже установлено / браузер не умеет
+  const install = async () => {
+    const ev = window.__ddcInstall;
+    if (ev) {
+      ev.prompt();
+      try { await ev.userChoice; } catch { /* пользователь закрыл диалог */ }
+      window.__ddcInstall = null; setCanPrompt(false);
+    } else setIosHint((v) => !v);
+  };
+  return (
+    <div className="pt-2fa">
+      <div className="pt-2fa-h"><b>📱 Приложение</b></div>
+      <div className="pt-2fa-b">
+        <p>Установите портал как приложение: свой значок, полный экран, быстрый запуск.</p>
+        {iosHint && <p>На iPhone: «Поделиться» → «На экран „Домой“».</p>}
+        <button className="adm-btn ghost" onClick={install}>Установить приложение</button>
       </div>
     </div>
   );
