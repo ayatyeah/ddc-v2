@@ -1717,6 +1717,16 @@ html.lenis, html.lenis body { height: auto; }
      И снимаем параллакс-сдвиг с текста — пусть статичен (дешевле, без композитинга на скролле). */
   .hero-orbs { display: none !important; }
   .hero-inner { transform: none !important; }
+
+  /* ВЕЧНЫЕ анимации, которые грели телефон (iPhone тёплый даже в покое):
+     • градиент в заголовке героя (background-position на clip:text) — ПЕРЕРИСОВКА текста
+       каждый кадр все 8 секунд по кругу;
+     • «дыхание» светового столба — композит огромного (весь вьюпорт) слоя каждый кадр;
+     • mask-image поверх бегущей строки — дорогая связка mask+animation на iOS
+       (сам marquee остаётся: один дешёвый transform-слой). */
+  .hero-h1 .accent { animation: none !important; }
+  [data-theme='dark'] .hero::before { animation: none !important; }
+  .ribbon { -webkit-mask-image: none !important; mask-image: none !important; }
 }
 
 /* ════════════════ UX: 404, CTA-бэнд, скелетоны загрузки ════════════════ */
