@@ -527,9 +527,31 @@
 .va-mic.on { background: #e5484d; color: #fff; animation: vaPulse 1.3s ease-in-out infinite; }
 @keyframes vaPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(229,72,77,0.5); } 50% { box-shadow: 0 0 0 8px rgba(229,72,77,0); } }
 .va-nofb { padding: 4px 14px 8px; font-size: 12px; color: var(--ink-soft); }
-.va-typed { display: flex; gap: 6px; padding: 0 14px 14px; }
-.va-typed .adm-input { flex: 1; }
+.va-typed { display: flex; gap: 6px; padding: 0 14px 14px; align-items: stretch; }
+.va-typed .adm-input { flex: 1; min-width: 0; }
 @media (prefers-reduced-motion: reduce) { .va-mic.on { animation: none; } }
+
+/* Подсказки-чипы: примеры команд/вопросов одним кликом (текст-первый сценарий). */
+.va-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 14px 10px; }
+.va-chip {
+  padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 4%, transparent); color: var(--ink-soft);
+  font: inherit; font-size: 12px; cursor: pointer; text-align: left;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.va-chip:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
+.va-chip:disabled { opacity: 0.55; cursor: default; }
+/* Компактная кнопка голоса рядом с полем ввода (голос — бонус, не главный путь). */
+.va-mic2 {
+  width: 40px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer;
+  font: inherit; font-size: 15px; line-height: 1;
+  background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue);
+  transition: background 0.15s, transform 0.1s;
+}
+.va-mic2:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 18%, transparent); }
+.va-mic2.on { background: #e5484d; border-color: #e5484d; color: #fff; animation: vaPulse 1.3s ease-in-out infinite; transform: scale(calc(1 + var(--lvl, 0) * 0.05)); }
+.va-mic2:disabled { opacity: 0.5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .va-mic2.on { animation: none; } }
 
 /* Голосовой агент: результат действий, реакция на голос, «живая» кнопка */
 .va-msg.done { align-self: flex-start; background: color-mix(in srgb, #0a8a5a 14%, transparent); color: #0a8a5a; font-size: 12.5px; white-space: pre-line; border-bottom-left-radius: 4px; font-weight: 500; }

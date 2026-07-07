@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { sendJSON } from '../api.js';
 import { parseVoice } from './voiceNlu.js';
 
-// Голосовой агент портала — работает во ВСЕХ браузерах:
-//  • Chrome/Edge/Safari: встроенное распознавание речи (SpeechRecognition) — мгновенно, потоково,
-//    без сети до нашего сервера и без OpenAI-ключа. Авто-стоп по тишине — нативный.
-//  • Firefox и прочие без SpeechRecognition: запись → WAV → сервер (OpenAI) как фолбэк.
-// Понимание команды: сперва локальный парсер на правилах (voiceNlu, без ИИ, мгновенно); если
-// фраза незнакомая — тихий фолбэк на ИИ (/api/assistant/command). Исполнение — через существующие
-// эндпоинты (права роли проверяет сервер). Плюс всегда есть ввод команды текстом.
+// ДиДи — текст-первый ассистент портала (чат как основной путь, голос — бонус).
+//  • Текст: команды разбирает ЛОКАЛЬНЫЙ парсер (voiceNlu) — мгновенно, без ИИ и сети;
+//    незнакомые фразы тихо уходят в ИИ (/api/assistant/command). Вопросы — RAG по базе портала.
+//    ИИ БЕЗ истории диалога: каждый запрос независим (диалог хранится только в UI/sessionStorage) —
+//    предсказуемые ответы и минимальный расход токенов.
+//  • Голос: Chrome/Edge/Safari — нативный SpeechRecognition; Firefox — запись → WAV → сервер.
+//    Озвучка ответа — только если ввод был голосом (на текст ДиДи отвечает тихо).
+// Исполнение действий — через существующие эндпоинты (права роли проверяет сервер).
 const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const TAB_LABEL = {
   home: 'Главная', calendar: 'Календарь', booking: 'Переговорные', news: 'Новости', polls: 'Опросы',
@@ -16,6 +17,11 @@ const TAB_LABEL = {
   dm: 'Личные сообщения', chat: 'Чаты', profile: 'Профиль', mission: 'Mission Control',
 };
 const REQ_LABEL = { vacation: 'Отпуск', sick: 'Больничный', trip: 'Командировка', certificate: 'Справка', access: 'Доступ', equipment: 'Оборудование', pass: 'Пропуск', other: 'Заявка' };
+// Подсказки-чипы: жюри/новичок видит, что умеет ассистент, и запускает сценарий одним кликом.
+const CHIPS = {
+  cmd: ['Создай задачу: подготовить отчёт к пятнице', 'Впиши встречу завтра в 10:00', 'Оформи заявку на отпуск', 'Открой календарь'],
+  ask: ['Как оформить отпуск?', 'Какие требования к паролю?', 'Можно ли работать удалённо?', 'Как оформить командировку?'],
+};
 // Человеческая дата для подтверждений и озвучки («2026-07-08» → «8 июля»).
 const MONTHS_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const humanDate = (iso) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${+m[3]} ${MONTHS_RU[+m[2] - 1]}` : String(iso || ''); };
@@ -64,18 +70,25 @@ export default function VoiceAgent({ onGo, me }) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState('idle');    // idle | listening | processing
   const [level, setLevel] = useState(0);
-  const [log, setLog] = useState([]);
+  // Диалог живёт в sessionStorage: перезагрузка страницы не стирает демо-переписку.
+  // На сервер при этом уходит ТОЛЬКО текущая фраза (ИИ без истории — stateless).
+  const [log, setLog] = useState(() => { try { return (JSON.parse(sessionStorage.getItem('dd_chat') || '[]') || []).slice(-40); } catch { return []; } });
   const [typed, setTyped] = useState('');
   const [interim, setInterim] = useState('');   // живой текст распознавания (нативный движок)
   const [wake, setWake] = useState(() => { try { return localStorage.getItem('dd_wake') === '1'; } catch { return false; } });   // режим отклика на имя «ДиДи»
   const [mode, setMode] = useState('cmd');   // cmd = выполнять команды | ask = отвечать на вопросы (RAG по базе портала)
   const mrRef = useRef(null), streamRef = useRef(null), ctxRef = useRef(null), vadRef = useRef(0), cancelRef = useRef(false);
   const recRef = useRef(null);
+  const logRef = useRef(null), inputRef = useRef(null);
   const startNativeRef = useRef(() => {});   // всегда актуальная ссылка на запуск распознавания (для wake-слушателя)
   const modeRef = useRef('cmd'); modeRef.current = mode;   // актуальный режим для голосового ввода
   const voicesRef = useRef([]);
   const canVoice = !!SR || hasMic;
-  const addLog = (role, text, extra) => setLog((l) => [...l.slice(-12), { role, text, ...extra }]);
+  const addLog = (role, text, extra) => setLog((l) => [...l.slice(-39), { role, text, ...extra }]);
+  useEffect(() => { try { sessionStorage.setItem('dd_chat', JSON.stringify(log)); } catch { /* необязательно */ } }, [log]);
+  // Автопрокрутка чата вниз + фокус на вводе при открытии панели.
+  useEffect(() => { const el = logRef.current; if (el) el.scrollTop = el.scrollHeight; }, [log, phase, interim]);
+  useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 60); }, [open, mode]);
 
   // Голоса TTS: подгружаются асинхронно — кэшируем и обновляем по событию.
   useEffect(() => {
@@ -139,7 +152,8 @@ export default function VoiceAgent({ onGo, me }) {
   }, [speakBrowser, stopSpeaking]);
 
   // Исполнение действий (через уже существующие эндпоинты — права проверяет сервер).
-  const execute = useCallback(async (actions, say) => {
+  // voice=true — ввод был голосом: тогда подтверждение озвучиваем; на текст отвечаем тихо.
+  const execute = useCallback(async (actions, say, voice) => {
     const done = [];
     for (const a of (actions || [])) {
       try {
@@ -165,36 +179,55 @@ export default function VoiceAgent({ onGo, me }) {
     }
     const reply = say || (done.length ? done.join('; ') : 'Не понял команду');
     if (done.length) addLog('done', done.join('\n'));
-    addLog('bot', reply); speak(reply);
+    // Текстовый пузырь — только если есть что сказать сверх карточки результата
+    // (иначе один и тот же текст дублировался зелёным и серым).
+    if (say || !done.length) addLog('bot', reply);
+    if (voice) speak(reply);
   }, [onGo, me, speak]);
 
   // Разбор → исполнение. Сначала локальный парсер (без ИИ, мгновенно). Если он не понял —
-  // тихий фолбэк на ИИ (/api/assistant/command). Обратная связь по фазам мгновенная.
-  const runText = useCallback(async (text) => {
+  // тихий фолбэк на ИИ. Если и ИИ недоступен — не пугаем ошибкой, а подсказываем формат команд.
+  const runText = useCallback(async (text, voice) => {
     const t = (text || '').trim(); if (!t) return;
     addLog('me', t); setPhase('processing');
     try {
       const local = parseVoice(t);
-      if (local.length) { await execute(local); }
-      else { const r = await sendJSON('/api/assistant/command', 'POST', { text: t }); await execute(r.actions, r.say); }
-    } catch (e) { addLog('bot', e.message || 'Ассистент недоступен'); speak('Ассистент недоступен'); }
+      if (local.length) { await execute(local, undefined, voice); }
+      else {
+        try {
+          const r = await sendJSON('/api/assistant/command', 'POST', { text: t });
+          await execute(r.actions, r.say, voice);
+        } catch {
+          // ИИ недоступен — локальный парсер остаётся рабочим путём, подсказываем формат.
+          addLog('bot', 'Эту фразу я не разобрала, а ИИ сейчас недоступен. Я понимаю прямые команды, например: «создай задачу подготовить отчёт к пятнице», «встреча завтра в 10», «оформи заявку на отпуск», «открой календарь».');
+        }
+      }
+    } catch (e) { addLog('bot', e.message || 'Не получилось выполнить'); }
     finally { setPhase('idle'); }
-  }, [execute, speak]);
+  }, [execute]);
 
-  // Режим «Спроси»: RAG-ответ по базе портала со ссылками на источники (документы/новости/люди…).
-  const runAsk = useCallback(async (text) => {
+  // Режим «Спросить»: RAG-ответ по базе портала со ссылками на источники.
+  // Если ИИ недоступен — показываем результаты обычного поиска (тоже полезно, без «ошибки»).
+  const runAsk = useCallback(async (text, voice) => {
     const t = (text || '').trim(); if (!t) return;
     addLog('me', t); setPhase('processing');
     try {
       const r = await sendJSON('/api/assistant/ask', 'POST', { question: t });
       addLog('bot', r.answer || 'Не нашёл ответа.', { sources: r.sources || [] });
-      speak(r.answer || '');
-    } catch (e) { addLog('bot', e.message || 'ИИ недоступен'); }
+      if (voice) speak(r.answer || '');
+    } catch {
+      try {
+        const s = await sendJSON('/api/portal/search', 'POST', { q: t });
+        const found = (s.results || []).slice(0, 5);
+        if (found.length) addLog('bot', 'ИИ сейчас недоступен, но вот что нашлось в базе портала:', { sources: found.map((f) => ({ ...f, kindLabel: f.kindLabel || f.kind })) });
+        else addLog('bot', 'ИИ сейчас недоступен, и по запросу ничего не нашлось. Попробуйте другими словами.');
+      } catch { addLog('bot', 'Поиск сейчас недоступен. Попробуйте чуть позже.'); }
+    }
     finally { setPhase('idle'); }
   }, [speak]);
 
   // Обработка распознанного/введённого текста по текущему режиму (команда или вопрос).
-  const handleInput = useCallback((text) => { (modeRef.current === 'ask' ? runAsk : runText)(text); }, [runAsk, runText]);
+  const handleInput = useCallback((text, voice = false) => { (modeRef.current === 'ask' ? runAsk : runText)(text, voice); }, [runAsk, runText]);
 
   const cleanup = () => {
     clearTimeout(vadRef.current);
@@ -233,7 +266,7 @@ export default function VoiceAgent({ onGo, me }) {
       recRef.current = null; setLevel(0); setInterim('');
       const t = finalText.trim();
       if (cancelRef.current) { setPhase('idle'); return; }
-      if (t) handleInput(t); else { setPhase('idle'); addLog('bot', 'Не услышал. Повторите, пожалуйста.'); }
+      if (t) handleInput(t, true); else { setPhase('idle'); addLog('bot', 'Не услышал. Повторите, пожалуйста.'); }
     };
     try { rec.start(); setPhase('listening'); } catch { startMedia(); }
   };
@@ -294,14 +327,14 @@ export default function VoiceAgent({ onGo, me }) {
         // а не в разбор команд (mode передаём, чтобы сервер не тратил ИИ-вызов на NLU).
         const r = await sendJSON('/api/assistant/voice', 'POST', { audio, mode: modeRef.current });
         if (modeRef.current === 'ask') {
-          if (r.text) await runAsk(r.text);
+          if (r.text) await runAsk(r.text, true);
           else addLog('bot', 'Не расслышал. Повторите, пожалуйста.');
         } else if (r.text) {
           addLog('me', r.text);
           const local = parseVoice(r.text);   // сперва локальный разбор и здесь
-          if (local.length) { await execute(local); } else { await execute(r.actions, r.say); }
-        } else { await execute(r.actions, r.say); }
-      } catch (e) { addLog('bot', e.message || 'Ассистент недоступен'); speak('Ассистент недоступен'); }
+          if (local.length) { await execute(local, undefined, true); } else { await execute(r.actions, r.say, true); }
+        } else { await execute(r.actions, r.say, true); }
+      } catch (e) { addLog('bot', e.message || 'Ассистент недоступен'); }
       finally { setPhase('idle'); }
     };
     // Детект голоса/тишины (VAD): автоматически останавливаем запись после паузы.
@@ -313,7 +346,7 @@ export default function VoiceAgent({ onGo, me }) {
       const data = new Uint8Array(analyser.fftSize);
       // Порог адаптируется к микрофону: первые ~450мс меряем фоновый шум, речь = заметно выше него.
       const SIL_MS = 900, MAX_MS = 14000, NOSPEECH_MS = 6000;
-      let speaking = false, silence = 0, t0 = Date.now(), calib = [], noise = 0.01;
+      let speakingNow = false, silence = 0, t0 = Date.now(), calib = [], noise = 0.01;
       const tick = () => {
         if (!mrRef.current || mrRef.current.state === 'inactive') return;
         analyser.getByteTimeDomainData(data);
@@ -323,17 +356,16 @@ export default function VoiceAgent({ onGo, me }) {
         if (el < 450) calib.push(vol);
         else if (calib) { noise = Math.max(0.008, calib.reduce((a, b) => a + b, 0) / (calib.length || 1)); calib = null; }
         const speakThr = Math.max(0.02, noise * 2.4), silThr = Math.max(0.014, noise * 1.6);
-        if (vol > speakThr) { speaking = true; silence = 0; }
-        else if (speaking && vol < silThr) { if (!silence) silence = now; else if (now - silence > SIL_MS) { stopRec(); return; } }
+        if (vol > speakThr) { speakingNow = true; silence = 0; }
+        else if (speakingNow && vol < silThr) { if (!silence) silence = now; else if (now - silence > SIL_MS) { stopRec(); return; } }
         if (el > MAX_MS) { stopRec(); return; }
-        if (!speaking && el > NOSPEECH_MS) { stopRec(); return; }   // отправляем всё равно — тихую речь распознаёт сервер
+        if (!speakingNow && el > NOSPEECH_MS) { stopRec(); return; }   // отправляем всё равно — тихую речь распознаёт сервер
         vadRef.current = setTimeout(tick, 60);
       };
       mr.start(); setPhase('listening'); vadRef.current = setTimeout(tick, 60);
     } catch { cleanup(); setPhase('idle'); addLog('bot', 'Не удалось начать запись.'); }
   };
   const stopRec = () => { clearTimeout(vadRef.current); try { if (mrRef.current && mrRef.current.state !== 'inactive') mrRef.current.stop(); } catch {} try { recRef.current?.stop(); } catch {} };
-  const cancelRec = () => { cancelRef.current = true; stopRec(); };
 
   const listening = phase === 'listening', processing = phase === 'processing';
   return (
@@ -341,17 +373,17 @@ export default function VoiceAgent({ onGo, me }) {
       {open && (
         <div className="va-panel">
           <div className="va-head">
-            <b>🎙 ДиДи <span className="va-sub">— голосовой ассистент</span></b>
+            <b>💬 ДиДи <span className="va-sub">— ассистент ЦЦР</span></b>
             <button className="va-x" onClick={() => setOpen(false)} aria-label="Закрыть">×</button>
           </div>
           <div className="va-modes" role="tablist">
-            <button className={`va-mode ${mode === 'cmd' ? 'on' : ''}`} onClick={() => setMode('cmd')} role="tab" aria-selected={mode === 'cmd'}>⚡ Команда</button>
+            <button className={`va-mode ${mode === 'cmd' ? 'on' : ''}`} onClick={() => setMode('cmd')} role="tab" aria-selected={mode === 'cmd'}>⚡ Сделать</button>
             <button className={`va-mode ${mode === 'ask' ? 'on' : ''}`} onClick={() => setMode('ask')} role="tab" aria-selected={mode === 'ask'}>❓ Спросить</button>
           </div>
-          <div className="va-log">
+          <div className="va-log" ref={logRef}>
             {log.length === 0 && (mode === 'ask'
-              ? <div className="va-hint">Спросите что угодно о работе — я найду ответ в базе портала. Например: «Как оформить отпуск?», «Какие требования к паролю?», «Можно ли работать удалённо?», «Что делать при фишинговом письме?». Отвечу и покажу источники.</div>
-              : <div className="va-hint">Я — <b>ДиДи</b>. Нажмите «Говорить», скажите команду и сделайте паузу — я всё выполню. Например: «Открой календарь и впиши встречу на завтра в 10 утра», «Создай срочную задачу — отчёт к пятнице», «Оформи заявку на отпуск с 15 июля».{SR ? ' Включите «Реагировать на имя» — и просто скажите «ДиДи».' : ''}</div>)}
+              ? <div className="va-hint">Спросите что угодно о работе — я найду ответ в базе портала и покажу источники. Можно начать с подсказки ниже.</div>
+              : <div className="va-hint">Я — <b>ДиДи</b>. Напишите команду — создам задачу, встречу, заявку или открою раздел. Можно голосом: кнопка 🎙 рядом с полем ввода.{SR ? ' А если включить «Реагировать на имя» — просто скажите «ДиДи».' : ''}</div>)}
             {log.map((m, i) => (
               <div key={i} className={`va-msg ${m.role}`}>
                 {m.text}
@@ -367,32 +399,37 @@ export default function VoiceAgent({ onGo, me }) {
               </div>
             ))}
             {listening && interim && <div className="va-msg me interim">{interim}…</div>}
-            {processing && <div className="va-msg bot">{mode === 'ask' ? 'Ищу ответ в базе…' : 'Распознаю и выполняю…'}</div>}
+            {processing && <div className="va-msg bot">{mode === 'ask' ? 'Ищу ответ в базе…' : 'Разбираю и выполняю…'}</div>}
             {speaking && <button className="adm-btn sm" onClick={stopSpeaking} style={{ alignSelf: 'flex-start' }}>⏹ Прервать озвучку</button>}
           </div>
-          {canVoice ? (
-            <button className={`va-mic ${listening ? 'on' : ''}`} onClick={listening ? stopRec : startRec} disabled={processing}
-              style={listening ? { '--lvl': Math.min(1, level * 8) } : undefined}>
-              {listening ? '● Слушаю… (пауза = выполнить)' : processing ? 'Обрабатываю…' : '🎙 Говорить'}
-            </button>
-          ) : (
-            <div className="va-nofb">Микрофон недоступен — введите команду текстом:</div>
-          )}
+          <div className="va-chips" aria-label="Примеры">
+            {CHIPS[mode].map((c) => (
+              <button key={c} className="va-chip" disabled={processing || listening} onClick={() => handleInput(c)}>{c}</button>
+            ))}
+          </div>
+          <form className="va-typed" onSubmit={(e) => { e.preventDefault(); const t = typed; setTyped(''); handleInput(t); }}>
+            <input ref={inputRef} className="adm-input" placeholder={mode === 'ask' ? 'Ваш вопрос…' : 'Команда: «создай задачу…», «открой…»'} value={typed} onChange={(e) => setTyped(e.target.value)} disabled={processing || listening} />
+            {canVoice && (
+              <button type="button" className={`va-mic2 ${listening ? 'on' : ''}`} onClick={listening ? stopRec : startRec} disabled={processing}
+                title={listening ? 'Остановить и выполнить' : 'Сказать голосом'} aria-label="Голосовой ввод"
+                style={listening ? { '--lvl': Math.min(1, level * 8) } : undefined}>
+                {listening ? '●' : '🎙'}
+              </button>
+            )}
+            <button className="adm-btn sm" type="submit" disabled={processing || listening || !typed.trim()}>→</button>
+          </form>
+          {listening && <div className="va-nofb">Слушаю… скажите фразу и сделайте паузу — я выполню. Повторное нажатие ● останавливает.</div>}
           {SR && (
             <label className="va-wake" title="Фоновое прослушивание имени «ДиДи»">
               <input type="checkbox" checked={wake} onChange={(e) => setWake(e.target.checked)} />
               <span>Реагировать на имя «ДиДи»{wake ? ' — слушаю…' : ''}</span>
             </label>
           )}
-          <form className="va-typed" onSubmit={(e) => { e.preventDefault(); handleInput(typed); setTyped(''); }}>
-            <input className="adm-input" placeholder={mode === 'ask' ? 'Ваш вопрос…' : 'Команда текстом…'} value={typed} onChange={(e) => setTyped(e.target.value)} disabled={processing} />
-            <button className="adm-btn sm" type="submit" disabled={processing || !typed.trim()}>→</button>
-          </form>
         </div>
       )}
-      <button className={`va-fab ${listening ? 'live' : ''} ${wake && !open ? 'wake' : ''}`} onClick={() => setOpen((o) => !o)} aria-label="ДиДи — голосовой ассистент" title={wake ? 'ДиДи слушает имя' : 'ДиДи — голосовой ассистент'}>
+      <button className={`va-fab ${listening ? 'live' : ''} ${wake && !open ? 'wake' : ''}`} onClick={() => setOpen((o) => !o)} aria-label="ДиДи — ассистент" title={wake ? 'ДиДи слушает имя' : 'ДиДи — ассистент'}>
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+          <path d="M21 12a8 8 0 0 1-8 8H5a2 2 0 0 1-2-2v-6a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z" /><path d="M8 11h.01M12 11h.01M16 11h.01" />
         </svg>
       </button>
     </div>
