@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../store.js';
-import { t } from '../i18n.js';
+import { t, CV_HELP } from '../i18n.js';
 import { sendJSON, getJSON } from '../api.js';
 import Reveal from './Reveal.jsx';
 
@@ -61,6 +61,7 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
     } catch (e2) { setErr(e2?.message || t(lang, 'contact.err.server')); setState('error'); }
   };
 
+  const cvh = CV_HELP[lang] || CV_HELP.ru;
   const btnClass = state === 'sent' ? 'btn btn-primary ok' : state === 'error' ? 'btn btn-primary bad' : 'btn btn-primary';
   const btnLabel = state === 'sending' ? t(lang, 'contact.sending') : state === 'sent' ? t(lang, 'contact.sent') : state === 'error' ? err : t(lang, 'contact.send');
 
@@ -104,7 +105,7 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
                     <span>{cv ? cv.name : t(lang, 'careers.cv.pick')}</span>
                   </label>
                   {cv && <button type="button" className="cv-x" onClick={() => setCv(null)} aria-label="Убрать файл">✕</button>}
-                  <button type="button" className="cv-help-btn" onClick={() => setCvHelp(true)}>Каким должно быть резюме?</button>
+                  <button type="button" className="cv-help-btn" onClick={() => setCvHelp(true)}>{cvh.btn}</button>
                   <p className="cv-hint">{t(lang, 'careers.cv.hint')}</p>
                 </div>
               )}
@@ -121,19 +122,14 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
 
       {cvHelp && (
         <div className="cv-help-ov" onClick={() => setCvHelp(false)}>
-          <div className="cv-help" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Требования к резюме">
-            <div className="cv-help-h"><b>📄 Каким должно быть резюме</b><button onClick={() => setCvHelp(false)} aria-label="Закрыть">×</button></div>
+          <div className="cv-help" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={cvh.title}>
+            <div className="cv-help-h"><b>{cvh.title}</b><button onClick={() => setCvHelp(false)} aria-label={t(lang, 'news.close')}>×</button></div>
             <div className="cv-help-b">
-              <p>Чтобы мы быстрее оценили ваш отклик, приложите резюме (CV), где есть:</p>
+              <p>{cvh.intro}</p>
               <ul>
-                <li><b>Контакты</b> — ФИО, телефон, email, город, ссылки (GitHub/LinkedIn/портфолио).</li>
-                <li><b>Желаемая позиция</b> — на какую роль претендуете и уровень (junior/middle/senior).</li>
-                <li><b>Опыт работы</b> — компания, должность, период и <b>конкретные достижения с цифрами</b> (что сделали и какой результат).</li>
-                <li><b>Ключевые навыки и стек</b> — языки, фреймворки, инструменты, базы данных.</li>
-                <li><b>Образование и сертификаты</b> — вуз, курсы, профильные сертификаты.</li>
-                <li><b>Проекты</b> — 2–3 значимых проекта с вашей ролью и технологиями.</li>
+                {cvh.items.map(([b, d], i) => <li key={i}><b>{b}</b> — {d}</li>)}
               </ul>
-              <p className="cv-help-fmt"><b>Формат:</b> PDF или DOCX, 1–2 страницы, актуальная версия, без сканов и лишних украшений. Пишите по делу — конкретика важнее объёма.</p>
+              <p className="cv-help-fmt"><b>{cvh.fmtLabel}</b> {cvh.fmt}</p>
             </div>
           </div>
         </div>

@@ -70,6 +70,10 @@ export const DICT = {
     'contact.addr': 'г. Астана, пр. Мангилик Ел, 57А',
     'asst.title': 'Ассистент ЦЦР', 'asst.status': 'Онлайн · отвечает сразу',
     'asst.greeting': 'Здравствуйте! Я ассистент Центра цифрового развития. Выберите вопрос — отвечу сразу.',
+    'asst.error': 'Извините, ассистент временно недоступен. Напишите нам через раздел «Контакты».',
+    'asst.ask': 'Спросите об услугах ЦЦР…',
+    'about.history': 'История', 'footer.privacy': 'Политика конфиденциальности', 'contact.map': 'Карта', 'a11y.skip': 'К основному содержимому',
+    'pwa.install': 'Установить приложение', 'pwa.dismiss': 'Скрыть', 'pwa.iosHint': 'Чтобы установить: нажмите «Поделиться» и выберите «На экран „Домой“».',
     'footer.rights': 'Все права защищены', 'footer.admin': 'Админ-панель',
     'nav.projects': 'Проекты', 'nav.sections': 'Разделы', 'nav.careers': 'Карьера', 'nav.partners': 'Партнёрам',
     'a11y.toggle': 'Версия для слабовидящих',
@@ -160,6 +164,10 @@ export const DICT = {
     'contact.addr': 'Астана қ., Мәңгілік Ел даңғ., 57А',
     'asst.title': 'ЦДО Көмекшісі', 'asst.status': 'Онлайн · бірден жауап береді',
     'asst.greeting': 'Сәлеметсіз бе! Мен Цифрлық даму орталығының көмекшісімін. Сұрақты таңдаңыз — бірден жауап беремін.',
+    'asst.error': 'Кешіріңіз, көмекші уақытша қолжетімсіз. Бізге «Байланыс» бөлімі арқылы жазыңыз.',
+    'asst.ask': 'ЦДО қызметтері туралы сұраңыз…',
+    'about.history': 'Тарих', 'footer.privacy': 'Құпиялылық саясаты', 'contact.map': 'Карта', 'a11y.skip': 'Негізгі мазмұнға өту',
+    'pwa.install': 'Қолданбаны орнату', 'pwa.dismiss': 'Жасыру', 'pwa.iosHint': 'Орнату үшін: «Бөлісу» түймесін басып, «Негізгі экранға» таңдаңыз.',
     'footer.rights': 'Барлық құқықтар қорғалған', 'footer.admin': 'Әкімші панелі',
     'nav.projects': 'Жобалар', 'nav.sections': 'Бөлімдер', 'nav.careers': 'Мансап', 'nav.partners': 'Серіктестерге',
     'a11y.toggle': 'Нашар көретіндерге арналған нұсқа',
@@ -250,8 +258,12 @@ export const DICT = {
     'contact.addr': 'Astana, Mangilik El Ave., 57A',
     'asst.title': 'DDC Assistant', 'asst.status': 'Online · instant replies',
     'asst.greeting': 'Hello! I am the Digital Development Center assistant. Pick a question — I will answer right away.',
+    'asst.error': 'Sorry, the assistant is temporarily unavailable. Please reach us via the Contacts section.',
+    'asst.ask': 'Ask about DDC services…',
+    'about.history': 'History', 'footer.privacy': 'Privacy Policy', 'contact.map': 'Map', 'a11y.skip': 'Skip to main content',
+    'pwa.install': 'Install app', 'pwa.dismiss': 'Dismiss', 'pwa.iosHint': 'To install: tap Share and choose “Add to Home Screen”.',
     'footer.rights': 'All rights reserved', 'footer.admin': 'Admin panel',
-    'nav.projects': 'Projects', 'nav.sections': 'Sections',
+    'nav.projects': 'Projects', 'nav.sections': 'Sections', 'nav.careers': 'Careers', 'nav.partners': 'For partners',
     'a11y.toggle': 'Version for the visually impaired',
     'services.apply': 'Request service',
     'services.select': 'Service',
@@ -296,6 +308,102 @@ export const TIMELINE = {
     { y: '2022', t: 'Systems development', d: 'Began developing, implementing and maintaining information systems for the National Bank and its subsidiaries.' },
     { y: '17.07.2025', t: 'Digital Development Center', d: 'Reorganised into JSC “Digital Development Center of the National Bank of Kazakhstan”. Sole shareholder — the NBK.' },
   ],
+};
+
+/* Памятка «Каким должно быть резюме» (модалка в форме отклика на вакансию). */
+export const CV_HELP = {
+  ru: {
+    btn: 'Каким должно быть резюме?', title: '📄 Каким должно быть резюме',
+    intro: 'Чтобы мы быстрее оценили ваш отклик, приложите резюме (CV), где есть:',
+    items: [
+      ['Контакты', 'ФИО, телефон, email, город, ссылки (GitHub/LinkedIn/портфолио).'],
+      ['Желаемая позиция', 'на какую роль претендуете и уровень (junior/middle/senior).'],
+      ['Опыт работы', 'компания, должность, период и конкретные достижения с цифрами (что сделали и какой результат).'],
+      ['Ключевые навыки и стек', 'языки, фреймворки, инструменты, базы данных.'],
+      ['Образование и сертификаты', 'вуз, курсы, профильные сертификаты.'],
+      ['Проекты', '2–3 значимых проекта с вашей ролью и технологиями.'],
+    ],
+    fmtLabel: 'Формат:', fmt: 'PDF или DOCX, 1–2 страницы, актуальная версия, без сканов и лишних украшений. Пишите по делу — конкретика важнее объёма.',
+  },
+  kk: {
+    btn: 'Түйіндеме қандай болуы керек?', title: '📄 Түйіндеме қандай болуы керек',
+    intro: 'Өтінішіңізді тезірек бағалауымыз үшін мынадай мәліметтері бар түйіндеме (CV) тіркеңіз:',
+    items: [
+      ['Байланыс', 'ТАӘ, телефон, email, қала, сілтемелер (GitHub/LinkedIn/портфолио).'],
+      ['Қалаған лауазым', 'қандай рөлге және деңгейге үміткерсіз (junior/middle/senior).'],
+      ['Жұмыс тәжірибесі', 'компания, лауазым, кезең және сандармен көрсетілген нақты жетістіктер (не істедіңіз және қандай нәтиже).'],
+      ['Негізгі дағдылар мен стек', 'тілдер, фреймворктер, құралдар, деректер қорлары.'],
+      ['Білім және сертификаттар', 'жоғары оқу орны, курстар, бейінді сертификаттар.'],
+      ['Жобалар', 'сіздің рөліңіз бен технологиялары көрсетілген 2–3 маңызды жоба.'],
+    ],
+    fmtLabel: 'Формат:', fmt: 'PDF немесе DOCX, 1–2 бет, өзекті нұсқа, сканерсіз және артық әшекейсіз. Нақты жазыңыз — нақтылық көлемнен маңызды.',
+  },
+  en: {
+    btn: 'What should a CV look like?', title: '📄 What a good CV looks like',
+    intro: 'To review your application faster, attach a CV that includes:',
+    items: [
+      ['Contacts', 'full name, phone, email, city, links (GitHub/LinkedIn/portfolio).'],
+      ['Desired position', 'the role you apply for and your level (junior/middle/senior).'],
+      ['Work experience', 'company, position, period and concrete achievements with numbers (what you did and the result).'],
+      ['Key skills and stack', 'languages, frameworks, tools, databases.'],
+      ['Education and certificates', 'university, courses, relevant certifications.'],
+      ['Projects', '2–3 significant projects with your role and technologies.'],
+    ],
+    fmtLabel: 'Format:', fmt: 'PDF or DOCX, 1–2 pages, up to date, no scans or excessive decoration. Be concise — specifics matter more than length.',
+  },
+};
+
+/* Политика конфиденциальности — заголовки страницы и разделы на трёх языках.
+   {year} в note подставляется текущим годом. Текст ознакомительный. */
+export const PRIVACY = {
+  ru: {
+    eyebrow: 'Правовая информация', title: 'Политика конфиденциальности',
+    note: 'Шаблонная редакция от {year} года. Текст носит ознакомительный характер и подлежит согласованию с юристом.',
+    sections: [
+      ['1. Общие положения', 'Настоящая Политика конфиденциальности определяет порядок обработки и защиты персональных данных пользователей сайта АО «Центр цифрового развития» (далее — «Центр»). Используя сайт и оставляя свои данные через формы обратной связи, вы соглашаетесь с условиями настоящей Политики.'],
+      ['2. Какие данные мы собираем', 'Мы можем обрабатывать: фамилию, имя, отчество; адрес электронной почты; номер телефона; тему и текст обращения, а также технические данные (cookie, IP-адрес, сведения о браузере), необходимые для работы сайта.'],
+      ['3. Цели обработки', 'Данные обрабатываются для обработки и ответа на ваши обращения, предоставления запрошенных услуг и информации, улучшения работы сайта и сервисов, а также выполнения требований законодательства.'],
+      ['4. Правовые основания', 'Обработка осуществляется на основании вашего согласия, а также в соответствии с законодательством Республики Казахстан о персональных данных и их защите.'],
+      ['5. Передача третьим лицам', 'Мы не передаём ваши персональные данные третьим лицам, за исключением случаев, предусмотренных законодательством, либо с вашего отдельного согласия.'],
+      ['6. Хранение и защита', 'Персональные данные хранятся не дольше, чем это необходимо для целей обработки. Мы принимаем организационные и технические меры для защиты данных от несанкционированного доступа, изменения и уничтожения.'],
+      ['7. Ваши права', 'Вы вправе запросить информацию об обработке ваших данных, потребовать их уточнения, блокирования или удаления, а также отозвать согласие на обработку, направив запрос на указанные ниже контакты.'],
+      ['8. Файлы cookie', 'Сайт использует файлы cookie для корректной работы и аналитики. Вы можете отключить cookie в настройках браузера, однако это может повлиять на работу отдельных функций сайта.'],
+      ['9. Изменения политики', 'Мы можем периодически обновлять настоящую Политику. Актуальная редакция всегда доступна на этой странице.'],
+      ['10. Контакты', 'По вопросам обработки персональных данных: г. Астана, пр. Мангилик Ел, 57А. Телефон: +7 727 258-49-58. Email: info@bsbnb.kz.'],
+    ],
+  },
+  kk: {
+    eyebrow: 'Құқықтық ақпарат', title: 'Құпиялылық саясаты',
+    note: '{year} жылғы үлгілік редакция. Мәтін танысу мақсатында берілген және заңгермен келісілуі тиіс.',
+    sections: [
+      ['1. Жалпы ережелер', 'Осы Құпиялылық саясаты «Цифрлық даму орталығы» АҚ (бұдан әрі — «Орталық») сайты пайдаланушыларының дербес деректерін өңдеу және қорғау тәртібін айқындайды. Сайтты пайдаланып, кері байланыс нысандары арқылы деректеріңізді қалдыра отырып, сіз осы Саясаттың шарттарымен келісесіз.'],
+      ['2. Біз қандай деректерді жинаймыз', 'Біз мыналарды өңдей аламыз: тегі, аты, әкесінің аты; электрондық пошта; телефон нөмірі; өтініштің тақырыбы мен мәтіні, сондай-ақ сайттың жұмысы үшін қажетті техникалық деректер (cookie, IP-мекенжай, браузер туралы мәліметтер).'],
+      ['3. Өңдеу мақсаттары', 'Деректер өтініштеріңізді өңдеу және жауап беру, сұралған қызметтер мен ақпаратты ұсыну, сайт пен сервистердің жұмысын жақсарту, сондай-ақ заңнама талаптарын орындау үшін өңделеді.'],
+      ['4. Құқықтық негіздер', 'Өңдеу сіздің келісіміңіз негізінде, сондай-ақ Қазақстан Республикасының дербес деректер және оларды қорғау туралы заңнамасына сәйкес жүзеге асырылады.'],
+      ['5. Үшінші тұлғаларға беру', 'Біз сіздің дербес деректеріңізді үшінші тұлғаларға бермейміз, заңнамада көзделген жағдайларды немесе сіздің жеке келісіміңізді қоспағанда.'],
+      ['6. Сақтау және қорғау', 'Дербес деректер өңдеу мақсаттары үшін қажет мерзімнен ұзақ сақталмайды. Біз деректерді рұқсатсыз қол жеткізуден, өзгертуден және жоюдан қорғау үшін ұйымдастырушылық және техникалық шаралар қолданамыз.'],
+      ['7. Сіздің құқықтарыңыз', 'Сіз деректеріңіздің өңделуі туралы ақпарат сұрауға, оларды нақтылауды, бұғаттауды немесе жоюды талап етуге, сондай-ақ төмендегі байланыстарға сұрау жіберу арқылы өңдеуге келісімді қайтарып алуға құқылысыз.'],
+      ['8. Cookie файлдары', 'Сайт дұрыс жұмыс істеу және аналитика үшін cookie файлдарын пайдаланады. Сіз cookie-ді браузер баптауларында өшіре аласыз, бірақ бұл сайттың кейбір функцияларына әсер етуі мүмкін.'],
+      ['9. Саясаттың өзгеруі', 'Біз осы Саясатты мезгіл-мезгіл жаңартып отыруымыз мүмкін. Өзекті редакция әрқашан осы бетте қолжетімді.'],
+      ['10. Байланыс', 'Дербес деректерді өңдеу мәселелері бойынша: Астана қ., Мәңгілік Ел даңғ., 57А. Телефон: +7 727 258-49-58. Email: info@bsbnb.kz.'],
+    ],
+  },
+  en: {
+    eyebrow: 'Legal information', title: 'Privacy Policy',
+    note: 'Template edition of {year}. The text is for information only and is subject to legal review.',
+    sections: [
+      ['1. General provisions', 'This Privacy Policy defines how personal data of users of the website of JSC “Digital Development Center” (the “Center”) is processed and protected. By using the site and submitting your data through feedback forms, you agree to the terms of this Policy.'],
+      ['2. What data we collect', 'We may process: last name, first name, patronymic; email address; phone number; the subject and text of your enquiry, as well as technical data (cookies, IP address, browser information) required for the site to operate.'],
+      ['3. Purposes of processing', 'Data is processed to handle and respond to your enquiries, provide the requested services and information, improve the site and services, and to comply with legal requirements.'],
+      ['4. Legal grounds', 'Processing is carried out on the basis of your consent and in accordance with the legislation of the Republic of Kazakhstan on personal data and its protection.'],
+      ['5. Transfer to third parties', 'We do not transfer your personal data to third parties, except in cases provided for by law or with your separate consent.'],
+      ['6. Storage and protection', 'Personal data is stored no longer than necessary for the purposes of processing. We take organisational and technical measures to protect data from unauthorised access, alteration and destruction.'],
+      ['7. Your rights', 'You have the right to request information about the processing of your data, to demand its clarification, blocking or deletion, and to withdraw your consent to processing by sending a request to the contacts below.'],
+      ['8. Cookies', 'The site uses cookies for proper operation and analytics. You can disable cookies in your browser settings, but this may affect certain site functions.'],
+      ['9. Changes to the policy', 'We may update this Policy from time to time. The current version is always available on this page.'],
+      ['10. Contacts', 'For questions about personal data processing: Astana, Mangilik El Ave., 57A. Phone: +7 727 258-49-58. Email: info@bsbnb.kz.'],
+    ],
+  },
 };
 
 export const BOARD = {

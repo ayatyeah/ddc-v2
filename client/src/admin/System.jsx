@@ -20,12 +20,18 @@ const ST = {
 };
 const SEV = { minor: ['Низкая', '#5b6472'], major: ['Средняя', '#c8960c'], critical: ['Критическая', '#c0455a'] };
 const INCST = { open: 'Открыт', monitoring: 'Наблюдение', resolved: 'Решён' };
+const CHECK_KIND = {
+  none: 'Ручной', self: 'Портал (self)', db: 'База данных', http: 'HTTP-пинг', tcp: 'TCP-порт',
+};
 
 export default function System({ onAuthLost }) {
   const [d, setD] = useState(null);
   const [mon, setMon] = useState(null);
   const [err, setErr] = useState(false);
   const [inc, setInc] = useState({ title: '', system_id: '', severity: 'minor' });
+  const [checking, setChecking] = useState(false);
+  const [cfgId, setCfgId] = useState(null);              // id системы с открытой настройкой проверки
+  const [cfg, setCfg] = useState({ check_kind: 'none', check_target: '' });
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +50,18 @@ export default function System({ onAuthLost }) {
   };
   const setIncStatus = async (i, status) => { try { await sendJSON(`/api/admin/incidents/${i.id}`, 'PATCH', { status }); load(); } catch {} };
 
+  const checkNow = async () => {
+    setChecking(true);
+    try { await sendJSON('/api/admin/systems/check', 'POST', {}); await load(); }
+    catch (e) { alert(e.message || 'Не удалось выполнить проверку'); }
+    finally { setChecking(false); }
+  };
+  const openCfg = (sys) => { setCfgId(sys.id); setCfg({ check_kind: sys.check_kind || 'none', check_target: sys.check_target || '' }); };
+  const saveCfg = async (sys) => {
+    try { await sendJSON(`/api/admin/systems/${sys.id}`, 'PATCH', { check_kind: cfg.check_kind, check_target: cfg.check_target.trim() }); setCfgId(null); await load(); }
+    catch (e) { alert(e.message || 'Не удалось сохранить'); }
+  };
+
   if (!mon && !d) return <div className="adm-hint">{err ? 'Мониторинг недоступен' : 'Загрузка мониторинга…'}</div>;
   const s = d?.server || {};
   const sla = mon?.sla || { total: 0, byStatus: {}, avgUptime: 100, openInc: 0 };
@@ -51,8 +69,11 @@ export default function System({ onAuthLost }) {
 
   return (
     <>
-      <div className="nm-head"><h2>Мониторинг ИТ-систем</h2></div>
-      <div className="adm-note">Статус-борд систем ЦЦР, инциденты и телеметрия сервера. Автообновление каждые 8 секунд.</div>
+      <div className="nm-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h2>Мониторинг ИТ-систем</h2>
+        <button className="adm-btn sm" onClick={checkNow} disabled={checking} title="Запустить реальные проверки доступности прямо сейчас">{checking ? 'Проверяю…' : '⟳ Проверить сейчас'}</button>
+      </div>
+      <div className="adm-note">Реестр систем ЦЦР с реальными проверками доступности (пинг каждые 30 сек), инциденты и телеметрия сервера. <b>Live</b> — статус измеряется автоматически; <b>ручной</b> — выставляется дежурным.</div>
 
       {/* Общий статус + SLA */}
       <div className={`mon-banner ${overallOk ? 'ok' : 'warn'}`}>
@@ -72,6 +93,8 @@ export default function System({ onAuthLost }) {
       <div className="mon-systems">
         {(mon?.systems || []).map((sys) => {
           const [lbl, col] = ST[sys.status] || ST.operational;
+          const auto = sys.check_kind && sys.check_kind !== 'none';
+          const editing = cfgId === sys.id;
           return (
             <div className="mon-sys" key={sys.id} style={{ '--c': col }}>
               <div className="mon-sys-top">
@@ -80,10 +103,37 @@ export default function System({ onAuthLost }) {
                 <span className="mon-sys-badge">{lbl}</span>
               </div>
               <div className="mon-sys-up"><span className="mon-sys-bar"><i style={{ width: `${Math.min(100, sys.uptime)}%` }} /></span><b>{Number(sys.uptime).toFixed(2)}%</b></div>
+              <div className="mon-sys-live">
+                {auto ? (
+                  <span className="mon-live" title={`Авто-проверка: ${CHECK_KIND[sys.check_kind]}${sys.check_target ? ' · ' + sys.check_target : ''}`}>
+                    <span className="mon-live-dot" /> live · {CHECK_KIND[sys.check_kind]}
+                    {sys.latency_ms != null && <> · {sys.latency_ms} мс</>}
+                    {sys.last_checked && <> · {ago(sys.last_checked)} назад</>}
+                  </span>
+                ) : <span className="mon-manual">ручной статус</span>}
+                <button className="mon-cfg-btn" onClick={() => (editing ? setCfgId(null) : openCfg(sys))} title="Настроить проверку доступности">⚙</button>
+              </div>
               {sys.note && <div className="mon-sys-note">{sys.note}</div>}
-              <select className="adm-input mon-sys-sel" value={sys.status} onChange={(e) => setStatus(sys, e.target.value)}>
-                {Object.entries(ST).map(([k, v]) => <option key={k} value={k}>{v[0]}</option>)}
-              </select>
+              {editing ? (
+                <div className="mon-cfg">
+                  <select className="adm-input" value={cfg.check_kind} onChange={(e) => setCfg({ ...cfg, check_kind: e.target.value })}>
+                    {Object.entries(CHECK_KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                  {(cfg.check_kind === 'http' || cfg.check_kind === 'tcp') && (
+                    <input className="adm-input" placeholder={cfg.check_kind === 'http' ? 'https://адрес' : 'host:port'} value={cfg.check_target}
+                      onChange={(e) => setCfg({ ...cfg, check_target: e.target.value })} />
+                  )}
+                  <div className="mon-cfg-act">
+                    <button className="adm-btn sm" onClick={() => saveCfg(sys)}>Сохранить</button>
+                    <button className="adm-ghost sm" onClick={() => setCfgId(null)}>Отмена</button>
+                  </div>
+                </div>
+              ) : (
+                <select className="adm-input mon-sys-sel" value={sys.status} onChange={(e) => setStatus(sys, e.target.value)}
+                  title={auto ? 'У авто-систем статус измеряется пингом; ручной выбор перезапишется при следующей проверке (кроме «Обслуживание»)' : ''}>
+                  {Object.entries(ST).map(([k, v]) => <option key={k} value={k}>{v[0]}</option>)}
+                </select>
+              )}
             </div>
           );
         })}

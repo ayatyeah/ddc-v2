@@ -11,11 +11,22 @@ import { parseVoice } from './voiceNlu.js';
 // эндпоинты (права роли проверяет сервер). Плюс всегда есть ввод команды текстом.
 const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const TAB_LABEL = {
-  home: 'Главная', calendar: 'Календарь', news: 'Новости', docs: 'Документы', requests: 'Заявки',
-  tasks: 'Задачи', people: 'Сотрудники', depts: 'Отделы', dm: 'Личные сообщения', chat: 'Чаты',
-  profile: 'Профиль', mission: 'Mission Control',
+  home: 'Главная', calendar: 'Календарь', booking: 'Переговорные', news: 'Новости', polls: 'Опросы',
+  docs: 'Документы', requests: 'Заявки', tasks: 'Задачи', people: 'Сотрудники', depts: 'Отделы',
+  dm: 'Личные сообщения', chat: 'Чаты', profile: 'Профиль', mission: 'Mission Control',
 };
 const REQ_LABEL = { vacation: 'Отпуск', sick: 'Больничный', trip: 'Командировка', certificate: 'Справка', access: 'Доступ', equipment: 'Оборудование', pass: 'Пропуск', other: 'Заявка' };
+// Человеческая дата для подтверждений и озвучки («2026-07-08» → «8 июля»).
+const MONTHS_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const humanDate = (iso) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${+m[3]} ${MONTHS_RU[+m[2] - 1]}` : String(iso || ''); };
+// Озвучиваем не больше ~400 символов и режем по границе предложения (сервер клипует по 500 —
+// иначе голос обрывается на полуслове).
+const ttsTrim = (text) => {
+  const t = String(text || '').trim();
+  if (t.length <= 400) return t;
+  const cut = t.slice(0, 400), m = cut.match(/^[\s\S]*[.!?…]/);
+  return (m ? m[0] : cut).trim();
+};
 const hasMic = typeof navigator !== 'undefined' && navigator.mediaDevices && typeof window !== 'undefined' && window.MediaRecorder;
 const blobToDataUrl = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(blob); });
 
@@ -73,8 +84,23 @@ export default function VoiceAgent({ onGo, me }) {
     window.speechSynthesis?.addEventListener?.('voiceschanged', load);
     return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', load);
   }, []);
-  // Если панель закрыли во время записи — прекращаем слушать (без отправки).
-  useEffect(() => { if (!open && phase === 'listening') { cancelRef.current = true; try { mrRef.current?.state !== 'inactive' && mrRef.current?.stop(); } catch {} try { recRef.current?.stop(); } catch {} } }, [open, phase]);
+  // Пока ДиДи говорит — держим флаг: на это время глушится wake-слушатель (иначе ассистент
+  // услышит в колонках сам себя и своё имя) и появляется кнопка «стоп».
+  const [speaking, setSpeaking] = useState(false);
+  const ttsRef = useRef(null), ttsUrlRef = useRef('');
+  const stopSpeaking = useCallback(() => {
+    try { ttsRef.current?.pause(); } catch {}
+    try { if (ttsUrlRef.current) URL.revokeObjectURL(ttsUrlRef.current); } catch {}
+    ttsRef.current = null; ttsUrlRef.current = '';
+    try { window.speechSynthesis?.cancel(); } catch {}
+    setSpeaking(false);
+  }, []);
+  // Если панель закрыли — замолкаем; если закрыли во время записи — прекращаем слушать (без отправки).
+  useEffect(() => {
+    if (open) return;
+    stopSpeaking();
+    if (phase === 'listening') { cancelRef.current = true; try { mrRef.current?.state !== 'inactive' && mrRef.current?.stop(); } catch {} try { recRef.current?.stop(); } catch {} }
+  }, [open, phase, stopSpeaking]);
   // Запасной голос — браузерный. Спокойные параметры (pitch 1.0, чуть медленнее), избегаем
   // роботизированных системных голосов (MS Irina/Pavel Desktop), если есть выбор получше.
   const speakBrowser = useCallback((text) => {
@@ -89,27 +115,28 @@ export default function VoiceAgent({ onGo, me }) {
         || ru.find((x) => !robotic.test(x.name))
         || ru[0];
       if (v) u.voice = v;
-      synth.cancel(); synth.speak(u);
-    } catch { /* TTS необязателен */ }
+      u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false);
+      synth.cancel(); setSpeaking(true); synth.speak(u);
+    } catch { setSpeaking(false); /* TTS необязателен */ }
   }, []);
   // Основной голос ДиДи — тёплый нейросетевой (сервер, gpt-4o-mini-tts). Если недоступен —
   // мгновенно откатываемся на браузерный голос. Предыдущее воспроизведение прерываем.
-  const ttsRef = useRef(null);
   const speak = useCallback(async (text) => {
-    if (!text) return;
-    try { ttsRef.current?.pause(); } catch {}
-    try { window.speechSynthesis?.cancel(); } catch {}
+    const spoken = ttsTrim(text);
+    if (!spoken) return;
+    stopSpeaking();
     try {
-      const res = await fetch('/api/assistant/tts', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      setSpeaking(true);
+      const res = await fetch('/api/assistant/tts', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spoken }) });
       if (!res.ok) throw new Error('tts ' + res.status);
       const blob = await res.blob();
       if (!/audio/.test(blob.type)) throw new Error('not audio');
       const url = URL.createObjectURL(blob);
-      const a = new Audio(url); ttsRef.current = a;
-      a.onended = () => { try { URL.revokeObjectURL(url); } catch {} };
+      const a = new Audio(url); ttsRef.current = a; ttsUrlRef.current = url;
+      a.onended = () => { try { URL.revokeObjectURL(url); } catch {} if (ttsUrlRef.current === url) ttsUrlRef.current = ''; setSpeaking(false); };
       await a.play();
-    } catch { speakBrowser(text); }   // фолбэк на браузерный голос
-  }, [speakBrowser]);
+    } catch { setSpeaking(false); speakBrowser(spoken); }   // фолбэк на браузерный голос
+  }, [speakBrowser, stopSpeaking]);
 
   // Исполнение действий (через уже существующие эндпоинты — права проверяет сервер).
   const execute = useCallback(async (actions, say) => {
@@ -120,11 +147,11 @@ export default function VoiceAgent({ onGo, me }) {
         else if (a.type === 'create_event' && a.title && a.date) {
           const starts_at = a.time ? `${a.date}T${a.time}:00` : `${a.date}T00:00:00`;
           await sendJSON('/api/portal/events', 'POST', { kind: a.kind || 'meeting', title: a.title, starts_at, all_day: !a.time, author_name: me?.username });
-          done.push(`Событие «${a.title}» на ${a.date}${a.time ? ' ' + a.time : ''}`); onGo?.('calendar');
+          done.push(`Событие «${a.title}» — ${humanDate(a.date)}${a.time ? ' в ' + a.time : ''}`); onGo?.('calendar');
         }
         else if (a.type === 'create_task' && a.title) {
           await sendJSON('/api/portal/tasks', 'POST', { title: a.title, priority: a.priority || 'normal', due_date: a.due_date || undefined });
-          done.push(`Задача «${a.title}»`); onGo?.('tasks');
+          done.push(`Задача «${a.title}»${a.due_date ? ' — к ' + humanDate(a.due_date) : ''}`); onGo?.('tasks');
         }
         else if (a.type === 'create_news' && a.title) {
           await sendJSON('/api/portal/news', 'POST', { title: a.title, body: a.body || a.title, category: a.category || 'company', author_name: me?.username });
@@ -179,6 +206,7 @@ export default function VoiceAgent({ onGo, me }) {
 
   // Основной движок: встроенное распознавание браузера. Мгновенно, потоково, авто-стоп по тишине.
   const startNative = () => {
+    stopSpeaking();   // замолкаем перед прослушиванием — иначе микрофон ловит голос ДиДи
     cancelRef.current = false; setInterim('');
     let rec;
     try { rec = new SR(); } catch { return startMedia(); }
@@ -188,8 +216,8 @@ export default function VoiceAgent({ onGo, me }) {
     rec.onresult = (e) => {
       let live = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const seg = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalText += seg; else live += seg;
+        const seg = (e.results[i][0].transcript || '').trim();
+        if (e.results[i].isFinal) finalText += (finalText && seg ? ' ' : '') + seg; else live += seg;
       }
       setInterim(live || finalText); setLevel(0.5);
     };
@@ -215,9 +243,10 @@ export default function VoiceAgent({ onGo, me }) {
 
   // Режим «ДиДи»: фоновое распознавание ждёт обращение по имени и сразу запускает приём команды.
   // Работает только на движках с SpeechRecognition (Chrome/Edge/Safari). Пока идёт команда
-  // (phase≠idle) — слушатель имени приостановлен, чтобы не было двух распознавателей на один микрофон.
+  // (phase≠idle) или ДиДи говорит (speaking) — слушатель имени приостановлен: не должно быть
+  // двух распознавателей на один микрофон, и ассистент не должен просыпаться от своего же голоса.
   useEffect(() => {
-    if (!wake || !SR || phase !== 'idle') return;
+    if (!wake || !SR || phase !== 'idle' || speaking) return;
     let rec, stopped = false, restartT = 0;
     try { rec = new SR(); } catch { return; }
     rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = true;
@@ -232,12 +261,13 @@ export default function VoiceAgent({ onGo, me }) {
     rec.onend = () => { if (!stopped) restartT = setTimeout(() => { try { rec.start(); } catch {} }, 300); };   // авто-рестарт (Chrome сам обрывает continuous)
     try { rec.start(); } catch {}
     return () => { stopped = true; clearTimeout(restartT); try { rec.stop(); } catch {} };
-  }, [wake, phase]);
+  }, [wake, phase, speaking]);
   useEffect(() => { try { localStorage.setItem('dd_wake', wake ? '1' : '0'); } catch {} }, [wake]);
 
   // Фолбэк-движок (Firefox и т.п. без SpeechRecognition): запись → WAV → сервер.
   const startMedia = async () => {
     if (!hasMic || phase !== 'idle') return;
+    stopSpeaking();   // замолкаем перед прослушиванием — иначе микрофон ловит голос ДиДи
     cancelRef.current = false;
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
@@ -260,8 +290,13 @@ export default function VoiceAgent({ onGo, me }) {
           dctx.close();
           audio = await blobToDataUrl(encodeWav(audioBuffer));   // WAV 16кГц — надёжное распознавание
         } catch { audio = await blobToDataUrl(blob); }           // фолбэк: как записали
-        const r = await sendJSON('/api/assistant/voice', 'POST', { audio });
-        if (r.text) {
+        // В режиме «Спросить» серверу нужна только транскрипция — дальше вопрос уходит в RAG,
+        // а не в разбор команд (mode передаём, чтобы сервер не тратил ИИ-вызов на NLU).
+        const r = await sendJSON('/api/assistant/voice', 'POST', { audio, mode: modeRef.current });
+        if (modeRef.current === 'ask') {
+          if (r.text) await runAsk(r.text);
+          else addLog('bot', 'Не расслышал. Повторите, пожалуйста.');
+        } else if (r.text) {
           addLog('me', r.text);
           const local = parseVoice(r.text);   // сперва локальный разбор и здесь
           if (local.length) { await execute(local); } else { await execute(r.actions, r.say); }
@@ -333,6 +368,7 @@ export default function VoiceAgent({ onGo, me }) {
             ))}
             {listening && interim && <div className="va-msg me interim">{interim}…</div>}
             {processing && <div className="va-msg bot">{mode === 'ask' ? 'Ищу ответ в базе…' : 'Распознаю и выполняю…'}</div>}
+            {speaking && <button className="adm-btn sm" onClick={stopSpeaking} style={{ alignSelf: 'flex-start' }}>⏹ Прервать озвучку</button>}
           </div>
           {canVoice ? (
             <button className={`va-mic ${listening ? 'on' : ''}`} onClick={listening ? stopRec : startRec} disabled={processing}

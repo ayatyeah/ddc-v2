@@ -12,7 +12,7 @@ export default function Footer() {
         <span className="brand">DDC — {t(lang, 'hero.eyebrow')}</span>
         <span className="sp" />
         <span>© {year} · {t(lang, 'footer.rights')}</span>
-        <a href="/politika-konfidencialnosti" onClick={goPrivacy}>Политика конфиденциальности</a>
+        <a href="/politika-konfidencialnosti" onClick={goPrivacy}>{t(lang, 'footer.privacy')}</a>
         <a href="tel:+77272584958">+7 727 258-49-58</a>
         <a href="mailto:info@bsbnb.kz">info@bsbnb.kz</a>
         <a href="/portal" data-spa>{t(lang, 'portal.enter')}</a>

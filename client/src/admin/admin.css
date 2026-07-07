@@ -633,6 +633,37 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .mon-sys-up b { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
 .mon-sys-note { font-size: 12px; color: var(--ink-faint); margin-top: 8px; line-height: 1.45; }
 .mon-sys-sel { margin-top: 10px; font-size: 12.5px; padding: 6px 8px; }
+.mon-sys-live { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+.mon-live { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-size: 11px; font-weight: 600; color: #1f9d57; font-variant-numeric: tabular-nums; }
+.mon-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #1f9d57; flex: none; box-shadow: 0 0 0 0 color-mix(in srgb, #1f9d57 60%, transparent); animation: monpulse 1.8s ease-out infinite; }
+@keyframes monpulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, #1f9d57 55%, transparent); } 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.mon-manual { flex: 1; font-size: 11px; color: var(--ink-faint); }
+.mon-cfg-btn { flex: none; border: 1px solid var(--line); background: var(--card); border-radius: 8px; width: 26px; height: 24px; cursor: pointer; color: var(--ink-soft); font-size: 12px; line-height: 1; }
+.mon-cfg-btn:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); }
+.mon-cfg { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.mon-cfg .adm-input { font-size: 12.5px; padding: 6px 8px; }
+.mon-cfg-act { display: flex; gap: 8px; }
+
+/* ── Массовые рассылки + экспорт ── */
+.adm-ok { color: #1f9d57; font-size: 13px; margin-top: 8px; font-weight: 600; }
+.bc-compose { display: flex; flex-direction: column; gap: 10px; max-width: 720px; }
+.bc-body { resize: vertical; min-height: 100px; line-height: 1.5; font-family: inherit; }
+.bc-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.bc-lbl { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-soft); flex: 1 1 220px; }
+.bc-lbl .adm-input { font-size: 13px; }
+.bc-hist { display: flex; flex-direction: column; gap: 10px; max-width: 820px; }
+.bc-item { display: flex; align-items: flex-start; gap: 14px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.bc-item-b { flex: 1; min-width: 0; }
+.bc-item-b b { font-size: 14px; display: block; }
+.bc-item-b p { margin: 4px 0 6px; font-size: 13px; color: var(--ink-soft); line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.bc-item-b small { font-size: 11.5px; color: var(--ink-faint); }
+.bc-count { flex: none; font-size: 20px; font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; text-align: center; line-height: 1.1; }
+.bc-count small { display: block; font-size: 10px; font-weight: 500; color: var(--ink-faint); }
+.bc-export { display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+.bc-backup { align-self: flex-start; }
+.bc-csv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.bc-csv-grid a { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-decoration: none; }
+.bc-csv-tag { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-faint); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
 .mon-inc-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .mon-inc-form .adm-input:first-child { flex: 1 1 220px; }
 .mon-incidents { display: flex; flex-direction: column; gap: 10px; }

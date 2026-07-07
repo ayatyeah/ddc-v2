@@ -1,14 +1,28 @@
 {
+  "id": "/",
   "name": "Центр цифрового развития · НБРК",
   "short_name": "ЦЦР DDC",
   "description": "Цифровые продукты и IT-инфраструктура для финансового сектора Казахстана.",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#0a1224",
   "theme_color": "#0a1224",
   "lang": "ru",
+  "dir": "ltr",
+  "categories": ["business", "finance", "productivity"],
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/ddc.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Портал сотрудников", "short_name": "Портал", "url": "/portal", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Услуги", "short_name": "Услуги", "url": "/uslugi" },
+    { "name": "Контакты", "short_name": "Контакты", "url": "/kontakty" },
+    { "name": "Админ-панель", "short_name": "Админ", "url": "/admin" }
   ]
 }

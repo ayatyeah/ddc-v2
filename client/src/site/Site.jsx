@@ -1,11 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useA11y, useTheme } from '../store.js';
+import { useA11y, useTheme, useLang } from '../store.js';
+import { t } from '../i18n.js';
 import { useRoute } from './router.js';
 import { ROUTES, NotFoundPage } from './pages.jsx';
 import Nav from './Nav.jsx';
 import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
+import InstallPrompt from './InstallPrompt.jsx';
 import Fog from './Fog.jsx';
 import CircuitField from './CircuitField.jsx';
 import DepthFog from './DepthFog.jsx';
@@ -40,6 +42,7 @@ export default function Site() {
   const route = known || ROUTES['/'];       // фон/оттенок неба для 404 берём как у главной
   const Page = known ? route.Comp : NotFoundPage;
   const isMobile = useIsMobile();
+  const lang = useLang();
   // «Лёгкий» режим: слабое устройство ИЛИ слабый GPU ИЛИ reduced-motion (см. perfProfile).
   // На таких НЕ грузим декор-слои глубины (PCB/туман/HUD/частицы) и параллакс мыши.
   const lowPower = useState(() => perf.lite)[0];
@@ -177,7 +180,7 @@ export default function Site() {
 
   return (
     <>
-      <a href="#main" className="skip-link">К основному содержимому</a>
+      <a href="#main" className="skip-link">{t(lang, 'a11y.skip')}</a>
       <div id="scroll-bg" aria-hidden="true" />
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="bg-planet" aria-hidden="true" />
@@ -209,6 +212,7 @@ export default function Site() {
       </main>
       <Footer />
       <Assistant />
+      <InstallPrompt />
     </>
   );
 }

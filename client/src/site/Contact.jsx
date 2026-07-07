@@ -106,7 +106,7 @@ export default function Contact() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Мәңгілік Ел, 57А → Карта
+              Мәңгілік Ел, 57А → {t(lang, 'contact.map')}
             </a>
           </div>
         </Reveal>

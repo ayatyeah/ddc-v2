@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getJSON } from '../api.js';
 
-const ENTITY_LABEL = { lead: 'Заявка', news: 'Новость', service: 'Услуга', career: 'Карьера', vacancy: 'Вакансия', user: 'Пользователь', department: 'Отдел', feed: 'AI-лента', system: 'Система', incident: 'Инцидент', wiki: 'База знаний' };
+const ENTITY_LABEL = { lead: 'Заявка', news: 'Новость', service: 'Услуга', career: 'Карьера', vacancy: 'Вакансия', user: 'Пользователь', department: 'Отдел', feed: 'AI-лента', system: 'Система', incident: 'Инцидент', wiki: 'База знаний', broadcast: 'Рассылка' };
 const FILTERS = [
   { id: '', label: 'Все' },
   { id: 'lead', label: 'Заявки' },
@@ -14,6 +14,7 @@ const FILTERS = [
   { id: 'system', label: 'Системы' },
   { id: 'incident', label: 'Инциденты' },
   { id: 'wiki', label: 'База знаний' },
+  { id: 'broadcast', label: 'Рассылки' },
   { id: 'feed', label: 'AI-лента' },
 ];
 const fmt = (ts) => { try { return new Date(ts).toLocaleString('ru-RU'); } catch { return ''; } };

@@ -83,6 +83,7 @@ try {
   if (lite) document.documentElement.dataset.perf = 'lite';
 } catch { /* SSR/edge */ }
 
-// offthread выставляется в true из scene.worker.js (рендер в Web Worker): в этом режиме
-// сцена не снижает DPR/качество под fps — главный поток свободен, скролл плавный.
+// offthread выставляет мост (Background3D.jsx), когда сцена рендерится в Web Worker через
+// OffscreenCanvas: three.js уходит с главного потока, скролл плавный даже под GPU-нагрузкой.
+// Здесь всегда false — это дефолт для снимка env.perf, который мост передаёт сцене.
 export const perf = { engine, browser, lowPower, weakGpu, softwareGpu, lite, mobile, gpu, dprCap, antialias, offthread: false };

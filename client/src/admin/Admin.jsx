@@ -22,9 +22,10 @@ const WebAnalytics = lazy(() => import('./WebAnalytics.jsx'));
 const System = lazy(() => import('./System.jsx'));
 const Security = lazy(() => import('./Security.jsx'));
 const Wiki = lazy(() => import('./Wiki.jsx'));
+const Broadcasts = lazy(() => import('./Broadcasts.jsx'));
 
 const ROLE_LABEL = { admin: 'Администратор', manager: 'Начальник отдела', staff: 'Сотрудник', editor: 'Редактор', viewer: 'Просмотр' };
-const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', webviews: 'Веб-аналитика', careers: 'Карьера', system: 'Мониторинг', security: 'Безопасность', wiki: 'База знаний', services: 'Услуги', news: 'Новости', history: 'История', users: 'Пользователи' };
+const TITLES = { dashboard: 'Дашборд', leads: 'Заявки', ai: 'ИИ-аналитика', analytics: 'Аналитика', webviews: 'Веб-аналитика', careers: 'Карьера', system: 'Мониторинг', security: 'Безопасность', wiki: 'База знаний', broadcast: 'Рассылки', services: 'Услуги', news: 'Новости', history: 'История', users: 'Пользователи' };
 
 function Ico({ name, size = 20 }) {
   const p = {
@@ -37,6 +38,7 @@ function Ico({ name, size = 20 }) {
     system: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.2" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></>,
     security: <><path d="M12 3l7 3v6c0 4.4-3 7.5-7 9-4-1.5-7-4.6-7-9V6z" /><path d="M9 12l2 2 4-4" /></>,
     wiki: <><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M14 3v5h5M8 13h8M8 17h5" /></>,
+    broadcast: <><path d="M3 11l18-7-7 18-2.5-7.5z" /><path d="M11.5 12.5L21 4" /></>,
     webviews: <><path d="M3 3v18h18" /><path d="M7 14l3-4 3 3 4-6" /></>,
     news: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
     services: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" /></>,
@@ -139,6 +141,7 @@ export default function Admin() {
     { id: 'system', show: isAdmin || isManager },
     { id: 'security', show: isAdmin || isManager },
     { id: 'wiki', show: isAdmin || isManager || role === 'editor' },
+    { id: 'broadcast', show: isAdmin || isManager },
     { id: 'services', show: isAdmin || role === 'editor' || role === 'viewer' },
     { id: 'news', show: isAdmin || role === 'editor' || role === 'viewer' },
     { id: 'history', show: !isStaff },
@@ -193,6 +196,7 @@ export default function Admin() {
             {tab === 'system' && (isAdmin || isManager) && <System onAuthLost={() => setState('login')} />}
             {tab === 'security' && (isAdmin || isManager) && <Security onAuthLost={() => setState('login')} />}
             {tab === 'wiki' && (isAdmin || isManager || role === 'editor') && <Wiki onAuthLost={() => setState('login')} canEdit={isAdmin || isManager || role === 'editor'} />}
+            {tab === 'broadcast' && (isAdmin || isManager) && <Broadcasts onAuthLost={() => setState('login')} isAdmin={isAdmin} />}
             {tab === 'services' && <ServicesManager onAuthLost={() => setState('login')} canEdit={canEditNews} />}
             {tab === 'news' && <NewsManager onAuthLost={() => setState('login')} canEdit={canEditNews} />}
             {tab === 'history' && <History onAuthLost={() => setState('login')} />}

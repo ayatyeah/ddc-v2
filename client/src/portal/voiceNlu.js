@@ -34,10 +34,12 @@ function parseDate(text, now) {
   if (m) return fmt(addDays(today, +m[1] * (m[2] === 'недел' ? 7 : 1)));
   const WD = { воскресень: 0, понедельник: 1, вторник: 2, сред: 3, четверг: 4, пятниц: 5, суббот: 6 };
   for (const k in WD) if (new RegExp(k).test(text)) { let d = addDays(today, 1); for (let i = 0; i < 7; i++) { if (d.getDay() === WD[k]) return fmt(d); d = addDays(d, 1); } }
+  // Явную дату без года трактуем как ближайшую будущую: «3 июля», сказанное 7 июля, — это следующий год.
+  const nextOccurrence = (mon, day) => { let d = new Date(now.getFullYear(), mon, day); if (d < today) d = new Date(now.getFullYear() + 1, mon, day); return fmt(d); };
   m = text.match(new RegExp('(\\d{1,2})\\s*(?:-?(?:го|е|ое|ье|ого))?\\s*(' + MONTH_RE + ')'));   // «3 июля», «15-го июля»
-  if (m) { const day = +m[1], mon = monthIndex(m[2]); if (mon >= 0 && day >= 1 && day <= 31) return fmt(new Date(now.getFullYear(), mon, day)); }
+  if (m) { const day = +m[1], mon = monthIndex(m[2]); if (mon >= 0 && day >= 1 && day <= 31) return nextOccurrence(mon, day); }
   m = text.match(new RegExp('([а-я]+(?:\\s+[а-я]+)?)\\s+(' + MONTH_RE + ')'));   // «третье июля», «двадцать пятое августа»
-  if (m) { const day = ordinalDay(m[1]), mon = monthIndex(m[2]); if (mon >= 0 && day >= 1) return fmt(new Date(now.getFullYear(), mon, day)); }
+  if (m) { const day = ordinalDay(m[1]), mon = monthIndex(m[2]); if (mon >= 0 && day >= 1) return nextOccurrence(mon, day); }
   return null;
 }
 
@@ -56,6 +58,7 @@ function parseTime(text) {
 }
 
 const TABS = [
+  ['booking', /переговорк|переговорн|бронир|брон[ья]/], ['polls', /опрос|голосован/],
   ['calendar', /календар|расписани|событи/], ['news', /новост/], ['docs', /документ|файл/],
   ['requests', /заявк|обращени/], ['tasks', /задач|задани|таск/], ['people', /сотрудник|персонал|коллег|люди/],
   ['depts', /отдел|департамент|подразделени/], ['dm', /личн[а-я]*\s*сообщени|личк/], ['chat', /чат/],
@@ -63,11 +66,16 @@ const TABS = [
 ];
 const matchTab = (text) => { for (const [tab, re] of TABS) if (re.test(text)) return tab; return null; };
 
-const priorityOf = (t) => /не\s*срочн|не\s*важн|низк[а-я]*\s*приоритет|низк[а-я]*\s*важн|потом|когда-нибудь/.test(t) ? 'low' : /срочн|важн|критичн|немедлен|асап|горит|как можно скор/.test(t) ? 'high' : 'normal';
+// Приоритет задачи: сервер принимает low|normal|high|urgent — «срочно/горит» это urgent, «важно» — high.
+const priorityOf = (t) => /не\s*срочн|не\s*важн|низк[а-я]*\s*приоритет|низк[а-я]*\s*важн|потом|когда-нибудь/.test(t) ? 'low'
+  : /срочн|критичн|немедлен|асап|горит|как можно скор/.test(t) ? 'urgent'
+  : /важн|высок[а-я]*\s*приоритет/.test(t) ? 'high' : 'normal';
 const reqKind = (t) => /отпуск|отгул/.test(t) ? 'vacation' : /больничн|болею|заболел/.test(t) ? 'sick' : /командировк/.test(t) ? 'trip' : /справк/.test(t) ? 'certificate' : /доступ/.test(t) ? 'access' : /оборудован|технику|ноутбук|компьютер|монитор/.test(t) ? 'equipment' : /пропуск/.test(t) ? 'pass' : 'other';
+// Осмысленный заголовок заявки по её типу — когда из фразы не извлеклось ничего конкретного.
+const REQ_TITLE = { vacation: 'Отпуск', sick: 'Больничный', trip: 'Командировка', certificate: 'Справка', access: 'Запрос доступа', equipment: 'Запрос оборудования', pass: 'Пропуск', other: 'Заявка' };
 
 // Служебные слова, которые вычищаем из заголовка (кириллица-безопасно, по токенам).
-const DROP_ROOT = /^(открой|откры|зайд|перейд|покажи|показат|войд|включ|переключ|вернис|впиш|запиш|запис|занес|созда|добав|назнач|постав|запланир|сдела|оформ|завед|напомн|опубликуй|объяв|анонс|напиш|нужн|надо|хоч|встреч|созвон|совещан|событ|презентац|задач|задан|таск|новост|заявк|отпуск|больничн|командировк|справк|пропуск|отгул|календар|расписан|документ|файл|сотрудник|персонал|коллег|отдел|департамент|подразделен|профил|настройк|мониторинг|дашборд|главн|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр|понедельник|вторник|сред|четверг|пятниц|суббот|воскресень|срочн|важн|критичн|обычн|низк|высок|приоритет|немедлен|утр|вечер|ночи|полдень|полночь)/;
+const DROP_ROOT = /^(открой|откры|зайд|перейд|покажи|показат|войд|включ|переключ|вернис|впиш|запиш|запис|занес|созда|добав|назнач|постав|запланир|сдела|оформ|завед|напомн|опубликуй|объяв|анонс|напиш|нужн|надо|хоч|встреч|созвон|совещан|событ|презентац|задач|задан|таск|новост|заявк|отпуск|больничн|командировк|справк|пропуск|отгул|календар|расписан|документ|файл|сотрудник|персонал|коллег|отдел|департамент|подразделен|профил|настройк|мониторинг|дашборд|главн|переговорк|переговорн|бронир|опрос|голосован|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр|понедельник|вторник|сред|четверг|пятниц|суббот|воскресень|срочн|важн|критичн|обычн|низк|высок|приоритет|немедлен|утр|вечер|ночи|полдень|полночь)/;
 const DROP_EXACT = /^(на|в|во|к|с|со|до|и|а|но|по|о|об|про|у|из|для|это|мне|нам|там|же|бы|ли|не|дня|днем|час|часа|часов|чат|личк|сегодня|завтра|послезавтра|сейчас|mission|control)$/;
 // Числительные-порядковые дня (чтобы «пятнадцатое» не попадало в заголовок — дату мы уже извлекли).
 const DROP_ORD = /^(перв|втор|трет|четверт|четвёрт|пят|шест|седьм|восьм|девят|десят|одиннадцат|двенадцат|тринадцат|четырнадцат|пятнадцат|шестнадцат|семнадцат|восемнадцат|девятнадцат|двадцат|тридцат)/;
@@ -105,14 +113,20 @@ export function parseVoice(raw, now = new Date()) {
   if (tab && (navVerb || !creating)) actions.push({ type: 'navigate', tab });
 
   if (wantEvent) {
-    const kind = /презентац/.test(text) ? 'presentation' : /день рожд/.test(text) ? 'birthday' : 'meeting';
+    // «день рождения» → 'other': сервер принимает только holiday|meeting|presentation|other
+    // (настоящие дни рождения календарь берёт из профилей сотрудников).
+    const kind = /презентац/.test(text) ? 'presentation' : /день рожд/.test(text) ? 'other' : 'meeting';
     actions.push({ type: 'create_event', title: extractTitle(raw, 'create_event'), date: parseDate(text, now) || fmt(now), time: parseTime(text) || undefined, kind });
   } else if (wantTask) {
     actions.push({ type: 'create_task', title: extractTitle(raw, 'create_task'), priority: priorityOf(text), due_date: parseDate(text, now) || undefined });
   } else if (wantNews) {
     actions.push({ type: 'create_news', title: extractTitle(raw, 'create_news') });
   } else if (wantReq) {
-    actions.push({ type: 'create_request', title: extractTitle(raw, 'create_request'), kind: reqKind(text) });
+    const kind = reqKind(text);
+    const title = extractTitle(raw, 'create_request');
+    // Исходную фразу сохраняем в body: детали («с 15 июля на две недели») вычищаются из
+    // заголовка, но согласующему они нужны.
+    actions.push({ type: 'create_request', title: title !== 'Заявка' ? title : (REQ_TITLE[kind] || 'Заявка'), kind, body: String(raw).trim() });
   }
   return actions;
 }

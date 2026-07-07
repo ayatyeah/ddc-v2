@@ -1021,19 +1021,48 @@ textarea.inp { resize: vertical; min-height: 110px; }
 
 /* ── Ассистент ───────────────────────────────────────────────────────────────── */
 .asst-bubble {
-  position: fixed; right: 22px; bottom: 22px; z-index: 150; width: 58px; height: 58px; border-radius: 50%;
+  position: fixed; right: 22px; bottom: calc(22px + env(safe-area-inset-bottom)); z-index: 150; width: 58px; height: 58px; border-radius: 50%;
   border: none; background: var(--blue); color: #fff; display: grid; place-items: center;
   box-shadow: var(--shadow-pop); transition: transform 0.2s var(--ease);
 }
 [data-theme='dark'] .asst-bubble { color: #04122e; }
 .asst-bubble:hover { transform: scale(1.06); }
 .asst-panel {
-  position: fixed; right: 22px; bottom: 90px; z-index: 150; width: min(360px, calc(100vw - 44px));
+  position: fixed; right: 22px; bottom: calc(90px + env(safe-area-inset-bottom)); z-index: 150; width: min(360px, calc(100vw - 44px));
   background: var(--card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
   box-shadow: var(--shadow-pop); display: flex; flex-direction: column; max-height: 70vh;
   transform-origin: bottom right; animation: pop 0.22s var(--ease);
 }
 @keyframes pop { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
+
+/* Плавающая кнопка «Установить приложение» (PWA A2HS) — слева, чтобы не мешать ассистенту */
+.pwa-install {
+  position: fixed; left: max(16px, env(safe-area-inset-left)); bottom: calc(22px + env(safe-area-inset-bottom));
+  z-index: 150; max-width: min(320px, calc(100vw - 32px));
+  animation: pwaIn 0.35s var(--ease);
+}
+@keyframes pwaIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.pwa-install-row { display: flex; align-items: center; gap: 8px; }
+.pwa-install-btn {
+  display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
+  background: var(--blue); color: #fff; font: inherit; font-weight: 600; font-size: 14px;
+  padding: 11px 16px; border-radius: 30px; box-shadow: var(--shadow-pop);
+  transition: transform 0.18s var(--ease);
+}
+[data-theme='dark'] .pwa-install-btn { color: #04122e; }
+.pwa-install-btn:hover { transform: translateY(-2px); }
+.pwa-install-x {
+  width: 34px; height: 34px; flex: none; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
+  font-size: 14px; line-height: 1; box-shadow: var(--shadow-pop);
+}
+.pwa-ios-hint {
+  margin: 0 0 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.5;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  color: var(--ink-soft); box-shadow: var(--shadow-pop); max-width: 280px;
+}
+@media (prefers-reduced-motion: reduce) { .pwa-install { animation: none; } .pwa-install-btn:hover { transform: none; } }
+
 .asst-head { display: flex; align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .asst-head .av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--gold)); display: grid; place-items: center; color: #fff; }
 .asst-head b { font-size: 14px; }

@@ -10,7 +10,7 @@ function Timeline({ lang }) {
   return (
     <section className="section">
       <div className="wrap">
-        <Reveal className="board-title"><h2 className="h2" style={{ fontSize: 'clamp(1.5rem,3vw,2.2rem)' }}>История</h2></Reveal>
+        <Reveal className="board-title"><h2 className="h2" style={{ fontSize: 'clamp(1.5rem,3vw,2.2rem)' }}>{t(lang, 'about.history')}</h2></Reveal>
         <div className="tl">
           <span className="tl-rail" />
           {items.map((it, i) => (

@@ -16,13 +16,21 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import helvetikerBold from 'three/examples/fonts/helvetiker_bold.typeface.json';
 import { PARTICLE_N, DDC_PTS } from './particlePoints.js';
 import { KZ_OUTLINE, KZ_NODES, KZ_HUB } from './kzGeo.js';
-import { perf } from './perfProfile.js';
 
-export function initScene(canvas) {
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const mobile = window.matchMedia('(max-width: 760px)').matches;
-  // Профиль производительности (движок + устройство) — см. perfProfile.js.
+// Сцена не трогает window/document: всё окружение (размеры, DPR, тема, perf-профиль) приходит
+// через env от моста (Background3D.jsx), а DOM-события — вызовами методов возвращаемого
+// объекта. Благодаря этому один и тот же код работает и на главном потоке, и в Web Worker
+// с OffscreenCanvas (там DOM недоступен).
+export function initScene(canvas, env) {
+  const perf = env.perf;
+  const reduce = env.reduce;
+  const mobile = env.mobile;
+  let W = env.width, H = env.height;
+  // Профиль производительности (движок + устройство) — см. perfProfile.js (снимок в env.perf).
   const lowPower = perf.lowPower;
+  // В воркере нет document — канвы для процедурных текстур делаем через OffscreenCanvas.
+  const isWorker = typeof document === 'undefined';
+  const mkCanvas = (w, h) => (isWorker ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h }));
   // Лёгкая сцена для ВСЕХ устройств: без тяжёлых fullscreen-эффектов (звёзды/облака/
   // спутники/планета/параллакс) — ради плавности в браузерах. Ядро (карта/башни/неон/DDC) остаётся.
   const LIGHT = true;
@@ -32,7 +40,7 @@ export function initScene(canvas) {
   // За плавность под нагрузкой отвечает адаптивный DPR (ниже разрешение, но FPS высокий).
   // Адаптивное разрешение рендера: стартуем с максимума, а в кадре сами держим плавность —
   // на слабом телефоне тихо снижаем (для размытого фона незаметно), на сильном — десктопное.
-  let curDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+  let curDpr = Math.min(env.dpr || 1, DPR_CAP);
   const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: perf.antialias, alpha: true, powerPreference: 'high-performance' });
@@ -45,7 +53,7 @@ export function initScene(canvas) {
   // Туман сцены зависит от темы: в светлой — светлая дымка, в тёмной — глубокий navy
   // (иначе дальняя часть карты/сцены «уходила в серое» на тёмной теме — виден серый фон).
   const fogColor = (th) => (th === 'light' ? 0xdfe8f5 : 0x0a1930);
-  scene.fog = new THREE.FogExp2(fogColor(document.documentElement.dataset.theme), 0.004);
+  scene.fog = new THREE.FogExp2(fogColor(env.theme), 0.004);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
@@ -65,8 +73,21 @@ export function initScene(canvas) {
   const emis = (c, i = 0.6) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i, roughness: 0.5 });
   const box = (w, h, d, m, r = 0.1) => new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 1, r), m);   // 1 сегмент скругления — незаметно, но меньше полигонов
 
-  const TL = new THREE.TextureLoader();
-  const facadeTex = (url, rx, ry) => { const t = TL.load(url); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 4; return t; };
+  // TextureLoader работает через <img> и в воркере недоступен — там грузим ImageBitmapLoader
+  // (fetch + createImageBitmap; flipY делаем на декоде, поэтому у текстуры он выключен).
+  const facadeTex = (url, rx, ry) => {
+    let t;
+    if (isWorker) {
+      t = new THREE.Texture();
+      t.flipY = false;
+      new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY' })
+        .load(url, (bmp) => { t.image = bmp; t.needsUpdate = true; });
+    } else {
+      t = new THREE.TextureLoader().load(url);
+    }
+    t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 4;
+    return t;
+  };
   const facadeA = facadeTex('/tex/facade_a.jpg', 2, 5);
   const facadeB = facadeTex('/tex/facade_b.jpg', 2, 4);
 
@@ -76,7 +97,7 @@ export function initScene(canvas) {
   // хабом на карте. Карта (gMap) — отдельный потомок gBuild и НЕ масштабируется вместе с ним.
   const gTowers = new THREE.Group(); gBuild.add(gTowers);
   const towerMats = [];
-  let beacon = null;
+  let beacon = null, drawLogo = null;
   (() => {
     // Стекло башен светится собственным цветом фасада (emissiveMap = текстура): окна и
     // синева стекла «горят» изнутри, как на ночном референсе, а не выглядят блекло.
@@ -105,7 +126,7 @@ export function initScene(canvas) {
     // Мягкое голубое свечение у основания — «штаб-квартира светится на карте».
     // На мобиле пропускаем (большой additive-план = тяжёлый overdraw → фризы).
     if (!mobile) {
-      const glowCv = document.createElement('canvas'); glowCv.width = glowCv.height = 128;
+      const glowCv = mkCanvas(128, 128);
       const gx = glowCv.getContext('2d');
       const gr = gx.createRadialGradient(64, 64, 0, 64, 64, 64);
       gr.addColorStop(0, 'rgba(120,210,255,0.9)'); gr.addColorStop(0.45, 'rgba(70,160,255,0.32)'); gr.addColorStop(1, 'rgba(70,160,255,0)');
@@ -117,21 +138,22 @@ export function initScene(canvas) {
     }
 
     // Логотип DDC на крыше высокой башни — спрайт всегда лицом к камере.
-    // Рисуем SVG-логотип в текстуру; на аддитивном блендинге светятся светлые части глифа.
-    const signCv = document.createElement('canvas'); signCv.width = signCv.height = 256;
+    // Рисуем логотип в текстуру; на аддитивном блендинге светятся светлые части глифа.
+    // Картинку передаёт мост методом setLogo: на главном потоке — Image (SVG умеет рисовать
+    // только DOM), в воркере — растровый ImageBitmap.
+    const signCv = mkCanvas(256, 256);
     const sg = signCv.getContext('2d');
     const signTex = new THREE.CanvasTexture(signCv);
     const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.95 }));
     sign.position.set(6.5, 33.4, 0); sign.scale.set(6, 6, 1); gTowers.add(sign);
-    const logoImg = new Image();
-    logoImg.onload = () => {
-      sg.clearRect(0, 0, 256, 256);
-      sg.shadowColor = 'rgba(120,210,255,0.9)'; sg.shadowBlur = 20;
-      sg.drawImage(logoImg.__bitmap || logoImg, 26, 26, 204, 204);   // в воркере логотип приходит как ImageBitmap
-      signTex.needsUpdate = true;
+    drawLogo = (img) => {
+      try {
+        sg.clearRect(0, 0, 256, 256);
+        sg.shadowColor = 'rgba(120,210,255,0.9)'; sg.shadowBlur = 20;
+        sg.drawImage(img, 26, 26, 204, 204);
+        signTex.needsUpdate = true;
+      } catch { /* вывеска необязательна */ }
     };
-    logoImg.onerror = () => {};
-    logoImg.src = '/logo_ddc.svg';
 
     gTowers.traverse((o) => { if (o.material) { o.material.transparent = true; towerMats.push(o.material); } });
   })();
@@ -140,7 +162,7 @@ export function initScene(canvas) {
   // Это отдельный тёмный диск НА поверхности карты, само здание он не красит.
   let groundShadowMat = null;
   (() => {
-    const sc = document.createElement('canvas'); sc.width = sc.height = 128;
+    const sc = mkCanvas(128, 128);
     const sx = sc.getContext('2d');
     const g = sx.createRadialGradient(64, 64, 6, 64, 64, 64);
     g.addColorStop(0, 'rgba(0,0,0,0.62)'); g.addColorStop(0.55, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -238,7 +260,7 @@ export function initScene(canvas) {
     // шестиугольников, каждая грань со своей яркостью, между гранями — тёмные швы. Как
     // bump-map это даёт объёмные ячейки-фасеты, играющие под светом и отражениями. Дёшево.
     const TS = 512;
-    const mcv = document.createElement('canvas'); mcv.width = mcv.height = TS;
+    const mcv = mkCanvas(TS, TS);
     const mc = mcv.getContext('2d');
     mc.fillStyle = '#808080'; mc.fillRect(0, 0, TS, TS);          // нейтральная база bump
     const HR = 30;                        // радиус гекса, px
@@ -286,7 +308,7 @@ export function initScene(canvas) {
     // что их анимируют/ресайзят, защищены проверками `if (edgeCoreMat)` и просто пропускаются.
 
     // узлы-точки по стране (сияющие диски-спрайты)
-    const dotCv = document.createElement('canvas'); dotCv.width = dotCv.height = 64;
+    const dotCv = mkCanvas(64, 64);
     const dctx = dotCv.getContext('2d');
     const dg = dctx.createRadialGradient(32, 32, 0, 32, 32, 32);
     dg.addColorStop(0, 'rgba(220,248,255,1)'); dg.addColorStop(0.25, 'rgba(150,225,255,0.9)'); dg.addColorStop(1, 'rgba(120,210,250,0)');
@@ -478,10 +500,9 @@ export function initScene(canvas) {
     const mesh = new THREE.Mesh(geo, bodyMat); mesh.renderOrder = 6; ddcGroup.add(mesh); ddcMeshMats.push(bodyMat);
 
     // неон-контур по буквам: внешний контур + «дырки» (счётчик в D), на верхней грани.
-    const W0 = window.innerWidth, H0 = window.innerHeight;
     const glowMat = new LineMaterial({ color: 0x3aa0ff, linewidth: 4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
     const coreMat = new LineMaterial({ color: 0xcdeeff, linewidth: 1.4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
-    glowMat.resolution.set(W0, H0); coreMat.resolution.set(W0, H0);
+    glowMat.resolution.set(W, H); coreMat.resolution.set(W, H);
     glowMat.userData = { baseOp: 0.5, glow: true }; coreMat.userData = { baseOp: 0.95 };
     ddcLineMats.push(glowMat, coreMat);
     const toWorld = (p) => [(p.x - cxf) * s, topY, -((p.y - cyf) * s)];
@@ -518,48 +539,27 @@ export function initScene(canvas) {
   // При переходе между страницами фон едет к новому состоянию МЕДЛЕННО и мягко (не резко):
   // до этого времени (сек) используем более плавное сглаживание камеры/сцены.
   let navEaseUntil = -1;
-  const onPointer = (e) => { tx = (e.clientX / window.innerWidth - 0.5) * 2; ty = (e.clientY / window.innerHeight - 0.5) * 2; };
-  if (!reduce && !LIGHT) window.addEventListener('pointermove', onPointer, { passive: true });
+  // (параллакс мыши в сцене отключён: LIGHT всегда true, tx/ty остаются 0 — слои глубины
+  //  двигает CSS на главном потоке; сцене события мыши для этого не нужны)
 
   // ── Перетаскивание здания: только по горизонтали (рыскание), без наклона ─────
+  // События приходят от моста методами pointerDown/pointerMove/pointerUp (фильтрация
+  // по UI-элементам и кнопке мыши — на стороне моста, у сцены нет доступа к DOM).
   let dragging = false, lastX = 0, yawVel = 0, dragYaw = HERO_YAW;   // стартовый разворот = угол приветствия
-  const isUi = (el) => el && el.closest && el.closest('button, a, input, textarea, select, label, .modal, .nav-island, .af-card, .chip, .chip-info, .news-track');
-  const onDown = (e) => {
-    if ((e.button != null && e.button !== 0) || progress > 0.4 || isUi(e.target)) return; // только когда здание видно и не на UI
-    dragging = true; lastX = e.clientX; yawVel = 0;
-  };
-  const onDrag = (e) => { if (!dragging) return; const d = (e.clientX - lastX) * 0.006; lastX = e.clientX; dragYaw += d; yawVel = d; };
-  const onUp = () => { dragging = false; };
-  if (!mobile) {   // на телефоне вращение пальцем мешает скроллу — отключаем перетаскивание
-    window.addEventListener('pointerdown', onDown, { passive: true });
-    window.addEventListener('pointermove', onDrag, { passive: true });
-    window.addEventListener('pointerup', onUp, { passive: true });
-    window.addEventListener('pointercancel', onUp, { passive: true });
-  }
 
-  let lastW = 0;
-  // На мобильных адресная строка при скролле постоянно меняет ВЫСОТУ вьюпорта. Если на это
-  // менять размер буфера и camera.aspect — кадр «дышит» по ширине и фризит. Поэтому на телефоне
-  // рендерим в стабильную (максимальную) высоту экрана и канвас сайзим в CSS-пикселях (низ просто
-  // уходит под фолд), а реагируем ТОЛЬКО на смену ширины/ориентации.
-  const stableH = Math.max(window.innerHeight, (window.screen && window.screen.height) || 0);
-  function doResize() {
-    const w = window.innerWidth;
-    const h = mobile ? stableH : window.innerHeight;
+  // Ресайз приходит от моста (там же решается стабильная высота на мобиле и фильтрация
+  // «изменилась только высота из-за адресной строки»). CSS-размер канваса — тоже на мосте.
+  function doResize(w, h, dpr) {
+    if (w) W = w; if (h) H = h; if (dpr) curDpr = Math.min(dpr, DPR_CAP);
     L = layout();
     renderer.setPixelRatio(curDpr);   // уважаем текущее адаптивное качество (не сбрасываем на ресайзе)
-    renderer.setSize(w, h, mobile);   // mobile: фиксируем CSS-размер канваса (без растяжения при адресной строке)
-    camera.aspect = w / h; camera.updateProjectionMatrix();
-    if (edgeGlowMat) edgeGlowMat.resolution.set(w, h);   // px-толщина неон-границы зависит от размера канваса
-    if (edgeCoreMat) edgeCoreMat.resolution.set(w, h);
-    for (const m of ddcLineMats) m.resolution.set(w, h);  // px-толщина неон-контура DDC
-    lastW = w;
+    renderer.setSize(W, H, false);
+    camera.aspect = W / H; camera.updateProjectionMatrix();
+    if (edgeGlowMat) edgeGlowMat.resolution.set(W, H);   // px-толщина неон-границы зависит от размера канваса
+    if (edgeCoreMat) edgeCoreMat.resolution.set(W, H);
+    for (const m of ddcLineMats) m.resolution.set(W, H);  // px-толщина неон-контура DDC
   }
-  function resize() {
-    if (mobile && window.innerWidth === lastW) return;   // изменилась только высота (адресная строка) — игнор
-    doResize();
-  }
-  window.addEventListener('resize', resize); doResize();
+  doResize(W, H, curDpr);
 
   scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
 
@@ -585,7 +585,7 @@ export function initScene(canvas) {
     raf = 0;
     if (running) raf = requestAnimationFrame(loop);
     // Разовое применение старт-качества для слабых устройств (когда сцена уже собрана).
-    if (!tierInit) { tierInit = true; if (perf.lite) { applyHeavy(true); try { document.documentElement.dataset.perfTier = String(perfTier); } catch { /* SSR */ } } }
+    if (!tierInit) { tierInit = true; if (perf.lite) { applyHeavy(true); try { env.onTier?.(perfTier); } catch { /* необязательно */ } } }
     const t = clock.getElapsedTime();
     // Сглаживание по реальному времени кадра (а не фикс-шаг): переходы одинаково
     // плавные на 60/90/120 Гц и не «дёргаются» при просадках fps. dt ограничен,
@@ -601,7 +601,9 @@ export function initScene(canvas) {
     if (t - perfT > 0.7 && perfN > 8) {
       // Губернатор: меряем реальный FPS на устройстве. Плохо → ступень вниз (снимаем нагрузку,
       // сохраняя сцену); хорошо и стабильно → ступень вверх (возвращаем красоту). DPR не трогаем.
-      if (!perf.offthread) {
+      // Работает и в offthread-режиме: там длительность кадра ≈ время GPU, тиеры снимают именно
+      // GPU-нагрузку, а perfTier на <html> (через env.onTier) гасит параллакс мыши на мосте.
+      {
         const avg = perfAcc / perfN;                             // средняя длительность кадра, сек
         if (tierHold > 0) tierHold--;
         if (avg > 0.026) { badWin++; goodWin = 0; }              // < ~38 fps
@@ -614,7 +616,7 @@ export function initScene(canvas) {
           const degraded = want > perfTier;      // больше номер = сильнее облегчение
           perfTier = want;
           if (degraded) tierHold = 4;            // после ухудшения ждём ~3с перед попыткой восстановления
-          try { document.documentElement.dataset.perfTier = String(perfTier); } catch { /* SSR */ }
+          try { env.onTier?.(perfTier); } catch { /* необязательно */ }
           applyHeavy(perfTier >= 3);
         }
       }
@@ -777,31 +779,29 @@ export function initScene(canvas) {
     }
   }
   function stop() { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-  // Не рендерим, когда страница не видна (вкладка скрыта) ИЛИ окно потеряло фокус (свернули/
-  // переключились на другое приложение) — фон фиксированный, поэтому «вне экрана» = «вне фокуса».
-  const onVisibility = () => { (document.hidden ? stop() : start()); };
-  const onBlur = () => stop();
-  const onFocus = () => { if (!document.hidden) start(); };
-  document.addEventListener('visibilitychange', onVisibility);
-  window.addEventListener('blur', onBlur);
-  window.addEventListener('focus', onFocus);
+  // Не рендерим, когда страница не видна или окно без фокуса — состояние сообщает мост
+  // (visibilitychange/blur/focus живут в DOM, у сцены их нет).
+  let visible = true;
+  const wake = () => { if (!running && visible) start(); };
   start();
 
   return {
-    setTarget(p) { progress = Math.min(1, Math.max(0, p)); if (!running && !document.hidden) start(); },
+    setTarget(p) { progress = Math.min(1, Math.max(0, p)); wake(); },
     // Включить мягкий замедленный доезд фона (~1.1с) — вызывается при переходе между разделами.
-    navEase() { navEaseUntil = clock.getElapsedTime() + 1.1; if (!running && !document.hidden) start(); },
-    setTheme(th) { scene.fog.color.setHex(fogColor(th)); if (!running && !document.hidden) start(); },
-    setHeroBias(v) { heroBiasT = Math.min(1, Math.max(0, v || 0)); if (!running && !document.hidden) start(); },
-    setYaw(y) { viewYaw = y || 0; if (!running && !document.hidden) start(); },
-    setPage() { if (!running && !document.hidden) start(); },
+    navEase() { navEaseUntil = clock.getElapsedTime() + 1.1; wake(); },
+    setTheme(th) { scene.fog.color.setHex(fogColor(th)); wake(); },
+    setHeroBias(v) { heroBiasT = Math.min(1, Math.max(0, v || 0)); wake(); },
+    setYaw(y) { viewYaw = y || 0; wake(); },
+    setPage() { wake(); },
+    setVisible(v) { visible = !!v; if (visible) start(); else stop(); },
+    resize(w, h, dpr) { doResize(w, h, dpr); wake(); },
+    setLogo(img) { drawLogo?.(img); },
+    // Перетаскивание здания (рыскание). Фильтрация по UI/кнопке мыши — на мосте.
+    pointerDown(x) { if (progress > 0.4) return; dragging = true; lastX = x; yawVel = 0; },   // только когда здание видно
+    pointerMove(x) { if (!dragging) return; const d = (x - lastX) * 0.006; lastX = x; dragYaw += d; yawVel = d; },
+    pointerUp() { dragging = false; },
     dispose() {
       stop();
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('blur', onBlur); window.removeEventListener('focus', onFocus);
-      window.removeEventListener('pointermove', onPointer); window.removeEventListener('resize', resize);
-      window.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onDrag);
-      window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
       [facadeA, facadeB].forEach((x) => x.dispose());
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const mm = o.material; (Array.isArray(mm) ? mm : [mm]).forEach((x) => x.dispose()); } });
       pmrem.dispose(); renderer.dispose();

@@ -41,7 +41,7 @@ export default function Assistant() {
     setMsgs((m) => [...m, { who: 'user', text: q }]);
     setTyping(true);
     try { const d = await sendJSON('/api/public/ask', 'POST', { q }); setMsgs((m) => [...m, { who: 'bot', text: d.answer || '—' }]); }
-    catch { setMsgs((m) => [...m, { who: 'bot', text: 'Извините, ассистент временно недоступен. Напишите нам через раздел «Контакты».' }]); }
+    catch { setMsgs((m) => [...m, { who: 'bot', text: t(lang, 'asst.error') }]); }
     finally { setTyping(false); }
   };
 
@@ -78,7 +78,7 @@ export default function Assistant() {
           </div>
 
           <form className="asst-input" onSubmit={send}>
-            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Спросите об услугах ЦЦР…" aria-label="Ваш вопрос" />
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder={t(lang, 'asst.ask')} aria-label={t(lang, 'asst.ask')} />
             <button type="submit" disabled={typing || !text.trim()} aria-label="Отправить">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
             </button>
