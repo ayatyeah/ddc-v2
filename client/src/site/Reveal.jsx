@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react';
 
 /* Появление по скроллу через IntersectionObserver. delay — мс задержки.
-   Задержка ограничена 120 мс: большая «лесенка» в сетках читалась как съехавшая
-   вёрстка (карточки в разных фазах анимации) и удлиняла ощущение загрузки. */
+   Мягкий каскад: шаги по 70–80 мс с потолком 240 мс — карточки «вплывают» друг
+   за другом воздушно, но ряд не разваливается на фазы (как было при 350+ мс). */
 export default function Reveal({ children, delay = 0, as: Tag = 'div', className = '', ...rest }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const d = Math.min(delay, 120);
+    const d = Math.min(delay, 240);
     const io = new IntersectionObserver(
       ([e]) => {
         if (e.isIntersecting) {

@@ -2172,3 +2172,33 @@ html[data-a11y='on'] .svc-ico, html[data-a11y='on'] .dir-ico, html[data-a11y='on
 /* Ссылка на политику в чекбоксе согласия */
 .consent-link { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
 .consent-link:hover { color: var(--blue-bright); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ВОЗДУШНОСТЬ 2026-07-08 — контент двигается мягко, а не «топорно».
+   Принцип: длиннее и легче (только transform/opacity), выдох вместо рывка.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Появление блоков: медленный «вплыв» с мягким выдохом (без scale — чистый подъём) */
+.reveal { transform: translateY(14px); }
+.reveal.in { animation: revealFocus 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Переход между страницами: спокойнее и глубже, волна секций — плавнее */
+.page-tx { animation-duration: 0.75s; }
+.page-tx > * { animation-duration: 0.8s; animation-delay: 0.08s; }
+.page-tx > *:nth-child(2) { animation-delay: 0.16s; }
+.page-tx > *:nth-child(3) { animation-delay: 0.24s; }
+
+/* Карточки: ховер-лифт как на подушке — длиннее переход, мягче кривая */
+.svc, .dir-card, .ncard, .nc-card {
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.45s ease;
+}
+.proj-card { transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.55s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.4s ease; }
+.svc-ico, .dir-ico, .proj-ico { transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* Кнопки: подъём с мягким торможением */
+.btn-primary, .btn-ghost { transition-duration: 0.35s, 0.4s, 0.3s; }
+
+/* Микро-встряска убрана: активная кнопка проседает чуть мягче */
+.btn:active { transform: scale(0.98); }

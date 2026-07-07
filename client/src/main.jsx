@@ -13,7 +13,7 @@ import './styles.css';
 // ещё один вечный rAF-цикл рядом со сценой. Длительность инерции снижена (0.9) — снаппи и меньше
 // «тяжёлых» кадров за жест.
 if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && !perf.lite) {
-  const lenis = new Lenis({ duration: 0.9, smoothWheel: true });
+  const lenis = new Lenis({ duration: 1.15, smoothWheel: true });   // длиннее инерция — «воздушный» скролл
   const raf = (time) => { lenis.raf(time); requestAnimationFrame(raf); };
   requestAnimationFrame(raf);
   window.__lenis = lenis;   // для программного скролла (router.navigate)
