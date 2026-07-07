@@ -3,6 +3,7 @@ import { useLang } from '../store.js';
 import { t, CV_HELP } from '../i18n.js';
 import { sendJSON, getJSON } from '../api.js';
 import Reveal from './Reveal.jsx';
+import Consent from './Consent.jsx';
 
 const EMPTY = { full_name: '', email: '', phone: '', message: '' };
 const CV_EXTS = ['pdf', 'doc', 'docx'];
@@ -111,7 +112,7 @@ export default function LeadForm({ subject, titleKey, subKey, msgPlaceholderKey,
               )}
               <label className="form-consent">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
-                <span>{t(lang, 'contact.consent')}</span>
+                <Consent lang={lang} />
               </label>
               <button type="submit" className={btnClass} disabled={state === 'sending'} aria-busy={state === 'sending'}>{btnLabel}</button>
               <span className="form-status" role="status" aria-live="polite">{state === 'error' ? err : state === 'sent' ? t(lang, 'contact.sent') : ''}</span>

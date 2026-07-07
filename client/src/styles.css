@@ -86,7 +86,8 @@ button { font-family: inherit; cursor: pointer; }
     radial-gradient(120% 85% at 50% 4%, var(--bg-top, #eaf4ff) 0%, transparent 60%),
     radial-gradient(150% 130% at 50% 46%, transparent 52%, rgba(24, 54, 112, 0.10) 100%),                            /* виньетка = глубина */
     linear-gradient(180deg, var(--bg-a, #ffffff) 0%, var(--bg-b, #f7faff) 100%);
-  transition: background 0.6s linear;
+  /* Без CSS-transition: палитру уже плавно лерпит JS (Site.jsx). Двойное сглаживание
+     заставляло перерисовывать полноэкранный градиент лишний раз при каждом переходе. */
 }
 [data-theme='dark'] #scroll-bg {
   background:
@@ -343,12 +344,13 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 
 /* ── Reveal по скроллу ───────────────────────────────────────────────────────── */
 /* Появление плашек через «вспышку»: короткий световой блик + свечение, затем проявление */
-.reveal { opacity: 0; transform: translateY(16px) scale(0.99); }
+.reveal { opacity: 0; transform: translateY(12px) scale(0.995); }
 /* Появление: только opacity + transform (композитятся на GPU). filter:blur убран — он
-   вызывал перерисовку (repaint) на КАЖДОМ появляющемся элементе → рывки при скролле. */
-.reveal.in { animation: revealFocus 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+   вызывал перерисовку (repaint) на КАЖДОМ появляющемся элементе → рывки при скролле.
+   Короче и с меньшим сдвигом: меньше одновременно бегущих анимаций при скролле. */
+.reveal.in { animation: revealFocus 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
 @keyframes revealFocus {
-  0%   { opacity: 0; transform: translateY(16px) scale(0.985); }
+  0%   { opacity: 0; transform: translateY(12px) scale(0.995); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
@@ -687,8 +689,10 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 .svc h3 { font-size: 1.18rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; min-height: 2.4em; }
 .svc p { margin-top: 10px; color: var(--ink-soft); font-size: 0.98rem; line-height: 1.55; }
 .svc .num { position: absolute; top: 30px; right: 28px; font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
-/* Услуга как кнопка: сбрасываем стиль <button>, оставляя вид карточки. Клик → форма заявки. */
-.svc-btn { width: 100%; display: block; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+/* Услуга как кнопка: сбрасываем стиль <button>, оставляя вид карточки. Клик → форма заявки.
+   ВАЖНО: display:flex, а не block — блочная <button> в Chrome центрирует содержимое по
+   вертикали, и в ряду равной высоты иконки коротких карточек «съезжали» вниз. */
+.svc-btn { width: 100%; display: flex; text-align: left; font: inherit; color: inherit; cursor: pointer; }
 .svc-cta { display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 18px; font-size: 14px; font-weight: 600; color: var(--blue); transition: gap 0.2s var(--ease); }
 .svc:hover .svc-cta { gap: 10px; }
 /* Модальная форма заявки на услугу */
@@ -2057,11 +2061,19 @@ html[data-a11y='on'] .ribbon { display: none; }
     radial-gradient(48% 120% at 90% 100%, rgba(216, 178, 90, 0.16), transparent 60%);
 }
 .cta-band > * { position: relative; z-index: 1; }
-/* В светлой теме бэнд — глубокий синий «остров» на светлом фоне */
+/* В светлой теме бэнд — светлое стекло с мягкой авророй: органично на светлом фоне */
 [data-theme='light'] .cta-band {
-  background: linear-gradient(135deg, #10264f, #0a1730 60%, #091326);
-  border-color: rgba(45, 111, 224, 0.30);
-  box-shadow: 0 22px 60px rgba(16, 38, 79, 0.28);
+  background: linear-gradient(135deg, #ffffff, #f0f6ff 70%, #eaf3ff);
+  border-color: rgba(45, 111, 224, 0.20);
+  box-shadow: 0 18px 50px rgba(20, 40, 80, 0.10);
+  color: var(--ink);
+}
+[data-theme='light'] .cta-band .h2 { color: var(--ink); }
+[data-theme='light'] .cta-band .lede { color: var(--ink-soft); }
+[data-theme='light'] .cta-band::before {
+  background:
+    radial-gradient(58% 130% at 10% 0%, rgba(78, 148, 255, 0.13), transparent 62%),
+    radial-gradient(48% 120% at 90% 100%, rgba(176, 125, 18, 0.09), transparent 60%);
 }
 
 /* ── Футер: полноценный фирменный ──────────────────────────────────────────── */
@@ -2103,3 +2115,50 @@ html[data-a11y='on'] .scroll-progress { display: none; }
 /* ── Выделение текста и видимый фокус — фирменные ──────────────────────────── */
 ::selection { background: color-mix(in srgb, var(--blue) 26%, transparent); }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
+
+/* ── Стикеры-иконки 2.0: сочная градиентная плашка + белая иконка + цветная тень.
+   Один стиль на услуги (.svc-ico), направления (.dir-ico) и карточки
+   проектов/карьеры/партнёров (.proj-ico) — вместо бледных контурных плиток. */
+.svc-ico, .dir-ico {
+  color: #fff;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--c, var(--blue)) 78%, #ffffff),
+    var(--c, var(--blue)) 55%,
+    color-mix(in srgb, var(--c, var(--blue)) 72%, #000000));
+  border: none;
+  box-shadow:
+    0 8px 20px color-mix(in srgb, var(--c, var(--blue)) 32%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+.proj-ico,
+[data-theme='light'] .proj-ico {
+  color: #fff;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent, var(--blue)) 78%, #ffffff),
+    var(--accent, var(--blue)) 55%,
+    color-mix(in srgb, var(--accent, var(--blue)) 72%, #000000));
+  border: none;
+  box-shadow:
+    0 8px 20px color-mix(in srgb, var(--accent, var(--blue)) 32%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+.svc:hover .svc-ico, .dir-card:hover .dir-ico {
+  box-shadow:
+    0 12px 30px color-mix(in srgb, var(--c, var(--blue)) 45%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+/* Версия для слабовидящих: стикеры — высококонтрастные, без градиентов и теней */
+html[data-a11y='on'] .svc-ico, html[data-a11y='on'] .dir-ico, html[data-a11y='on'] .proj-ico {
+  background: none; color: var(--ink); border: 2px solid var(--ink); box-shadow: none;
+}
+
+/* ── Перф: меньше фоновой работы ────────────────────────────────────────────── */
+/* Фирменные глифы — только на полностью свободных машинах (tier 0) */
+[data-perf-tier="1"] #ddc-brand { display: none !important; }
+[data-perf-tier="1"] #scroll-aurora { animation: none !important; }
+/* На самых слабых — останавливаем и бегущую строку */
+[data-perf-tier="3"] .ribbon-track { animation: none !important; }
+
+/* Ссылка на политику в чекбоксе согласия */
+.consent-link { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.consent-link:hover { color: var(--blue-bright); }

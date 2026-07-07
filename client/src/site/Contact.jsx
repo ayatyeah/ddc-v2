@@ -3,6 +3,7 @@ import { useLang } from '../store.js';
 import { t } from '../i18n.js';
 import { sendJSON } from '../api.js';
 import Reveal from './Reveal.jsx';
+import Consent from './Consent.jsx';
 
 const EMPTY = { full_name: '', email: '', phone: '', subject: '', message: '' };
 
@@ -79,7 +80,7 @@ export default function Contact() {
                 value={form.message} onChange={set('message')} />
               <label className="form-consent">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
-                <span>{t(lang, 'contact.consent')}</span>
+                <Consent lang={lang} />
               </label>
               <button type="submit" className={btnClass} disabled={state === 'sending'} aria-busy={state === 'sending'}>{btnLabel}</button>
               <span className="form-status" role="status" aria-live="polite">

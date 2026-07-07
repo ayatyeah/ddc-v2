@@ -1,15 +1,18 @@
 import { useEffect, useRef } from 'react';
 
-/* Появление по скроллу через IntersectionObserver. delay — мс задержки. */
+/* Появление по скроллу через IntersectionObserver. delay — мс задержки.
+   Задержка ограничена 120 мс: большая «лесенка» в сетках читалась как съехавшая
+   вёрстка (карточки в разных фазах анимации) и удлиняла ощущение загрузки. */
 export default function Reveal({ children, delay = 0, as: Tag = 'div', className = '', ...rest }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const d = Math.min(delay, 120);
     const io = new IntersectionObserver(
       ([e]) => {
         if (e.isIntersecting) {
-          setTimeout(() => el.classList.add('in'), delay);
+          setTimeout(() => el.classList.add('in'), d);
           io.unobserve(el);
         }
       },
