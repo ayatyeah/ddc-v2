@@ -405,16 +405,19 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
   width: 176px; flex: 0 0 176px; display: flex; flex-direction: column; align-items: stretch;
   gap: 8px; padding: 18px 12px; background: #0e1116; color: #cfd6e2;
   border-right: 1px solid rgba(255,255,255,0.06);
-  overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none;
+  overflow: hidden;
 }
-.adm-rail::-webkit-scrollbar { display: none; }
 /* Бургер и затемнение под боковое меню — только на телефоне */
 .adm-burger, .adm-backdrop { display: none; }
 /* Логотип сайта белый — на тёмном рейле показываем без белого квадрата (иначе сольётся) */
 .rail-brand { width: 48px; height: 48px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); display: grid; place-items: center; margin: 0 0 16px; transition: background 0.2s, border-color 0.2s; }
 .rail-brand:hover { background: rgba(255,255,255,0.11); }
 .rail-brand img { width: 34px; height: 34px; object-fit: contain; }
-.rail-nav { display: flex; flex-direction: column; gap: 6px; width: 100%; align-items: stretch; }
+.rail-nav {
+  display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; gap: 6px;
+  width: 100%; align-items: stretch; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none;
+}
+.rail-nav::-webkit-scrollbar { display: none; }
 .rail-btn {
   display: flex; flex-direction: row; align-items: center; gap: 11px; padding: 10px 12px;
   border: none; background: transparent; color: #8a93a6; border-radius: 14px; cursor: pointer;
@@ -473,7 +476,7 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
   .adm-menu-open .adm-backdrop { opacity: 1; pointer-events: auto; }
 
   .rail-brand { display: grid; margin-bottom: 14px; }
-  .rail-nav { flex-direction: column; gap: 4px; width: 100%; align-items: stretch; overflow: visible; }
+  .rail-nav { flex-direction: column; gap: 4px; width: 100%; align-items: stretch; overflow-y: auto; }
   /* Крупные пункты меню — иконка + подпись в строку */
   .rail-btn { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; padding: 13px 14px; font-size: 15px; border-radius: 12px; min-width: 0; min-height: 0; }
   .rail-btn span { display: block; font-size: 15px; white-space: nowrap; }
