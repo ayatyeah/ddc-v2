@@ -344,7 +344,12 @@ function Profile({ me, onAuthLost }) {
     });
     // errorCorrectionLevel 'Q' + запас размера: кириллица в UTF-8 «тяжёлая», при 'M' и мелком
     // модуле сканеры иногда читали мусор. Явный type=image/png и без обрезки версии.
-    QRCode.toDataURL(vcard, { errorCorrectionLevel: 'Q', margin: 3, scale: 8, width: 256, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
+    // Кодируем vCard ОДНИМ явным byte-сегментом из UTF-8 байтов. Иначе библиотека сама
+    // дробит строку на Alphanumeric/Byte-куски и добавляет к кириллице ECI-указатель UTF-8,
+    // который многие сканеры (особенно iOS) игнорируют и читают как Latin-1 → крякозябры
+    // во всех полях, кроме латиницы (имени). Единый byte-сегмент читается корректно везде.
+    const vcardBytes = new TextEncoder().encode(vcard);
+    QRCode.toDataURL([{ data: vcardBytes, mode: 'byte' }], { errorCorrectionLevel: 'Q', margin: 3, scale: 8, width: 256, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
   }, [me, info]);
 
   const saveEdit = async () => {
