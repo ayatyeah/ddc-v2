@@ -40,7 +40,7 @@ export default function Background3D({ onReady }) {
       && typeof canvas.transferControlToOffscreen === 'function';
     const mkEnv = () => ({
       perf: { ...perf, offthread }, mobile, reduce,
-      theme: document.documentElement.dataset.theme || 'dark',
+      theme: document.documentElement.dataset.theme || 'light',
       width: vw(), height: vh(), dpr: dprNow(),
     });
 

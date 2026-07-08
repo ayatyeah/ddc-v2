@@ -17,7 +17,7 @@ function read(key, fallback, allowed) {
 let state = {
   lang: read('ddc_lang', 'ru', LANGS),
   a11y: read('ddc_a11y', 'off', ['on', 'off']),   // версия для слабовидящих
-  theme: read('ddc_theme', 'dark', THEMES),        // тема оформления (весь сайт/портал/админка)
+  theme: read('ddc_theme', 'light', THEMES),       // тема оформления (весь сайт/портал/админка)
 };
 
 const listeners = new Set();

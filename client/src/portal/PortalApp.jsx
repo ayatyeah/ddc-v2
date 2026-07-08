@@ -41,6 +41,19 @@ const roleLabel = (r) => ROLE_LABEL[r] || r || 'Сотрудник';
 
 const fmtTime = (iso) => { try { return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 const initials = (n) => (n || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+const vcardEscape = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,').trim();
+const vcardTel = (v) => String(v || '').replace(/[^\d+() -]/g, '').trim();
+const makeVCard = ({ name, org, title, phone, note }) => [
+  'BEGIN:VCARD',
+  'VERSION:3.0',
+  `FN:${vcardEscape(name)}`,
+  `N:${vcardEscape(name)};;;;`,
+  `ORG:${vcardEscape(org)}`,
+  `TITLE:${vcardEscape(title)}`,
+  phone ? `TEL;TYPE=CELL,VOICE:${vcardTel(phone)}` : '',
+  note ? `NOTE:${vcardEscape(note)}` : '',
+  'END:VCARD',
+].filter(Boolean).join('\r\n');
 
 // Вложения чата
 const ATTACH_ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.txt';
@@ -303,8 +316,14 @@ function Profile({ me, onAuthLost }) {
   useEffect(() => { load(); }, [load]);
   // QR цифровой визитки (vCard) — можно отсканировать и сохранить контакт.
   useEffect(() => {
-    const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${me?.username || ''}\nORG:Центр цифрового развития (ЦЦР)\nTITLE:${info?.position || roleLabel(me?.role)}\nTEL:${info?.phone || ''}\nEND:VCARD`;
-    QRCode.toDataURL(vcard, { margin: 1, width: 220 }).then(setQr).catch(() => setQr(''));
+    const vcard = makeVCard({
+      name: info?.name || me?.username || '',
+      org: info?.department ? `Центр цифрового развития; ${info.department}` : 'Центр цифрового развития',
+      title: info?.position || roleLabel(me?.role),
+      phone: info?.phone || '',
+      note: info?.skills ? `Навыки: ${info.skills}` : '',
+    });
+    QRCode.toDataURL(vcard, { errorCorrectionLevel: 'M', margin: 2, scale: 8, width: 240, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
   }, [me, info]);
 
   const saveEdit = async () => {

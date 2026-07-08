@@ -49,24 +49,25 @@ export function initScene(canvas, env) {
   renderer.setPixelRatio(curDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.13;        // чуть больше свечения/«воздуха» в кадре
+  renderer.toneMappingExposure = 1.2;         // чуть ярче блики и неон, без смены композиции
 
   const scene = new THREE.Scene();
   // Туман сцены зависит от темы: в светлой — светлая дымка, в тёмной — глубокий navy
   // (иначе дальняя часть карты/сцены «уходила в серое» на тёмной теме — виден серый фон).
-  const fogColor = (th) => (th === 'light' ? 0xdfe8f5 : 0x0a1930);
-  scene.fog = new THREE.FogExp2(fogColor(env.theme), 0.004);
+  const fogColor = (th) => (th === 'light' ? 0xd8e5f4 : 0x08162c);
+  const fogDensity = (th) => (th === 'light' ? 0.0032 : 0.0037);
+  scene.fog = new THREE.FogExp2(fogColor(env.theme), fogDensity(env.theme));
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 600);
 
   // Меньше общего (ambient) света -> здания не «блекло-светлые», а тёмные с яркими бликами.
-  scene.add(new THREE.HemisphereLight(0xb8cdea, 0x37425a, 0.5));
-  const key = new THREE.DirectionalLight(0xffffff, 1.15); key.position.set(14, 28, 20); scene.add(key);
-  const rim = new THREE.DirectionalLight(0x9fc0ff, 0.8); rim.position.set(-16, 12, 8); scene.add(rim);  // холодный контровой свет — чётче кромки стеклянных башен
+  scene.add(new THREE.HemisphereLight(0xb8cdea, 0x26334f, 0.42));
+  const key = new THREE.DirectionalLight(0xffffff, 1.25); key.position.set(14, 28, 20); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x9fc0ff, 1.05); rim.position.set(-16, 12, 8); scene.add(rim);  // холодный контровой свет — чётче кромки стеклянных башен
   // Направленный прожектор НА башни — драматичный «свет оттуда»: тёмные здания, яркая подсветка.
-  const spot = new THREE.SpotLight(0xe2eeff, 4.4, 0, Math.PI / 5, 0.4, 0);   // distance 0, decay 0 -> предсказуемая яркость
+  const spot = new THREE.SpotLight(0xe2eeff, 4.8, 0, Math.PI / 5, 0.4, 0);   // distance 0, decay 0 -> предсказуемая яркость
   spot.position.set(8, 72, 40); spot.target.position.set(0, 12, -9);
   scene.add(spot); scene.add(spot.target);
 
@@ -87,7 +88,7 @@ export function initScene(canvas, env) {
     } else {
       t = new THREE.TextureLoader().load(url);
     }
-    t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 4;
+    t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = (mobile || perf.lite) ? 2 : 4;
     return t;
   };
   const facadeA = facadeTex('/tex/facade_a.jpg', 2, 5);
@@ -105,8 +106,8 @@ export function initScene(canvas, env) {
     // синева стекла «горят» изнутри, как на ночном референсе, а не выглядят блекло.
     // Лёгкий холодный тон + чуть глаже стекло -> насыщеннее синева и чётче блики.
     const towerMat = (tex) => new THREE.MeshStandardMaterial({
-      map: tex, color: 0x5c6a86, roughness: 0.22, metalness: 0.42, envMapIntensity: 1.1,   // тёмное стекло, но с подсветкой
-      emissive: 0xbfe6ff, emissiveMap: tex, emissiveIntensity: 0.72,                        // окна светятся ярче (тёплая синева)
+      map: tex, color: 0x4f617e, roughness: 0.2, metalness: 0.44, envMapIntensity: 1.2,     // тёмнее стекло, сильнее читаются грани
+      emissive: 0xbfe6ff, emissiveMap: tex, emissiveIntensity: 0.82,                        // окна светятся ярче (тёплая синева)
     });
     const tower = (w, d, h, x, tex) => {
       const tg = new THREE.Group();
@@ -290,15 +291,15 @@ export function initScene(canvas, env) {
       mc.fillStyle = `rgba(${c},${c},${c},0.05)`; mc.fillRect(x, y, 2, 2);
     }
     const mapTex = new THREE.CanvasTexture(mcv);
-    mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.09, 0.09); mapTex.anisotropy = 4;
+    mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.09, 0.09); mapTex.anisotropy = (mobile || perf.lite) ? 2 : 4;
 
     // Синий глянцевый кристалл: цвет из вершин (география), огранка из bump, глянец + отражения
     // среды (scene.environment) дают «ледяной»/стеклянный вид как в референсе. Без transmission —
     // чтобы не грузить мобилу лишним проходом; глянец имитируем низким roughness + envMap.
     const mapMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, vertexColors: true, bumpMap: mapTex, bumpScale: 0.65,
-      metalness: 0.5, roughness: 0.28, envMapIntensity: 1.6,
-      emissive: 0x1f52a8, emissiveIntensity: 0.22,
+      color: 0xffffff, vertexColors: true, bumpMap: mapTex, bumpScale: 0.7,
+      metalness: 0.52, roughness: 0.25, envMapIntensity: 1.75,
+      emissive: 0x1f52a8, emissiveIntensity: 0.3,
       transparent: true, opacity: 1,
     });
     mapMat.userData = { baseOp: 0.96 };
@@ -495,8 +496,8 @@ export function initScene(canvas, env) {
     });
     geo.translate(-cxf, -cyf, 0); geo.scale(s, s, s); geo.rotateX(-Math.PI / 2); geo.translate(0, TEXT_Y, 0);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x12386e, metalness: 0.55, roughness: 0.32, envMapIntensity: 1.0,
-      emissive: 0x0a2452, emissiveIntensity: 0.45, transparent: true, opacity: 0,
+      color: 0x0d3166, metalness: 0.56, roughness: 0.29, envMapIntensity: 1.12,
+      emissive: 0x0a2452, emissiveIntensity: 0.55, transparent: true, opacity: 0,
     });
     bodyMat.userData = { baseOp: 1 };
     const mesh = new THREE.Mesh(geo, bodyMat); mesh.renderOrder = 6; ddcGroup.add(mesh); ddcMeshMats.push(bodyMat);
@@ -563,7 +564,8 @@ export function initScene(canvas, env) {
   }
   doResize(W, H, curDpr);
 
-  scene.fog.color.setHex(0x0f1626);            // цвет тумана постоянен — задаём один раз, не в кадре
+  scene.fog.color.setHex(fogColor(env.theme));
+  scene.fog.density = fogDensity(env.theme);
 
   const clock = new THREE.Clock(); let raf = 0, disp = progress, running = false, prevT = 0;
   // «Сон в покое»: когда всё доехало и пользователь не трогает страницу несколько секунд,
@@ -586,7 +588,7 @@ export function initScene(canvas, env) {
     if (gMap.userData.dust) gMap.userData.dust.visible = !heavy;
     (gMap.userData.packets || []).forEach((pk, i) => { pk.visible = heavy ? (i % 3 === 0) : true; });
     const pm = gMap.userData.plateMat;                      // плита карты — самая большая площадь
-    if (pm) { pm.envMapIntensity = heavy ? 0.4 : 1.6; pm.bumpScale = heavy ? 0 : 0.65; }   // uniforms: без перекомпиляции шейдера
+    if (pm) { pm.envMapIntensity = heavy ? 0.55 : 1.75; pm.bumpScale = heavy ? 0.2 : 0.7; }   // uniforms: без перекомпиляции шейдера
   }
   // Вступительная «сборка» карты при загрузке (один раз, по таймеру — не под скролл):
   // контур прорисовывается → города зажигаются по очереди → дуги протягиваются → башни.
@@ -815,7 +817,7 @@ export function initScene(canvas, env) {
     setTarget(p) { progress = Math.min(1, Math.max(0, p)); kick(); wake(); },
     // Включить мягкий замедленный доезд фона (~1.1с) — вызывается при переходе между разделами.
     navEase() { navEaseUntil = clock.getElapsedTime() + 1.1; kick(); wake(); },
-    setTheme(th) { scene.fog.color.setHex(fogColor(th)); kick(); wake(); },
+    setTheme(th) { scene.fog.color.setHex(fogColor(th)); scene.fog.density = fogDensity(th); kick(); wake(); },
     setHeroBias(v) { heroBiasT = Math.min(1, Math.max(0, v || 0)); kick(); wake(); },
     setYaw(y) { viewYaw = y || 0; kick(); wake(); },
     setPage() { kick(); wake(); },
