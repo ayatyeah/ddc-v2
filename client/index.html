@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+  <!-- При смене домена обновите URL ниже, а также robots.txt и sitemap.xml -->
+  <title>Центр цифрового развития · Национальный Банк Казахстана</title>
+  <meta name="description" content="АО «Центр цифрового развития Национального Банка Казахстана» — цифровые продукты и IT-инфраструктура для финансового сектора страны." />
+  <meta name="keywords" content="ЦЦР, DDC, Национальный Банк Казахстана, цифровое развитие, финтех, IT, OutSystems, Астана" />
+  <meta name="author" content="АО «Центр цифрового развития»" />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0a1224" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#eaf4ff" media="(prefers-color-scheme: light)" />
+  <link rel="canonical" href="https://ddc-v2-56jns.ondigitalocean.app/" />
+
+  <!-- Иконки -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-180.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+
+  <!-- PWA / установка на iOS и Android -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ЦЦР DDC" />
+  <meta name="application-name" content="ЦЦР DDC" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Центр цифрового развития" />
+  <meta property="og:title" content="Центр цифрового развития · Национальный Банк Казахстана" />
+  <meta property="og:description" content="Цифровые продукты и IT-инфраструктура для финансового сектора Казахстана." />
+  <meta property="og:url" content="https://ddc-v2-56jns.ondigitalocean.app/" />
+  <meta property="og:image" content="https://ddc-v2-56jns.ondigitalocean.app/ddc.png" />
+  <meta property="og:locale" content="ru_RU" />
+  <meta property="og:locale:alternate" content="kk_KZ" />
+  <meta property="og:locale:alternate" content="en_US" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Центр цифрового развития · НБРК" />
+  <meta name="twitter:description" content="Цифровые продукты и IT-инфраструктура для финансового сектора Казахстана." />
+  <meta name="twitter:image" content="https://ddc-v2-56jns.ondigitalocean.app/ddc.png" />
+
+  <!-- Структурированные данные (организация) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "АО «Центр цифрового развития»",
+    "alternateName": "DDC NBK",
+    "url": "https://ddc-v2-56jns.ondigitalocean.app/",
+    "logo": "https://ddc-v2-56jns.ondigitalocean.app/ddc.png",
+    "description": "Цифровые продукты и IT-инфраструктура для финансового сектора Казахстана.",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Астана",
+      "addressCountry": "KZ",
+      "streetAddress": "пр. Мангилик Ел, 57А"
+    },
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "telephone": "+7-727-258-49-58",
+      "email": "info@bsbnb.kz",
+      "contactType": "customer service"
+    }
+  }
+  </script>
+
+  <!-- Шрифты — self-host (локально): без рендер-блокирующего внешнего запроса к Google,
+       быстрее FCP/LCP, работает офлайн (PWA). Критичные для первого экрана — предзагружаем. -->
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-400-cyrillic.woff2" crossorigin />
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-700-cyrillic.woff2" crossorigin />
+  <link rel="stylesheet" href="/fonts.css" />
+
+  <!-- Загрузочный экран: показывается мгновенно (до загрузки JS), убирается, когда
+       приложение смонтировалось. Логотип крутится + кольцо-лоадер. -->
+  <style>
+    #splash { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center;
+      background: radial-gradient(circle at 50% 42%, #0a1430 0%, #04070f 70%); transition: opacity 0.55s ease; }
+    #splash.hide { opacity: 0; pointer-events: none; }
+    #splash .sp-box { position: relative; display: grid; place-items: center; width: 132px; height: 132px; }
+    #splash .sp-ring { position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid rgba(120,180,255,0.14); border-top-color: rgba(130,190,255,0.9);
+      animation: spRing 0.9s linear infinite; }
+    #splash .sp-logo { width: 76px; height: 76px; filter: drop-shadow(0 0 16px rgba(70,150,255,0.5));
+      animation: spLogo 1.5s cubic-bezier(0.65,0,0.35,1) infinite; }
+    @keyframes spRing { to { transform: rotate(360deg); } }
+    @keyframes spLogo { 0% { transform: rotateY(0); } 100% { transform: rotateY(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #splash .sp-ring, #splash .sp-logo { animation: none; } }
+  </style>
+</head>
+<body>
+  <div id="splash" aria-hidden="true">
+    <div class="sp-box">
+      <span class="sp-ring"></span>
+      <img class="sp-logo" src="/logo_ddc.svg" alt="" />
+    </div>
+  </div>
+  <div id="root"></div>
+  <noscript>Для работы сайта включите JavaScript. / Сайтты пайдалану үшін JavaScript-ті қосыңыз.</noscript>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

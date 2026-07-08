@@ -1,0 +1,23 @@
+.env
+.env.*.local
+node_modules/
+client/node_modules/
+public/assets/
+public/index.html
+public/*.br
+public/*.gz
+public/sw.js
+public/registerSW.js
+public/workbox-*.js
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+ddc_perf_*.json
+.mcp.json
+
+# Загруженные файлы (CV, вложения чата) — не коммитим
+uploads/
+.playwright-mcp/
+*.jpeg
