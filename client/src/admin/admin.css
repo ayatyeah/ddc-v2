@@ -556,8 +556,25 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .dash-bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
 .dash-bento > * { margin: 0; min-width: 0; height: 100%; }
 /* История: панель фильтров + экспорт */
-.hist-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.hist-bar .cal-filters { flex: 1; }
+.hist-page { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 1180px; }
+.card-surface { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-card); }
+.hist-hero { display: flex; align-items: stretch; justify-content: space-between; gap: 18px; padding: 22px 24px; }
+.hist-lead { margin-top: 8px; max-width: 72ch; color: var(--ink-soft); line-height: 1.6; font-size: 13.5px; }
+.hist-stats { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 10px; align-self: stretch; }
+.hist-stat { min-width: 140px; padding: 14px 16px; border-radius: 14px; background: color-mix(in srgb, var(--ink) 4%, transparent); border: 1px solid var(--line); }
+.hist-stat b { display: block; font-size: 20px; line-height: 1.1; margin-bottom: 4px; color: var(--ink); }
+.hist-stat span { font-size: 12px; color: var(--ink-faint); line-height: 1.35; }
+.hist-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 16px; }
+.hist-bar .cal-filters { flex: 1; min-width: 0; }
+.hist-filters { max-width: calc(100% - 88px); }
+.hist-list { width: 100%; }
+.hist-item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 13px 14px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--ink) 2%, var(--card));
+}
+.hist-item:hover { border-color: var(--line-2); box-shadow: var(--shadow-pop); }
+.hist-item .au-sum { font-weight: 500; }
+.hist-item .au-meta { white-space: nowrap; }
 
 /* ── База знаний (Wiki) ── */
 .wiki-search { max-width: 480px; margin-bottom: 12px; }
@@ -814,6 +831,13 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
   .seg { display: grid; width: 100%; grid-template-columns: repeat(var(--seg-count, 4), 1fr); }
   .seg-btn { padding: 9px 8px; font-size: 12.5px; }
 }
+@media (max-width: 860px) {
+  .hist-hero { flex-direction: column; }
+  .hist-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .hist-filters { max-width: 100%; }
+  .hist-item { grid-template-columns: auto 1fr; align-items: start; }
+  .hist-item .au-meta { grid-column: 1 / -1; white-space: normal; }
+}
 @media (max-width: 400px) {
   .au-badge { min-width: 64px; font-size: 10.5px; padding: 3px 7px; }
   .seg-btn { font-size: 11.5px; padding: 9px 4px; }
@@ -1040,6 +1064,12 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
   .wiki-modal-b { padding: 16px; font-size: 14px; line-height: 1.65; }
   .wiki-tags, .wiki-modal-foot { padding-left: 16px; padding-right: 16px; }
   .wiki-ed-row, .nm-img, .mon-inc-form { flex-direction: column; }
+  .hist-hero { padding: 18px 16px; }
+  .hist-stats { grid-template-columns: 1fr; }
+  .hist-bar { padding: 12px 12px; }
+  .hist-filters, .cal-filters { max-width: 100%; }
+  .hist-bar .adm-btn { width: 100%; }
+  .hist-item { padding: 12px; }
   .wiki-body { min-height: 220px; }
   .nm-img-prev { width: 100%; height: auto; aspect-ratio: 16 / 9; flex-basis: auto; }
   .vac-form, .us-create { grid-template-columns: 1fr; }
