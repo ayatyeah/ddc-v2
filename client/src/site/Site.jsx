@@ -7,16 +7,10 @@ import Nav from './Nav.jsx';
 import Brand from './Brand.jsx';
 import Footer from './Footer.jsx';
 import Assistant from './Assistant.jsx';
-import Fog from './Fog.jsx';
-import CircuitField from './CircuitField.jsx';
-import DepthFog from './DepthFog.jsx';
-import DdcBrand from './DdcBrand.jsx';
-import HudLayer from './HudLayer.jsx';
 
 // Three.js-сцена (самая тяжёлая зависимость) — отдельным ленивым чанком: грузится
 // ПОСЛЕ первого экрана и плавно проявляется. Контент главной виден сразу.
 const Background3D = lazy(() => import('./Background3D.jsx'));
-import Particles from './Particles.jsx';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { hideSplash } from '../splash.js';
 import { perf } from './perfProfile.js';   // профиль устройства + детект слабого GPU (perf.lite)
@@ -200,14 +194,6 @@ export default function Site() {
       <div id="scroll-bg" aria-hidden="true" />
       <div id="scroll-aurora" aria-hidden="true" />
       <div id="bg-planet" aria-hidden="true" />
-      <div id="scroll-depth" aria-hidden="true" />
-      {/* ── СЛОИ ГЛУБИНЫ (только десктоп) — назад→вперёд, каждый со своим параллаксом ──
-          фон (#scroll-bg) → PCB-линии (CircuitField) → туман (DepthFog) → [3D-сцена] → HUD.
-          На мобиле всё это композитится на каждом кадре скролла → фризы, поэтому там только
-          сцена + небо. */}
-      {!isMobile && !lowPower && !a11y && <CircuitField />}
-      {!isMobile && !lowPower && !a11y && <DepthFog />}
-      {!isMobile && !lowPower && !a11y && <DdcBrand />}
       {/* 3D-сцена DDC (карта + здание) — на ВСЕХ устройствах, включая телефон. */}
       {!a11y && (
         <ErrorBoundary fallback={null}>
@@ -216,10 +202,6 @@ export default function Site() {
           </Suspense>
         </ErrorBoundary>
       )}
-      {!isMobile && !lowPower && !a11y && <Particles />}
-      {!isMobile && !a11y && <Fog />}
-      {/* HUD-оверлей (передний план) — техно-элементы вокруг сцены, только на главной, гаснут при скролле. */}
-      {!isMobile && !lowPower && !a11y && path === '/' && <HudLayer />}
       <div id="scroll-grain" aria-hidden="true" />
       <div className="scroll-progress" aria-hidden="true" />
       <Nav />
