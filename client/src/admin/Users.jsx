@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
+import { emitAdminDataChange, useAdminDataSync } from './adminEvents.js';
 
 const ROLES = [
   ['admin', 'Администратор'],
@@ -37,6 +38,7 @@ export default function Users({ onAuthLost, me }) {
   }, [authGuard]);
 
   useEffect(() => { load(); }, [load]);
+  useAdminDataSync(load);
 
   const create = async () => {
     if (form.full_name.trim().split(/\s+/).filter(Boolean).length < 2) { setErr('Укажите ФИО полностью (фамилия и имя)'); return; }
@@ -46,6 +48,7 @@ export default function Users({ onAuthLost, me }) {
     try {
       await sendJSON('/api/admin/users', 'POST', form);
       setForm({ username: '', password: '', full_name: '', phone: '', department: '', role: 'staff', birth_date: '' });
+      emitAdminDataChange('users');
       load();
     } catch (e) {
       if (authGuard(e)) return;
@@ -66,6 +69,7 @@ export default function Users({ onAuthLost, me }) {
     try {
       const r = await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       if (r.status === 401) { onAuthLost?.(); return; }
+      emitAdminDataChange('users');
       load();
     } catch {}
   };
@@ -73,7 +77,7 @@ export default function Users({ onAuthLost, me }) {
   // Раскидать по отделам: инлайн-смена отдела пользователя
   const assign = async (id, department) => {
     setItems((prev) => prev.map((u) => (u.id === id ? { ...u, department } : u)));   // оптимистично
-    try { await sendJSON(`/api/admin/users/${id}`, 'PATCH', { department }); load(); }
+    try { await sendJSON(`/api/admin/users/${id}`, 'PATCH', { department }); emitAdminDataChange('users'); emitAdminDataChange('departments'); load(); }
     catch (e) { if (!authGuard(e)) { setErr(e.message || 'Не удалось обновить'); load(); } }
   };
 
@@ -82,6 +86,7 @@ export default function Users({ onAuthLost, me }) {
     try {
       await sendJSON('/api/admin/departments', 'POST', dept);
       setDept({ name: '', descr: '' });
+      emitAdminDataChange('departments');
       load();
     } catch (e) {
       if (authGuard(e)) return;
@@ -94,6 +99,8 @@ export default function Users({ onAuthLost, me }) {
     try {
       const r = await apiFetch(`/api/admin/departments/${id}`, { method: 'DELETE' });
       if (r.status === 401) { onAuthLost?.(); return; }
+      emitAdminDataChange('departments');
+      emitAdminDataChange('users');
       load();
     } catch {}
   };

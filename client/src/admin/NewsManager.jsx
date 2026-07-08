@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
+import { emitAdminDataChange, useAdminDataSync } from './adminEvents.js';
 
 const LANGS = [['ru', 'RU'], ['kk', 'KZ'], ['en', 'EN']];
 const CROP_ASPECT = 16 / 9;   // соотношение кадра новости
@@ -257,12 +258,14 @@ export default function NewsManager({ onAuthLost, canEdit = true }) {
   }, [onAuthLost]);
 
   useEffect(() => { load(); }, [load]);
+  useAdminDataSync(load);
 
   const remove = async (id) => {
     if (!window.confirm('Удалить эту новость?')) return;
     try {
       const r = await apiFetch(`/api/admin/news/${id}`, { method: 'DELETE' });
       if (r.status === 401) { onAuthLost?.(); return; }
+      emitAdminDataChange('news');
       load();
     } catch {}
   };
@@ -310,7 +313,7 @@ export default function NewsManager({ onAuthLost, canEdit = true }) {
         <Editor
           initial={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); load(); }}
+          onSaved={() => { setEditing(null); emitAdminDataChange('news'); load(); }}
           onAuthLost={onAuthLost}
         />
       )}

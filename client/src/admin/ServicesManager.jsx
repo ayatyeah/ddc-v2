@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
 import { SERVICE_ICONS, SERVICE_ICON_KEYS } from '../site/icons.jsx';
+import { emitAdminDataChange, useAdminDataSync } from './adminEvents.js';
 
 const LANGS = [['ru', 'RU'], ['kk', 'KZ'], ['en', 'EN']];
 
@@ -120,12 +121,14 @@ export default function ServicesManager({ onAuthLost, canEdit = true }) {
   }, [onAuthLost]);
 
   useEffect(() => { load(); }, [load]);
+  useAdminDataSync(load);
 
   const remove = async (id) => {
     if (!window.confirm('Удалить эту услугу?')) return;
     try {
       const r = await apiFetch(`/api/admin/services/${id}`, { method: 'DELETE' });
       if (r.status === 401) { onAuthLost?.(); return; }
+      emitAdminDataChange('services');
       load();
     } catch {}
   };
@@ -172,7 +175,7 @@ export default function ServicesManager({ onAuthLost, canEdit = true }) {
         <Editor
           initial={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); load(); }}
+          onSaved={() => { setEditing(null); emitAdminDataChange('services'); load(); }}
           onAuthLost={onAuthLost}
         />
       )}

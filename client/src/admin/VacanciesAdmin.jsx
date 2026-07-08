@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
+import { emitAdminDataChange, useAdminDataSync } from './adminEvents.js';
 
 const EMPTY = { title: '', department: '', location: 'Астана', employment: 'Полная занятость', description: '', published: true };
 
@@ -15,6 +16,7 @@ export default function VacanciesAdmin({ onAuthLost }) {
     try { setItems(await getJSON('/api/admin/vacancies')); } catch (e) { if (e.status === 401) onAuthLost?.(); }
   }, [onAuthLost]);
   useEffect(() => { load(); }, [load]);
+  useAdminDataSync(load);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const save = async () => {
@@ -23,7 +25,7 @@ export default function VacanciesAdmin({ onAuthLost }) {
     try {
       if (editId) await sendJSON(`/api/admin/vacancies/${editId}`, 'PATCH', form);
       else await sendJSON('/api/admin/vacancies', 'POST', form);
-      setForm(EMPTY); setEditId(null); load();
+      setForm(EMPTY); setEditId(null); emitAdminDataChange('vacancies'); load();
     } catch (e) { if (e.status === 401) onAuthLost?.(); else setErr(e.message || 'Не удалось сохранить'); }
     finally { setBusy(false); }
   };
@@ -32,10 +34,10 @@ export default function VacanciesAdmin({ onAuthLost }) {
     setForm({ title: v.title, department: v.department, location: v.location, employment: v.employment, description: v.description, published: v.published });
   };
   const cancel = () => { setEditId(null); setForm(EMPTY); setErr(''); };
-  const togglePub = async (v) => { try { await sendJSON(`/api/admin/vacancies/${v.id}`, 'PATCH', { published: !v.published }); load(); } catch (e) { if (e.status === 401) onAuthLost?.(); } };
+  const togglePub = async (v) => { try { await sendJSON(`/api/admin/vacancies/${v.id}`, 'PATCH', { published: !v.published }); emitAdminDataChange('vacancies'); load(); } catch (e) { if (e.status === 401) onAuthLost?.(); } };
   const remove = async (v) => {
     if (!window.confirm('Удалить вакансию?')) return;
-    try { const r = await apiFetch(`/api/admin/vacancies/${v.id}`, { method: 'DELETE' }); if (r.status === 401) { onAuthLost?.(); return; } load(); } catch {}
+    try { const r = await apiFetch(`/api/admin/vacancies/${v.id}`, { method: 'DELETE' }); if (r.status === 401) { onAuthLost?.(); return; } emitAdminDataChange('vacancies'); load(); } catch {}
   };
 
   return (

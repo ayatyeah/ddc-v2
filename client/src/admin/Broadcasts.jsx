@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getJSON, sendJSON } from '../api.js';
+import { emitAdminDataChange, useAdminDataSync } from './adminEvents.js';
 
 const ROLE_OPTS = [
   ['role:admin', 'Роль: Администраторы'],
@@ -33,6 +34,7 @@ export default function Broadcasts({ onAuthLost, isAdmin }) {
     } catch (e) { if (e.status === 401) onAuthLost?.(); }
   }, [onAuthLost]);
   useEffect(() => { load(); }, [load]);
+  useAdminDataSync(load);
 
   const send = async () => {
     if (!form.title.trim() || !form.body.trim()) { setErr('Заполните заголовок и текст'); return; }
@@ -42,6 +44,7 @@ export default function Broadcasts({ onAuthLost, isAdmin }) {
       const r = await sendJSON('/api/admin/broadcasts', 'POST', { ...form, title: form.title.trim(), body: form.body.trim() });
       setMsg(`Доставлено получателям: ${r.recipients}`);
       setForm({ title: '', body: '', audience: 'all', channel: 'portal' });
+      emitAdminDataChange('broadcasts');
       load();
     } catch (e) { if (e.status === 401) onAuthLost?.(); else setErr(e.message || 'Не удалось отправить'); }
     finally { setBusy(false); }

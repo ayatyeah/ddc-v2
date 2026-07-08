@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
+import { emitAdminDataChange, useAdminDataSync } from './adminEvents.js';
 
 const fmt = (v) => { try { return new Date(v).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 const EMPTY = { title: '', category: 'Общее', tags: '', body: '' };
@@ -18,6 +19,7 @@ export default function Wiki({ onAuthLost, canEdit = true }) {
     try { setData(await getJSON(`/api/wiki?${p}`)); } catch (e) { if (e.status === 401) onAuthLost?.(); }
   }, [q, cat, onAuthLost]);
   useEffect(() => { const t = setTimeout(load, 220); return () => clearTimeout(t); }, [load]);
+  useAdminDataSync(load);
 
   const open = async (it) => { try { setActive(await getJSON(`/api/wiki/${it.id}`)); } catch {} };
   const save = async () => {
@@ -26,11 +28,11 @@ export default function Wiki({ onAuthLost, canEdit = true }) {
     try {
       if (edit.id) await sendJSON(`/api/admin/wiki/${edit.id}`, 'PATCH', edit);
       else await sendJSON('/api/admin/wiki', 'POST', edit);
-      setEdit(null); load();
+      setEdit(null); emitAdminDataChange('wiki'); load();
     } catch (e) { if (e.status === 401) onAuthLost?.(); else alert(e.message || 'Не удалось'); }
     finally { setBusy(false); }
   };
-  const del = async (it) => { if (!confirm('Удалить статью?')) return; try { await apiFetch(`/api/admin/wiki/${it.id}`, { method: 'DELETE' }); setActive(null); load(); } catch {} };
+  const del = async (it) => { if (!confirm('Удалить статью?')) return; try { await apiFetch(`/api/admin/wiki/${it.id}`, { method: 'DELETE' }); setActive(null); emitAdminDataChange('wiki'); load(); } catch {} };
 
   // ── Редактор ──
   if (edit) {
