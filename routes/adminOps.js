@@ -7,7 +7,7 @@ const { APP_VERSION } = require('../lib/config');
 const { auth, requireRole, logAudit } = require('../lib/auth');
 const { clip, parseJsonLoose, cleanAnswer } = require('../lib/util');
 const { notify, broadcastAll, onlineUserIds, onlineCount } = require('../lib/sse');
-const { OPENAI_KEY, GEMINI_KEYS, callGemini, aiText } = require('../lib/ai');
+const { OPENAI_KEY, GEMINI_KEYS, aiText, aiBatch } = require('../lib/ai');
 
 const router = express.Router();
 
@@ -139,7 +139,7 @@ router.post('/api/admin/ai/analyze', auth, requireRole('admin', 'editor', 'manag
     let analysis = null, lastErr = null;
     for (let attempt = 0; attempt < 2 && !analysis; attempt++) {
       try {
-        const text = await callGemini(prompt);
+        const text = await aiBatch(prompt);   // Gemini-первый (аналитика), OpenAI — фолбэк
         analysis = parseJsonLoose(text);
         if (!analysis) lastErr = new Error('не удалось разобрать ответ ИИ');
       } catch (e) { lastErr = e; }

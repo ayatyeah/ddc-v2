@@ -6,16 +6,23 @@ const db = require('../db');
 const { auth } = require('../lib/auth');
 const { clip, parseJsonLoose, cleanAnswer } = require('../lib/util');
 const { OPENAI_KEY, GEMINI_KEYS, callGemini, callOpenAI, aiText, embed, transcribeAudio } = require('../lib/ai');
-const { cosine, semanticSearch, KIND_LABEL, indexReady } = require('../lib/rag');
+const { cosine, semanticSearch, prefixSearch, KIND_LABEL, indexReady } = require('../lib/rag');
 
 const router = express.Router();
 
-// ── Семантический поиск по порталу ────────────────────────────────────────────
+// ── Глобальный поиск по порталу (Ctrl+K): ТОЧНЫЙ пословный префиксный поиск ────
+// Литеральный, а не семантический: «ayat» находит только «ayat…», не «a»/«ay»/«aya».
+// Работает по search_index (удалённые сущности убираются из индекса сразу при удалении).
 router.post('/api/portal/search', auth, async (req, res) => {
   const q = clip(req.body?.q, 200);
-  if (!q) return res.json({ results: [], semantic: !!OPENAI_KEY });
-  try { res.json({ results: (await semanticSearch(q, 10)).map((r) => ({ kind: r.kind, ref_id: r.ref_id, title: r.title, snippet: r.snippet, tab: r.tab, score: r.score, kindLabel: KIND_LABEL[r.kind] || r.kind })), semantic: !!OPENAI_KEY && indexReady() }); }
-  catch (e) { console.error('POST /api/portal/search:', e.message); res.status(502).json({ error: 'Поиск недоступен' }); }
+  if (!q) return res.json({ results: [], semantic: false });
+  try {
+    const hits = await prefixSearch(q, 10);
+    res.json({
+      results: hits.map((r) => ({ kind: r.kind, ref_id: r.ref_id, title: r.title, snippet: r.snippet, tab: r.tab, kindLabel: KIND_LABEL[r.kind] || r.kind })),
+      semantic: false,
+    });
+  } catch (e) { console.error('POST /api/portal/search:', e.message); res.status(502).json({ error: 'Поиск недоступен' }); }
 });
 
 // ── RAG «Спроси у ДиДи»: вопрос → релевантные фрагменты → ответ ИИ с источниками ──

@@ -6,6 +6,7 @@ const { auth } = require('../lib/auth');
 const { clip, parseJsonLoose } = require('../lib/util');
 const { broadcast, broadcastAll, notify } = require('../lib/sse');
 const { aiText } = require('../lib/ai');
+const { removeFromIndex } = require('../lib/rag');
 
 const router = express.Router();
 
@@ -97,6 +98,7 @@ router.delete('/api/portal/requests/:id(\\d+)', auth, async (req, res) => {
     const canDel = rows[0].author_id === req.admin.id || ['admin', 'manager'].includes(req.admin.role);
     if (!canDel) return res.status(403).json({ error: 'Можно удалять только свои заявки' });
     await db.query(`DELETE FROM requests WHERE id = $1`, [Number(req.params.id)]);
+    await removeFromIndex('request', Number(req.params.id));   // сразу убрать из глобального поиска
     res.json({ ok: true });
   } catch (e) { console.error('DELETE /api/portal/requests:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });
@@ -175,6 +177,7 @@ router.delete('/api/portal/tasks/:id(\\d+)', auth, async (req, res) => {
     if (t.rows[0].created_by !== req.admin.u && !['admin', 'manager'].includes(req.admin.role))
       return res.status(403).json({ error: 'Нет прав на удаление' });
     await db.query(`DELETE FROM tasks WHERE id = $1`, [id]);
+    await removeFromIndex('task', id);   // сразу убрать из глобального поиска
     res.json({ ok: true });
   } catch (e) { console.error('DELETE /api/portal/tasks:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });

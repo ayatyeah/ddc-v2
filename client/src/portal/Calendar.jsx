@@ -71,18 +71,31 @@ export default function Calendar({ me, onAuthLost }) {
 
   const dayEvents = byDay[sel] || [];
 
-  const openCreate = () => setForm({ kind: 'meeting', title: '', date: sel, time: '10:00', all_day: false, descr: '' });
+  const openCreate = () => setForm({ mode: 'create', kind: 'meeting', title: '', date: sel, time: '10:00', all_day: false, descr: '' });
+  const openEdit = (ev) => {
+    const iso = String(ev.starts_at || '');
+    const date = iso.slice(0, 10) || sel;
+    const time = ev.all_day ? '10:00' : (iso.slice(11, 16) || '10:00');
+    setForm({ mode: 'edit', id: ev.id, kind: KINDS[ev.kind] ? ev.kind : 'other', title: ev.title || '', date, time, all_day: !!ev.all_day, descr: ev.descr || '' });
+  };
   const submit = async (e) => {
     e?.preventDefault?.();
     if (!form.title.trim()) return;
     const starts_at = form.all_day ? `${form.date}T00:00:00` : `${form.date}T${form.time || '00:00'}:00`;
     try {
-      await sendJSON('/api/portal/events', 'POST', {
-        kind: form.kind, title: form.title.trim(), descr: form.descr.trim(),
-        starts_at, all_day: form.all_day, author_name: me?.username,
-      });
+      if (form.mode === 'edit') {
+        await sendJSON(`/api/portal/events/${form.id}`, 'PATCH', {
+          kind: form.kind, title: form.title.trim(), descr: form.descr.trim(),
+          starts_at, all_day: form.all_day,
+        });
+      } else {
+        await sendJSON('/api/portal/events', 'POST', {
+          kind: form.kind, title: form.title.trim(), descr: form.descr.trim(),
+          starts_at, all_day: form.all_day, author_name: me?.username,
+        });
+      }
       setForm(null); load();
-    } catch (e2) { if (e2.status === 401) onAuthLost?.(); else alert(e2.message || 'Не удалось создать'); }
+    } catch (e2) { if (e2.status === 401) onAuthLost?.(); else alert(e2.message || 'Не удалось сохранить'); }
   };
   const del = async (ev) => {
     if (!ev.can_delete || typeof ev.id !== 'number') return;
@@ -154,7 +167,12 @@ export default function Calendar({ me, onAuthLost }) {
                   </div>
                   {e.descr && <div className="cal-item-d">{e.descr}</div>}
                 </div>
-                {e.can_delete && typeof e.id === 'number' && <button className="cal-del" onClick={() => del(e)} aria-label="Удалить">×</button>}
+                {(e.can_edit || e.can_delete) && typeof e.id === 'number' && (
+                  <div className="cal-item-tools">
+                    {e.can_edit && <button className="cal-edit" onClick={() => openEdit(e)} aria-label="Изменить" title="Изменить">✎</button>}
+                    {e.can_delete && <button className="cal-del" onClick={() => del(e)} aria-label="Удалить" title="Удалить">×</button>}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -165,7 +183,7 @@ export default function Calendar({ me, onAuthLost }) {
       {form && (
         <div className="pt-modal-bg" onClick={() => setForm(null)}>
           <form className="pt-modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-            <h3>Новое событие</h3>
+            <h3>{form.mode === 'edit' ? 'Изменить событие' : 'Новое событие'}</h3>
             <div className="adm-field"><label>Тип</label>
               <select className="adm-input" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
                 <option value="meeting">Встреча</option>
@@ -187,7 +205,7 @@ export default function Calendar({ me, onAuthLost }) {
               <textarea className="adm-input" rows={3} value={form.descr} onChange={(e) => setForm({ ...form, descr: e.target.value })} /></div>
             <div className="pt-modal-foot">
               <button type="button" className="adm-btn ghost" onClick={() => setForm(null)}>Отмена</button>
-              <button type="submit" className="adm-btn">Создать</button>
+              <button type="submit" className="adm-btn">{form.mode === 'edit' ? 'Сохранить' : 'Создать'}</button>
             </div>
           </form>
         </div>

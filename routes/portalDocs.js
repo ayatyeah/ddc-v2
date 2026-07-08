@@ -3,10 +3,12 @@
 const express = require('express');
 const db = require('../db');
 const { buildDocPDF } = require('../docPdf');
+const { buildDocDOCX, docxAvailable } = require('../docDocx');
 const { fontsAvailable } = require('../pdfReport');
 const { auth } = require('../lib/auth');
 const { clip, parseJsonLoose, cleanAnswer } = require('../lib/util');
 const { aiText } = require('../lib/ai');
+const { removeFromIndex } = require('../lib/rag');
 
 const router = express.Router();
 
@@ -107,6 +109,22 @@ router.get('/api/portal/docs/:id(\\d+)/pdf', auth, async (req, res) => {
   } catch (e) { console.error('GET /api/portal/docs/pdf:', e.message); res.status(500).json({ error: 'Не удалось сформировать PDF' }); }
 });
 
+// DOCX документа: редактируемая версия того же бланка — открывается в Word (всегда на скачивание).
+router.get('/api/portal/docs/:id(\\d+)/docx', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT * FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Документ не найден' });
+    if (!docxAvailable()) return res.status(500).json({ error: 'Генерация DOCX недоступна' });
+    const d = rows[0];
+    const docx = await buildDocDOCX({ id: d.id, title: d.title, body: d.body, author: d.author_name, createdAt: d.created_at, docType: d.doc_type });
+    const safe = String(d.title || 'Документ').replace(/[\r\n"]+/g, '_').slice(0, 80);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safe)}.docx`);
+    res.send(docx);
+  } catch (e) { console.error('GET /api/portal/docs/docx:', e.message); res.status(500).json({ error: 'Не удалось сформировать DOCX' }); }
+});
+
 router.delete('/api/portal/docs/:id(\\d+)', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`SELECT author_id FROM documents WHERE id = $1`, [Number(req.params.id)]);
@@ -114,6 +132,7 @@ router.delete('/api/portal/docs/:id(\\d+)', auth, async (req, res) => {
     const canDel = rows[0].author_id === req.admin.id || ['admin', 'manager'].includes(req.admin.role);
     if (!canDel) return res.status(403).json({ error: 'Удалять можно только свои документы' });
     await db.query(`DELETE FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    await removeFromIndex('document', Number(req.params.id));   // сразу убрать из глобального поиска
     res.json({ ok: true });
   } catch (e) { console.error('DELETE /api/portal/docs:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });

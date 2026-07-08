@@ -5,6 +5,7 @@ const db = require('../db');
 const { auth, requireRole } = require('../lib/auth');
 const { clip } = require('../lib/util');
 const { broadcastAll, notify } = require('../lib/sse');
+const { removeFromIndex } = require('../lib/rag');
 
 const router = express.Router();
 
@@ -135,7 +136,7 @@ router.get('/api/portal/events', auth, async (req, res) => {
         WHERE ($1::date IS NULL OR e.starts_at >= $1::date)
           AND ($2::date IS NULL OR e.starts_at < ($2::date + INTERVAL '1 day'))
         ORDER BY e.starts_at`, [from, to]);
-    for (const e of ev.rows) out.push({ ...e, source: 'event', can_delete: e.created_by === req.admin.id || ['admin', 'manager'].includes(req.admin.role) });
+    for (const e of ev.rows) { const canManage = e.created_by === req.admin.id || ['admin', 'manager'].includes(req.admin.role); out.push({ ...e, source: 'event', can_delete: canManage, can_edit: canManage }); }
     // 2) Дни рождения — из дат рождения сотрудников, спроецированные на годы диапазона.
     const bd = await db.query(`SELECT id, COALESCE(NULLIF(full_name,''), username) AS name, birth_date FROM users WHERE active = TRUE AND birth_date IS NOT NULL`);
     const years = [];
@@ -181,7 +182,7 @@ router.post('/api/portal/events', auth, async (req, res) => {
        RETURNING id, kind, title, descr, starts_at, ends_at, all_day, department, created_by, created_by_name`,
       [kind, title, descr, starts_at, ends_at && !isNaN(+ends_at) ? ends_at : null, all_day, department, req.admin.id, name]);
     broadcastAll('event', { id: rows[0].id });   // календарь у всех обновится мгновенно (в т.ч. после ДиДи)
-    res.status(201).json({ ...rows[0], source: 'event', can_delete: true });
+    res.status(201).json({ ...rows[0], source: 'event', can_delete: true, can_edit: true });
   } catch (e) { console.error('POST /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось создать событие' }); }
 });
 // Перенос/правка события: ассистент («перенеси встречу с 10 на 12») и календарь.
@@ -205,13 +206,19 @@ router.patch('/api/portal/events/:id(\\d+)', auth, async (req, res) => {
       vals.push(t); sets.push(`title = $${vals.length}`);
     }
     if (req.body?.all_day !== undefined) { vals.push(!!req.body.all_day); sets.push(`all_day = $${vals.length}`); }
+    if (req.body?.descr !== undefined) { vals.push(clip(req.body.descr, 1000)); sets.push(`descr = $${vals.length}`); }
+    if (req.body?.kind !== undefined && EVENT_KINDS.includes(req.body.kind)) {
+      // Праздник может ставить только админ (как и при создании).
+      if (req.body.kind === 'holiday' && req.admin.role !== 'admin') return res.status(403).json({ error: 'Праздники — только администратор' });
+      vals.push(req.body.kind); sets.push(`kind = $${vals.length}`);
+    }
     if (!sets.length) return res.status(400).json({ error: 'Нечего обновлять' });
     vals.push(id);
     const { rows } = await db.query(
       `UPDATE events SET ${sets.join(', ')} WHERE id = $${vals.length}
        RETURNING id, kind, title, descr, starts_at, ends_at, all_day, department, created_by, created_by_name`, vals);
     broadcastAll('event', { id });   // перенос встречи виден всем сразу
-    res.json({ ...rows[0], source: 'event', can_delete: true });
+    res.json({ ...rows[0], source: 'event', can_delete: true, can_edit: true });
   } catch (e) { console.error('PATCH /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось обновить' }); }
 });
 router.delete('/api/portal/events/:id(\\d+)', auth, async (req, res) => {
@@ -222,6 +229,7 @@ router.delete('/api/portal/events/:id(\\d+)', auth, async (req, res) => {
     if (ev.rows[0].created_by !== req.admin.id && !['admin', 'manager'].includes(req.admin.role))
       return res.status(403).json({ error: 'Нет прав' });
     await db.query(`DELETE FROM events WHERE id = $1`, [id]);
+    await removeFromIndex('event', id);   // сразу убрать из глобального поиска
     broadcastAll('event', { id, deleted: true });
     res.json({ ok: true });
   } catch (e) { console.error('DELETE /api/portal/events:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
@@ -273,6 +281,7 @@ router.delete('/api/portal/news/:id(\\d+)', auth, async (req, res) => {
     if (n.rows[0].author_id !== req.admin.id && req.admin.role !== 'admin')
       return res.status(403).json({ error: 'Нет прав' });
     await db.query(`DELETE FROM portal_news WHERE id = $1`, [id]);
+    await removeFromIndex('news', id);   // сразу убрать из глобального поиска
     res.json({ ok: true });
   } catch (e) { console.error('DELETE /api/portal/news:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });

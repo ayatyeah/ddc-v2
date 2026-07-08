@@ -92,7 +92,10 @@ export default function Documents({ me, onAuthLost }) {
             <button className="pt-doc-aibtn" onClick={() => translate(active, 'kk')} disabled={!!aiBusy} title="Перевести на казахский">{aiBusy === 'kk' ? '…' : '🌐 KZ'}</button>
             <button className="pt-doc-aibtn" onClick={() => translate(active, 'en')} disabled={!!aiBusy} title="Перевести на английский">{aiBusy === 'en' ? '…' : '🌐 EN'}</button>
           </div>
-          <a className="adm-btn pt-doc-dl" href={`/api/portal/docs/${active.id}/pdf?download=1`} target="_blank" rel="noreferrer" download>⬇ Скачать PDF</a>
+          <div className="pt-doc-dl-group">
+            <a className="adm-btn pt-doc-dl" href={`/api/portal/docs/${active.id}/pdf?download=1`} target="_blank" rel="noreferrer" download>⬇ PDF</a>
+            <a className="adm-btn ghost pt-doc-dl" href={`/api/portal/docs/${active.id}/docx`} target="_blank" rel="noreferrer" download title="Скачать редактируемый Word-документ">⬇ Word</a>
+          </div>
         </div>
         {aiPanel && (
           <div className="pt-doc-aipanel">

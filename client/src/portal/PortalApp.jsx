@@ -41,19 +41,33 @@ const roleLabel = (r) => ROLE_LABEL[r] || r || 'Сотрудник';
 
 const fmtTime = (iso) => { try { return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 const initials = (n) => (n || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
-const vcardEscape = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,').trim();
-const vcardTel = (v) => String(v || '').replace(/[^\d+() -]/g, '').trim();
-const makeVCard = ({ name, org, title, phone, note }) => [
+// vCard 3.0. Экранируем ТОЛЬКО то, что требует спецификация в конкретном поле:
+//  • в текстовых значениях (FN/TITLE/NOTE/ORG-часть) — запятые/точки-с-запятой/переносы;
+//  • в структурном поле N разделители «;» между компонентами НЕ трогаем.
+// Раньше запятые/«;» экранировались везде подряд → многие сканеры показывали «мусор»,
+// а полное имя в N без нормальной структуры (Фамилия;Имя) ломало разбор карточки.
+const vcardText = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,').trim();
+const vcardTel = (v) => String(v || '').replace(/[^\d+]/g, '').trim();
+// Имя → структура N: «Фамилия;Имя;;;». Берём первое слово как имя, остальное — фамилия.
+const vcardName = (name) => {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  const given = vcardText(parts[0] || '');
+  const family = vcardText(parts.slice(1).join(' '));
+  return `${family};${given};;;`;
+};
+// makeVCardRaw — org уже собран (со структурными «;»), остальные поля экранируем сами.
+const makeVCardRaw = ({ name, org, title, phone, note }) => [
   'BEGIN:VCARD',
   'VERSION:3.0',
-  `FN:${vcardEscape(name)}`,
-  `N:${vcardEscape(name)};;;;`,
-  `ORG:${vcardEscape(org)}`,
-  `TITLE:${vcardEscape(title)}`,
+  `N:${vcardName(name)}`,
+  `FN:${vcardText(name)}`,
+  org ? `ORG:${org}` : '',
+  title ? `TITLE:${vcardText(title)}` : '',
   phone ? `TEL;TYPE=CELL,VOICE:${vcardTel(phone)}` : '',
-  note ? `NOTE:${vcardEscape(note)}` : '',
+  note ? `NOTE:${vcardText(note)}` : '',
   'END:VCARD',
 ].filter(Boolean).join('\r\n');
+const makeVCard = ({ name, org, title, phone, note }) => makeVCardRaw({ name, org: org ? vcardText(org) : '', title, phone, note });
 
 // Вложения чата
 const ATTACH_ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.txt';
@@ -316,14 +330,21 @@ function Profile({ me, onAuthLost }) {
   useEffect(() => { load(); }, [load]);
   // QR цифровой визитки (vCard) — можно отсканировать и сохранить контакт.
   useEffect(() => {
-    const vcard = makeVCard({
+    // ORG в vCard — структурное поле «Организация;Подразделение»: компоненты экранируем
+    // по отдельности, а разделяющую «;» оставляем как есть (иначе сканер видит один кусок).
+    const org = info?.department
+      ? `${vcardText('Центр цифрового развития')};${vcardText(info.department)}`
+      : vcardText('Центр цифрового развития');
+    const vcard = makeVCardRaw({
       name: info?.name || me?.username || '',
-      org: info?.department ? `Центр цифрового развития; ${info.department}` : 'Центр цифрового развития',
+      org,
       title: info?.position || roleLabel(me?.role),
       phone: info?.phone || '',
       note: info?.skills ? `Навыки: ${info.skills}` : '',
     });
-    QRCode.toDataURL(vcard, { errorCorrectionLevel: 'M', margin: 2, scale: 8, width: 240, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
+    // errorCorrectionLevel 'Q' + запас размера: кириллица в UTF-8 «тяжёлая», при 'M' и мелком
+    // модуле сканеры иногда читали мусор. Явный type=image/png и без обрезки версии.
+    QRCode.toDataURL(vcard, { errorCorrectionLevel: 'Q', margin: 3, scale: 8, width: 256, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
   }, [me, info]);
 
   const saveEdit = async () => {
@@ -533,7 +554,7 @@ function GlobalSearch({ onGo, onClose, onAuthLost }) {
             </button>
           ))}
         </div>
-        <div className="pt-gs-foot">{semantic ? '⚡ Семантический ИИ-поиск' : 'Поиск по ключевым словам'} · ↑↓ выбор · Enter открыть</div>
+        <div className="pt-gs-foot">Поиск по началу слова · ↑↓ выбор · Enter открыть</div>
       </div>
     </div>
   );

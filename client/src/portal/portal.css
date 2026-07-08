@@ -204,6 +204,7 @@
 .pt-doc-bar-t b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pt-doc-bar-t small { font-size: 11.5px; color: var(--ink-faint); }
 .pt-doc-dl { flex: none; text-decoration: none; }
+.pt-doc-dl-group { display: flex; gap: 6px; flex: none; }
 .pt-doc-frame { flex: 1; width: 100%; border: none; background: #525659; }
 
 /* Заявки */
@@ -305,6 +306,8 @@
   .pt-dm.has-active .pt-chat { flex: 1; padding: 12px 12px 8px; }
   .pt-compose { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
   .pt-view > .pt-compose { margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  /* Место под плавающую кнопку ассистента (она поднята над строкой ввода) */
+  .pt-conv-open .pt-chat { padding-bottom: 16px; }
 
   /* Telegram-пузыри */
   .pt-msg { max-width: 84%; }
@@ -426,6 +429,9 @@
 .cal-item-d { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
 .cal-del { flex: none; align-self: flex-start; width: 22px; height: 22px; border: none; background: transparent; color: var(--ink-faint); font-size: 18px; line-height: 1; cursor: pointer; border-radius: 6px; }
 .cal-del:hover { color: #e5484d; background: color-mix(in srgb, #e5484d 12%, transparent); }
+.cal-item-tools { display: flex; gap: 2px; flex: none; align-self: flex-start; }
+.cal-edit { width: 22px; height: 22px; border: none; background: transparent; color: var(--ink-faint); font-size: 13px; line-height: 1; cursor: pointer; border-radius: 6px; }
+.cal-edit:hover { color: var(--accent, #2f6fe0); background: color-mix(in srgb, var(--accent, #2f6fe0) 12%, transparent); }
 .cal-form-row { display: flex; gap: 10px; }
 .cal-form-row .adm-field { flex: 1; }
 .cal-allday { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); margin: 4px 0 8px; cursor: pointer; }
@@ -472,7 +478,10 @@
 }
 
 /* ═══════════════ Голосовой ассистент портала ═══════════════ */
-.va { position: fixed; right: 22px; bottom: calc(22px + env(safe-area-inset-bottom)); z-index: 90; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.va { position: fixed; right: 22px; bottom: calc(22px + env(safe-area-inset-bottom)); z-index: 90; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; transition: transform 0.25s var(--ease, ease); }
+/* В открытом чате (личном/командном) кнопка ассистента не должна перекрывать «Отправить»:
+   поднимаем её над строкой ввода. Панель ассистента (когда открыта) не двигаем. */
+.pt-conv-open .va:not(.open) { transform: translateY(-72px); }
 .va-fab {
   width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer;
   background: linear-gradient(135deg, #2f6fe0, #5a3fd6); color: #fff;

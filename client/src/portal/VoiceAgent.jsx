@@ -361,8 +361,11 @@ export default function VoiceAgent({ onGo, me }) {
           else addLog('bot', 'Не расслышал. Повторите, пожалуйста.');
         } else if (r.text) {
           addLog('me', r.text);
-          const local = parseVoice(r.text);   // сперва локальный разбор и здесь
-          if (local.length) { await execute(local, undefined, true); } else { await execute(r.actions, r.say, true); }
+          // ИИ-первый (OpenAI разобрал фразу на сервере): его действия приоритетны —
+          // он понимает свободные формулировки лучше локальных правил. Локальный
+          // парсер — только страховка, если ИИ действий не вернул.
+          if (Array.isArray(r.actions) && r.actions.length) { await execute(r.actions, r.say, true); }
+          else { const local = parseVoice(r.text); if (local.length) await execute(local, undefined, true); else await execute(r.actions, r.say, true); }
         } else { await execute(r.actions, r.say, true); }
       } catch (e) { addLog('bot', e.message || 'Ассистент недоступен'); }
       finally { setPhase('idle'); }
