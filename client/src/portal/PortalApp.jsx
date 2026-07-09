@@ -61,7 +61,7 @@ const vcardName = (name) => {
 // и показывали кракозябры во всех полях, кроме латиницы (имени).
 const makeVCardRaw = ({ name, org, title, phone, note }) => [
   'BEGIN:VCARD',
-  'VERSION:4.0',
+  'VERSION:3.0',
   `N:${vcardName(name)}`,
   `FN:${vcardText(name)}`,
   org ? `ORG:${org}` : '',
@@ -346,14 +346,11 @@ function Profile({ me, onAuthLost }) {
       phone: info?.phone || '',
       note: info?.skills ? `Навыки: ${info.skills}` : '',
     });
-    // errorCorrectionLevel 'Q' + запас размера: кириллица в UTF-8 «тяжёлая», при 'M' и мелком
-    // модуле сканеры иногда читали мусор. Явный type=image/png и без обрезки версии.
-    // Кодируем vCard ОДНИМ явным byte-сегментом из UTF-8 байтов. Иначе библиотека сама
-    // дробит строку на Alphanumeric/Byte-куски и добавляет к кириллице ECI-указатель UTF-8,
-    // который многие сканеры (особенно iOS) игнорируют и читают как Latin-1 → крякозябры
-    // во всех полях, кроме латиницы (имени). Единый byte-сегмент читается корректно везде.
-    const vcardBytes = new TextEncoder().encode(vcard);
-    QRCode.toDataURL([{ data: vcardBytes, mode: 'byte' }], { errorCorrectionLevel: 'Q', margin: 3, scale: 8, width: 512, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
+    // Отдаём vCard обычной строкой (как в рабочей версии): библиотека сама раскладывает
+    // её на сегменты, а кириллица уходит в byte-режим сырыми UTF-8 байтами — камера iOS и
+    // популярные сканеры читают это корректно. errorCorrectionLevel 'Q' + запас размера
+    // (width 512) — код крупный и уверенно сканируется даже с экрана.
+    QRCode.toDataURL(vcard, { errorCorrectionLevel: 'Q', margin: 3, scale: 8, width: 512, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
   }, [me, info]);
 
   const saveEdit = async () => {

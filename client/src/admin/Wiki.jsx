@@ -90,7 +90,7 @@ export default function Wiki({ onAuthLost, canEdit = true }) {
             {active.tags && <div className="wiki-tags">{active.tags.split(',').map((t, i) => t.trim() && <span key={i}>#{t.trim()}</span>)}</div>}
             {canEdit && (
               <div className="wiki-modal-foot">
-                <button className="adm-ghost" onClick={() => { setEdit({ id: active.id, title: active.title, category: active.category, tags: active.tags, body: active.body }); setActive(null); }}>Редактировать</button>
+                <button className="adm-btn" onClick={() => { setEdit({ id: active.id, title: active.title, category: active.category, tags: active.tags, body: active.body }); setActive(null); }}>Редактировать</button>
                 <button className="adm-ghost danger" onClick={() => del(active)}>Удалить</button>
               </div>
             )}

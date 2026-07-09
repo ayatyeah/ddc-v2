@@ -10,6 +10,42 @@ const { cosine, semanticSearch, prefixSearch, KIND_LABEL, indexReady } = require
 
 const router = express.Router();
 
+// ── Память диалога: скользящее окно ───────────────────────────────────────────
+// LLM не помнит ничего между вызовами — «память» = пересылка последних реплик
+// в каждом запросе. Держим ОКНО последних N обменов (не весь диалог), иначе
+// расход входных токенов растёт квадратично по длине переписки.
+const HISTORY_TURNS = 4;          // сколько последних пар «вопрос-ответ» помним
+const HISTORY_MSG_MAX = 500;      // максимум символов на одну реплику в истории
+
+// Приводим присланную клиентом историю к безопасному виду: только валидные роли,
+// обрезка по длине, окно последних HISTORY_TURNS*2 сообщений.
+function sanitizeHistory(raw) {
+  if (!Array.isArray(raw)) return [];
+  const msgs = raw
+    .map((m) => ({
+      role: m?.role === 'assistant' || m?.who === 'bot' ? 'assistant' : 'user',
+      text: clip(m?.text ?? m?.content, HISTORY_MSG_MAX),
+    }))
+    .filter((m) => m.text);
+  return msgs.slice(-HISTORY_TURNS * 2);   // последние N обменов
+}
+
+// История → компактный блок для промпта (пусто, если истории нет).
+function historyBlock(history) {
+  if (!history.length) return '';
+  const lines = history.map((m) => `${m.role === 'assistant' ? 'Ассистент' : 'Коллега'}: ${m.text}`).join('\n');
+  return `История диалога (для контекста уточняющих вопросов):\n${lines}\n\n`;
+}
+
+// Для порога релевантности короткие уточнения («а подробнее?», «сколько стоит?»)
+// сами по себе дают низкий скор. Поэтому ищем по запросу, дополненному ПОСЛЕДНИМ
+// вопросом пользователя из истории — так follow-up находит нужный контекст.
+function retrievalQuery(q, history) {
+  const prevUser = [...history].reverse().find((m) => m.role === 'user');
+  if (prevUser && q.length < 40) return `${prevUser.text} ${q}`.slice(0, 500);
+  return q;
+}
+
 // ── Глобальный поиск по порталу (Ctrl+K): ТОЧНЫЙ пословный префиксный поиск ────
 // Литеральный, а не семантический: «ayat» находит только «ayat…», не «a»/«ay»/«aya».
 // Работает по search_index (удалённые сущности убираются из индекса сразу при удалении).
@@ -29,17 +65,21 @@ router.post('/api/portal/search', auth, async (req, res) => {
 router.post('/api/assistant/ask', auth, async (req, res) => {
   const q = clip(req.body?.question || req.body?.q, 500);
   if (!q) return res.status(400).json({ error: 'Пустой вопрос' });
+  const history = sanitizeHistory(req.body?.history);
   try {
-    const hits = await semanticSearch(q, 6);
+    // Follow-up-вопросы ищем с учётом предыдущей реплики (иначе «а подробнее?» не найдёт контекст).
+    const hits = await semanticSearch(retrievalQuery(q, history), 6);
     const sources = hits.map((h) => ({ kind: h.kind, kindLabel: KIND_LABEL[h.kind] || h.kind, ref_id: h.ref_id, title: h.title, tab: h.tab }));
     const NOINFO = 'Честно — по этому вопросу я ничего не нашёл в базе портала, так что придумывать не буду 🙂 Лучше уточнить у HR или в разделе «Контакты». Могу ещё поискать, если переформулируете.';
     // Порог релевантности: не отвечаем «из головы», если ничего похожего не нашли.
+    // При наличии истории порог мягче — уточнения к уже найденной теме не должны обрываться.
     const top = hits[0]?.score;
-    const weak = OPENAI_KEY ? (top == null || top < 0.2) : hits.length === 0;   // редирект только при явной нерелевантности; остальное отсекает промпт
+    const minScore = history.length ? 0.12 : 0.2;
+    const weak = OPENAI_KEY ? (top == null || top < minScore) : hits.length === 0;   // редирект только при явной нерелевантности; остальное отсекает промпт
     if (weak) return res.json({ answer: NOINFO, sources: [] });
     if (!GEMINI_KEYS.length && !OPENAI_KEY) return res.json({ answer: 'Вот что нашлось по вашему запросу:', sources });
     const context = hits.map((h, i) => `[${i + 1}] (${KIND_LABEL[h.kind] || h.kind}) ${h.title}\n${(h.body || h.snippet || '').slice(0, 900)}`).join('\n\n');
-    const prompt = `Ты — ДиДи, тёплый и дружелюбный внутренний ИИ-помощник сотрудников ЦЦР (Центр цифрового развития). Общайся по-русски живо, по-человечески, дружелюбно (можно на «ты», можно лёгкий эмодзи), как отзывчивый коллега — но по делу и кратко. Отвечай ТОЛЬКО на основе фрагментов базы портала ниже. ЖЁСТКОЕ ПРАВИЛО: если ответа в данных нет — не выдумывай, а ответь ровно так: "${NOINFO}".\n\nФрагменты базы портала:\n${context}\n\nВопрос коллеги: ${q}\n\nОтвет ДиДи:`;
+    const prompt = `Ты — ДиДи, тёплый и дружелюбный внутренний ИИ-помощник сотрудников ЦЦР (Центр цифрового развития). Общайся по-русски живо, по-человечески, дружелюбно (можно на «ты», можно лёгкий эмодзи), как отзывчивый коллега — но по делу и кратко. Отвечай ТОЛЬКО на основе фрагментов базы портала ниже. Учитывай историю диалога, чтобы понимать уточняющие вопросы («а подробнее?», «а сколько это стоит?»). ЖЁСТКОЕ ПРАВИЛО: если ответа в данных нет — не выдумывай, а ответь ровно так: "${NOINFO}".\n\n${historyBlock(history)}Фрагменты базы портала:\n${context}\n\nВопрос коллеги: ${q}\n\nОтвет ДиДи:`;
     let answer = '';
     try { answer = cleanAnswer(await aiText(prompt)); } catch { /* фолбэк ниже */ }
     if (!answer) answer = NOINFO;
@@ -66,23 +106,26 @@ const publicAskLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeade
 router.post('/api/public/ask', publicAskLimiter, async (req, res) => {
   const q = clip(req.body?.q || req.body?.question, 400);
   if (!q) return res.status(400).json({ error: 'Пустой вопрос' });
+  const history = sanitizeHistory(req.body?.history);
   try {
     let hits = [];
+    const searchText = retrievalQuery(q, history);   // follow-up учитывает предыдущий вопрос
     if (OPENAI_KEY) {
-      const [qv] = await embed([q]);
+      const [qv] = await embed([searchText]);
       const { rows } = await db.query(`SELECT title, body, embedding FROM search_index WHERE kind = 'service' AND embedding IS NOT NULL`);
       hits = rows.map((r) => ({ title: r.title, body: r.body, score: cosine(qv, r.embedding) })).sort((a, b) => b.score - a.score).slice(0, 5);
     } else {
-      const { rows } = await db.query(`SELECT title, body FROM search_index WHERE kind = 'service' AND (title ILIKE $1 OR body ILIKE $1) LIMIT 5`, [`%${q}%`]);
+      const { rows } = await db.query(`SELECT title, body FROM search_index WHERE kind = 'service' AND (title ILIKE $1 OR body ILIKE $1) LIMIT 5`, [`%${searchText}%`]);
       hits = rows;
     }
     // Порог релевантности: если ничего похожего не нашли — НЕ галлюцинируем, а перенаправляем в «Контакты».
     const REDIRECT = 'Я отвечаю только по услугам и работе Центра цифрового развития и пока не нашёл точного ответа на ваш вопрос. Лучше уточнить у нас напрямую: оставьте заявку в разделе «Контакты» на сайте или позвоните в контакт-центр 1477.';
     const top = hits[0]?.score;
-    const weak = OPENAI_KEY ? (top == null || top < 0.2) : hits.length === 0;   // явно нерелевантно → сразу редирект; пограничное отсекает промпт
+    const minScore = history.length ? 0.12 : 0.2;
+    const weak = OPENAI_KEY ? (top == null || top < minScore) : hits.length === 0;   // явно нерелевантно → сразу редирект; пограничное отсекает промпт
     if (weak) return res.json({ answer: REDIRECT });
     const ctx = hits.map((h, i) => `[${i + 1}] ${h.title}\n${(h.body || '').slice(0, 600)}`).join('\n\n');
-    const prompt = `Ты — виртуальный консультант официального сайта Центра цифрового развития (ЦЦР), дочерней организации Национального Банка Казахстана. Твоя аудитория — клиенты и партнёры. Отвечай ПО-РУССКИ в сдержанном официально-деловом тоне, на «вы», кратко (2–4 предложения), без панибратства и эмодзи. Отвечай СТРОГО по списку услуг ниже. ЖЁСТКОЕ ПРАВИЛО: если в данных нет ответа — НЕ придумывай факты, цены, сроки и названия, а ответь ровно так: "${REDIRECT}". По вопросам заказа услуг и сотрудничества направляй в раздел «Контакты» или к контакт-центру 1477.\n\nУслуги ЦЦР:\n${ctx}\n\nВопрос клиента: ${q}\n\nОтвет консультанта:`;
+    const prompt = `Ты — виртуальный консультант официального сайта Центра цифрового развития (ЦЦР), дочерней организации Национального Банка Казахстана. Твоя аудитория — клиенты и партнёры. Отвечай ПО-РУССКИ в сдержанном официально-деловом тоне, на «вы», кратко (2–4 предложения), без панибратства и эмодзи. Отвечай СТРОГО по списку услуг ниже. Учитывай историю диалога для понимания уточняющих вопросов. ЖЁСТКОЕ ПРАВИЛО: если в данных нет ответа — НЕ придумывай факты, цены, сроки и названия, а ответь ровно так: "${REDIRECT}". По вопросам заказа услуг и сотрудничества направляй в раздел «Контакты» или к контакт-центру 1477.\n\n${historyBlock(history)}Услуги ЦЦР:\n${ctx}\n\nВопрос клиента: ${q}\n\nОтвет консультанта:`;
     let answer = '';
     try { answer = cleanAnswer(await aiText(prompt)); } catch { /* фолбэк ниже */ }
     if (!answer) answer = REDIRECT;

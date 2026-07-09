@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef } from 'react';
 import { useA11y, useTheme, useLang } from '../store.js';
 import { t } from '../i18n.js';
 import { useRoute } from './router.js';
@@ -13,32 +13,15 @@ import Assistant from './Assistant.jsx';
 const Background3D = lazy(() => import('./Background3D.jsx'));
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import { hideSplash } from '../splash.js';
-import { perf } from './perfProfile.js';   // профиль устройства + детект слабого GPU (perf.lite)
 
 function hex(v) { const n = parseInt(v.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-
-// Мобила (<=760px) — лёгкий 2D-фон вместо тяжёлой WebGL-сцены. Реагируем на смену брейкпоинта.
-function useIsMobile() {
-  const [m, setM] = useState(() => window.matchMedia('(max-width: 760px)').matches);
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 760px)');
-    const on = () => setM(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  return m;
-}
 
 export default function Site() {
   const path = useRoute();
   const known = ROUTES[path];
   const route = known || ROUTES['/'];       // фон/оттенок неба для 404 берём как у главной
   const Page = known ? route.Comp : NotFoundPage;
-  const isMobile = useIsMobile();
   const lang = useLang();
-  // «Лёгкий» режим: слабое устройство ИЛИ слабый GPU ИЛИ reduced-motion (см. perfProfile).
-  // На таких НЕ грузим декор-слои глубины (PCB/туман/HUD/частицы) и параллакс мыши.
-  const lowPower = useState(() => perf.lite)[0];
   const a11y = useA11y();   // версия для слабовидящих — без 3D, частиц и тумана
   const theme = useTheme(); // dark/light — влияет на палитру неба под страницу
 
@@ -60,52 +43,11 @@ export default function Site() {
   const sceneRef = useRef(null);
   const onReady = useCallback((inst) => { sceneRef.current = inst; inst.setTarget(route.prog); inst.setTheme?.(theme); inst.setHeroBias?.(window.location.pathname === '/' ? 1 : 0); inst.setYaw?.(route.yaw ?? 0); }, []); // eslint-disable-line
 
-  // Параллакс слоёв: публикуем scrollY в CSS-переменную --sy (px), а слои двигаем через
-  // calc(var(--sy) * factor) в CSS — дальний фон медленнее, текст быстрее → ощущение глубины.
-  useEffect(() => {
-    const root = document.documentElement;
-    let raf = 0;
-    // Высоту прокрутки кэшируем (не читаем scrollHeight на каждом кадре — reflow);
-    // пересчёт при смене страницы/resize. Небольшая неточность после подгрузки данных
-    // не критична — --sp питает только тонкий прогресс-бар.
-    let maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
-    const recalc = () => { maxScroll = Math.max(1, root.scrollHeight - window.innerHeight); };
-    const apply = () => {
-      raf = 0;
-      root.style.setProperty('--sy', window.scrollY + 'px');
-      if (window.scrollY > maxScroll) recalc();   // контент дорос (ленивые данные) — обновляем базу
-      root.style.setProperty('--sp', Math.min(1, window.scrollY / maxScroll).toFixed(4));
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-    const t = setTimeout(recalc, 1200);   // после первичной загрузки данных высота устаканилась
-    recalc(); apply();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', recalc, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', recalc);
-      clearTimeout(t);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [path]);
-
-  // Параллакс мыши: публикуем --mx/--my (−1…1) — слои глубины смещаются на разную величину
-  // (calc(var(--mx) * Npx)), создавая ощущение объёма. Только десктоп (на мобиле мыши нет).
-  useEffect(() => {
-    if (isMobile || lowPower) return;   // параллакс мыши — только на достаточно мощных устройствах
-    const root = document.documentElement;
-    let raf = 0, mx = 0, my = 0;
-    // При просадке FPS (perf-tier ≥ 1, ставит Scene3D) обнуляем параллакс мыши — это первое,
-    // что снимаем: постоянный композитинг больших слоёв на каждом движении курсора дорог.
-    const flush = () => { raf = 0; const k = (+(root.dataset.perfTier || 0) >= 1) ? 0 : 1; root.style.setProperty('--mx', (mx * k).toFixed(3)); root.style.setProperty('--my', (my * k).toFixed(3)); };
-    const onMove = (e) => {
-      mx = (e.clientX / window.innerWidth - 0.5) * 2;
-      my = (e.clientY / window.innerHeight - 0.5) * 2;
-      if (!raf) raf = requestAnimationFrame(flush);
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    return () => { window.removeEventListener('pointermove', onMove); if (raf) cancelAnimationFrame(raf); root.style.removeProperty('--mx'); root.style.removeProperty('--my'); };
-  }, [isMobile, lowPower]);
+  // NB: прежние параллакс-слои (.hero-orbs/.hero-inner/.circuit-field/.depth-fog/.hud-layer)
+  // удалены из DOM при упрощении фона, поэтому переменные --sy/--mx/--my/--hud больше НЕ
+  // публикуем: их не читает ни один смонтированный слой, а запись на :root каждый кадр скролла
+  // и каждое движение мыши стоила лишних style-recalc → микрофризы. Прогресс-бар (--sp) и
+  // 3D-сцену теперь кормит ЕДИНЫЙ scroll-эффект ниже (одно чтение layout + один rAF на кадр).
 
   // SEO: обновляем заголовок и meta-описание при смене страницы (SPA-навигация)
   useEffect(() => {
@@ -121,47 +63,48 @@ export default function Site() {
     setMeta('meta[property="og:url"]', 'content', url);
   }, [route, path]);
 
-  // 3D-фон: на главной здания «играют» при скролле (башни→планета→карта),
-  // на внутренних страницах — фиксированное состояние под маршрут (бесшовный лерп в сцене).
-  // Единственный scroll-слушатель на весь фон: одно чтение layout за кадр, отсюда же
-  // кормится туман (--fog) — чтобы не плодить параллельные reflow-хендлеры.
+  // Единый scroll-драйвер фона: одно чтение layout и ОДИН rAF на кадр (раньше на главной
+  // висело ДВА отдельных scroll-слушателя, каждый со своим rAF → лишние кадры и style-recalc).
+  // Публикует --sp (тонкий прогресс-бар — нужен на всех страницах, компоновка через scaleX),
+  // а на главной тем же кадром двигает 3D-сцену: башни→планета→карта. На внутренних страницах —
+  // фиксированное состояние под маршрут (бесшовный лерп в самой сцене).
   useEffect(() => {
     const root = document.documentElement;
-    const fogEl = document.getElementById('fog');
+    const home = path === '/';
     sceneRef.current?.setPage?.();          // при смене страницы узор планеты (DDC) слегка меняется
     sceneRef.current?.navEase?.();          // мягкий замедленный доезд фона при переходе между разделами
     sceneRef.current?.setYaw?.(route.yaw ?? 0);   // у каждой страницы свой угол доворота карты
-    if (path === '/') {
-      let raf = 0;
-      // Кэшируем высоту прокрутки и пересчитываем только на resize — чтобы НЕ читать
-      // scrollHeight (reflow) на каждом кадре скролла. На мобиле это заметно для плавности.
-      let maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
-      const recalc = () => { maxScroll = Math.max(1, root.scrollHeight - window.innerHeight); };
-      const apply = () => {
-        raf = 0;
-        const sp = Math.min(1, Math.max(0, window.scrollY / maxScroll));
+    let raf = 0;
+    // Кэшируем высоту прокрутки, пересчитываем только на resize/подгрузке — чтобы НЕ читать
+    // scrollHeight (reflow) на каждом кадре скролла. На мобиле это заметно для плавности.
+    let maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
+    const recalc = () => { maxScroll = Math.max(1, root.scrollHeight - window.innerHeight); };
+    const apply = () => {
+      raf = 0;
+      const y = window.scrollY;
+      if (y > maxScroll) recalc();          // контент дорос (ленивые данные) — обновляем базу
+      const sp = Math.min(1, Math.max(0, y / maxScroll));
+      root.style.setProperty('--sp', sp.toFixed(4));
+      if (home) {
         sceneRef.current?.setTarget(0.04 + sp * 0.56);
         // Здание смещено вправо на герое (текст слева), возвращается к центру при скролле.
         sceneRef.current?.setHeroBias?.(Math.max(0, 1 - sp / 0.28));
-        // HUD-оверлей гаснет при скролле (виден только на первом экране героя).
-        root.style.setProperty('--hud', Math.max(0, 1 - sp * 4).toFixed(3));
-        if (fogEl) fogEl.style.setProperty('--fog', Math.min(0.85, sp * 1.25).toFixed(3));
-      };
-      const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-      const onResize = () => { recalc(); onScroll(); };
-      recalc(); apply();
-      window.addEventListener('scroll', onScroll, { passive: true });
-      window.addEventListener('resize', onResize, { passive: true });
-      return () => {
-        window.removeEventListener('scroll', onScroll);
-        window.removeEventListener('resize', onResize);
-        if (raf) cancelAnimationFrame(raf);
-      };
-    }
-    sceneRef.current?.setTarget(route.prog);
-    sceneRef.current?.setHeroBias?.(0);       // сдвиг вправо только на главной
-    if (fogEl) fogEl.style.setProperty('--fog', '0');
-  }, [path, route.prog]);
+      }
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    const onResize = () => { recalc(); onScroll(); };
+    const t = setTimeout(recalc, 1200);     // после первичной загрузки данных высота устаканилась
+    recalc(); apply();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+    if (!home) { sceneRef.current?.setTarget(route.prog); sceneRef.current?.setHeroBias?.(0); }   // статичное состояние под маршрут
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+      clearTimeout(t);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [path, route.prog, route.yaw]);
 
   // Палитра неба: плавный переход цвета под страницу
   const curRef = useRef(null);

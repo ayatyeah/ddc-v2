@@ -169,7 +169,7 @@ export function initBuilding(canvas) {
   halo.rotation.x = -Math.PI / 2; halo.position.y = 0.02; scene.add(halo);
 
   // ── Видимость / прогресс / рендер ─────────────────────────────────────────
-  let progress = 0, visible = true;
+  let progress = 0;
   function setProgress(p) { progress = Math.max(0, Math.min(1, p)); }
 
   function resize() {
@@ -179,14 +179,21 @@ export function initBuilding(canvas) {
     camera.aspect = w / h; camera.updateProjectionMatrix();
   }
   const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
-  const io = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.01 });
+  // Рендерим ТОЛЬКО когда канва в кадре и ПОЛНОСТЬЮ гасим rAF за её пределами (раньше цикл
+  // крутился вхолостую даже за экраном — лишняя работа на главном потоке при скролле Услуг).
+  const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) start(); else stop(); }, { threshold: 0.01 });
   io.observe(canvas);
 
   const clock = new THREE.Clock();
-  let raf = 0;
-  function loop() {
+  // FPS-кэп: на мобиле/слабых устройствах эта сцена (она на ГЛАВНОМ потоке, в отличие от фона
+  // Scene3D в воркере) рендерится ~30 fps — авто-вращение на глаз плавное, а нагрузка на CPU/GPU
+  // и конкуренция с тач-скроллом вдвое ниже. На десктопе — без ограничения.
+  const FRAME_MIN = (perf.mobile || perf.lite) ? 1000 / 30 : 0;
+  let raf = 0, last = -1;
+  function loop(now) {
     raf = requestAnimationFrame(loop);
-    if (!visible) return;
+    if (FRAME_MIN && now - last < FRAME_MIN) return;   // держим целевой FPS
+    last = now;
     const t = clock.getElapsedTime();
     controls.target.y = cy * 0.78 - progress * 2.0;
     controls.update();
@@ -197,7 +204,9 @@ export function initBuilding(canvas) {
     }
     renderer.render(scene, camera);
   }
-  loop();
+  function start() { if (!raf) { last = -1; raf = requestAnimationFrame(loop); } }
+  function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+  start();
 
   return {
     setProgress,

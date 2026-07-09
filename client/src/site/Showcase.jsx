@@ -46,7 +46,10 @@ export default function Showcase() {
     };
     // setTimeout (а не requestIdleCallback) — гарантированно ПОСЛЕ первой отрисовки страницы:
     // плашки/текст видны сразу, тяжёлая 3D-модель инициализируется следом (без «пустого экрана»).
-    const tid = setTimeout(init, 180);
+    // 420мс — с запасом ПОСЛЕ анимации перехода (VT-кроссфейд ~300мс): компиляция тяжёлого
+    // шейдера стекла (MeshPhysicalMaterial+transmission) не роняет кадры посреди перехода
+    // Главная→Услуги. Плашки на месте сразу, моделька проявляется фейдом чуть позже.
+    const tid = setTimeout(init, 420);
     return () => {
       cancelled = true;
       clearTimeout(tid);

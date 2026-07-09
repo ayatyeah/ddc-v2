@@ -33,14 +33,17 @@ export default function Assistant() {
   };
 
   // Свободный вопрос → публичный ИИ-ассистент (RAG по услугам ЦЦР).
+  // Передаём последние реплики как память диалога — бэкенд сам обрежет окно.
   const send = async (e) => {
     e?.preventDefault?.();
     const q = text.trim();
     if (!q || typing) return;
     setText('');
+    // История для запроса — то, что было ДО текущего вопроса (последние 8 реплик).
+    const history = msgs.slice(-8).map((m) => ({ role: m.who === 'bot' ? 'assistant' : 'user', text: m.text }));
     setMsgs((m) => [...m, { who: 'user', text: q }]);
     setTyping(true);
-    try { const d = await sendJSON('/api/public/ask', 'POST', { q }); setMsgs((m) => [...m, { who: 'bot', text: d.answer || '—' }]); }
+    try { const d = await sendJSON('/api/public/ask', 'POST', { q, history }); setMsgs((m) => [...m, { who: 'bot', text: d.answer || '—' }]); }
     catch { setMsgs((m) => [...m, { who: 'bot', text: t(lang, 'asst.error') }]); }
     finally { setTyping(false); }
   };

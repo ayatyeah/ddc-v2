@@ -226,9 +226,11 @@ html[data-a11y='on'] .fog-shader { display: none; }
   border: 1px solid rgba(110, 200, 255, 0.10);
   transform: rotate(-22deg) scaleY(0.32);
 }
+/* Только translate — компоновка на GPU без повторной растеризации слоя (scale(1.02) заставлял
+   браузер перерисовывать радиальный градиент каждый кадр; на глаз разница незаметна). */
 @keyframes planetFloat {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50%      { transform: translate3d(0, 14px, 0) scale(1.02); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, 16px, 0); }
 }
 @media (prefers-reduced-motion: reduce) { #bg-planet { animation: none; } }
 @media (max-width: 760px) { #bg-planet { width: 40vh; height: 40vh; top: -8vh; right: -14vw; opacity: 0.6; } }
@@ -1146,17 +1148,25 @@ textarea.inp { resize: vertical; min-height: 110px; }
 }
 
 /* ── Переход между страницами: контент подменяется СРАЗУ и плавно проявляется ──
-   (без фазы ухода/пустого экрана; фон общий, переход бесшовный). ─────────────── */
-.page-tx { animation: pageTxIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+   (без фазы ухода/пустого экрана; фон общий, переход бесшовный). ───────────────
+   ПЕРФ: только opacity + translateY (композитятся на GPU без ре-растеризации).
+   Убраны scale(0.99) и per-child stagger — они форсировали перерисовку всего
+   дерева страницы каждый кадр (заметный фриз на тяжёлых страницах вроде «Услуг»).
+   Анимируется ОДИН контейнер, а не каждый вложенный блок. */
+.page-tx { animation: pageTxIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; will-change: opacity, transform; }
+.page-tx { animation-fill-mode: both; }
+/* Изоляция пересчёта: монтаж тяжёлой страницы (напр. «Услуги») не форсирует reflow
+   всего документа во время перехода. layout+style — без paint, чтобы не обрезать
+   тени/поповеры внутри страницы. Фон — fixed вне #main, containment его не трогает. */
+#main.page-tx { contain: layout style; }
 @keyframes pageTxIn {
-  0%   { opacity: 0; transform: translateY(18px) scale(0.99); }
-  100% { opacity: 1; transform: none; }
+  0%   { opacity: 0; transform: translate3d(0, 16px, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
-/* Лёгкая «волна»: вложенные блоки появляются с небольшой задержкой друг за другом */
-.page-tx > * { animation: sectionIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: 0.06s; }
-.page-tx > *:nth-child(2) { animation-delay: 0.13s; }
-.page-tx > *:nth-child(3) { animation-delay: 0.2s; }
-@media (prefers-reduced-motion: reduce) { .page-tx, .page-tx > * { animation: none; } }
+/* will-change снимаем после завершения — чтобы слой не «висел» в памяти композитора */
+.page-tx { animation-name: pageTxIn, pageTxDone; animation-duration: 0.42s, 0s; animation-delay: 0s, 0.42s; }
+@keyframes pageTxDone { to { will-change: auto; } }
+@media (prefers-reduced-motion: reduce) { .page-tx { animation: none; } }
 
 /* Логотип-локап кликабелен (на главную), фон-область остаётся «прозрачной» для кликов */
 .brandlock .bl-logo, .brandlock .bl-word { pointer-events: auto; cursor: pointer; }
@@ -1953,9 +1963,28 @@ html[data-a11y='on'] .kz-field { display: none; }
 /* Мягкий кроссфейд старого и нового содержимого. Поддержка: Chrome/Edge, Firefox, Safari 18+. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 0.34s;
+  animation-duration: 0.3s;
   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* ПЕРФ: раньше VT кроссфейдил ВЕСЬ root — включая fixed-фон (3D-canvas, аврора, туман)
+   за страницей. Захват и кроссфейд полноэкранного снимка ПОВЕРХ работающего WebGL —
+   главная причина фриза на переходах (особенно услуги↔главная с тяжёлым деревом).
+   Даём фоновым слоям собственные view-transition-name: они выходят из группы root,
+   не участвуют в кроссфейде и остаются статичными. Снимок становится лёгким — в него
+   попадает только контент страницы, а не весь экран с 3D. */
+#scroll-bg   { view-transition-name: bg-scroll; }
+#bg3d        { view-transition-name: bg-3d; }
+#particles   { view-transition-name: bg-particles; }
+#scroll-aurora { view-transition-name: bg-aurora; }
+/* Эти слои в переходе не анимируем — просто «замораживаем» на месте (без кроссфейда). */
+::view-transition-group(bg-scroll),
+::view-transition-group(bg-3d),
+::view-transition-group(bg-particles),
+::view-transition-group(bg-aurora) { animation: none; }
+::view-transition-old(bg-scroll), ::view-transition-new(bg-scroll),
+::view-transition-old(bg-3d), ::view-transition-new(bg-3d),
+::view-transition-old(bg-particles), ::view-transition-new(bg-particles),
+::view-transition-old(bg-aurora), ::view-transition-new(bg-aurora) { animation: none; mix-blend-mode: normal; }
 /* Где VT работает — выключаем старую entrance-анимацию (иначе двойной эффект: кроссфейд + въезд). */
 @supports (view-transition-name: none) {
   .page-tx { animation: none; }
@@ -1977,6 +2006,27 @@ html[data-a11y='on'] .kz-field { display: none; }
 [data-perf-tier="2"] #particles,     [data-perf-tier="3"] #particles { display: none !important; }
 /* На tier 3 замораживаем ещё и декоративные CSS-анимации фона — меньше работы композитору. */
 [data-perf-tier="3"] #scroll-aurora, [data-perf-tier="3"] .hero::before { animation: none !important; }
+
+/* ── ПРОАКТИВНАЯ разгрузка мобильных/слабых (не дожидаясь просадки FPS) ──────────
+   Governor (data-perf-tier) реагирует ПОСЛЕ фризов — пользователь их успевает
+   почувствовать. На телефоне fill-rate GPU слабый, и постоянно крутящиеся
+   полноэкранные CSS-слои конкурируют со скроллом. Поэтому самые дорогие из них
+   (дрейф авроры, плавающие глифы, облака, планета, зерно) снимаем СРАЗУ — по
+   ширине экрана и по флагу data-perf="lite" (perfProfile.js). Сцена и мягкие
+   статичные градиенты остаются — вид сохраняется, скролл разгружается. */
+@media (max-width: 820px) {
+  #scroll-aurora { animation: none !important; }
+  #ddc-brand, #bg-planet, #scroll-grain { display: none !important; }
+  /* #fog целиком: на мобиле его opacity переписывается каждый кадр скролла (--fog),
+     а это композитинг полуэкранного слоя. Убираем — заметная разгрузка скролла. */
+  #fog { display: none !important; }
+}
+[data-perf="lite"] #scroll-aurora { animation: none !important; }
+[data-perf="lite"] #ddc-brand,
+[data-perf="lite"] #bg-planet,
+[data-perf="lite"] #scroll-grain,
+[data-perf="lite"] .circuit-field { display: none !important; }
+[data-perf="lite"] #fog .cloud { animation: none !important; }
 
 /* ════════════════════════════════════════════════════════════════════════════
    ПОЛИРОВКА 2026-07 — единый визуальный язык + «вау»-слой.
@@ -2216,11 +2266,11 @@ html[data-a11y='on'] .svc-ico, html[data-a11y='on'] .dir-ico, html[data-a11y='on
 .reveal { transform: translateY(14px); }
 .reveal.in { animation: revealFocus 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
-/* Переход между страницами: спокойнее и глубже, волна секций — плавнее */
-.page-tx { animation-duration: 0.75s; }
-.page-tx > * { animation-duration: 0.8s; animation-delay: 0.08s; }
-.page-tx > *:nth-child(2) { animation-delay: 0.16s; }
-.page-tx > *:nth-child(3) { animation-delay: 0.24s; }
+/* Переход между страницами: спокойнее и глубже — но БЕЗ per-child stagger.
+   ПЕРФ: раньше здесь возвращались .page-tx > * задержки (0.8s на каждую секцию) —
+   именно они давали фриз на тяжёлых страницах («Услуги»), т.к. каждый вложенный
+   блок становился отдельным анимируемым слоем. Анимируем только контейнер. */
+.page-tx { animation-duration: 0.5s, 0s; animation-delay: 0s, 0.5s; }
 
 /* Карточки: ховер-лифт как на подушке — длиннее переход, мягче кривая */
 .svc, .dir-card, .ncard, .nc-card {

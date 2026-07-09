@@ -89,6 +89,8 @@ export default function VoiceAgent({ onGo, me }) {
   const voicesRef = useRef([]);
   const canVoice = !!SR || hasMic;
   const addLog = (role, text, extra) => setLog((l) => [...l.slice(-39), { role, text, ...extra }]);
+  // Актуальный лог в ref — чтобы собирать историю диалога в колбэках без пересоздания их мемоизации.
+  const chatRef = useRef(log); chatRef.current = log;
   useEffect(() => { try { sessionStorage.setItem('dd_chat', JSON.stringify(log)); } catch { /* необязательно */ } }, [log]);
   // Автопрокрутка чата вниз + фокус на вводе при открытии панели.
   useEffect(() => { const el = logRef.current; if (el) el.scrollTop = el.scrollHeight; }, [log, phase, interim]);
@@ -240,9 +242,14 @@ export default function VoiceAgent({ onGo, me }) {
   // Если ИИ недоступен — показываем результаты обычного поиска (тоже полезно, без «ошибки»).
   const runAsk = useCallback(async (text, voice) => {
     const t = (text || '').trim(); if (!t) return;
+    // История для памяти: последние реплики диалога (вопросы «me» и текстовые ответы «bot»).
+    const history = chatRef.current
+      .filter((m) => (m.role === 'me' || m.role === 'bot') && m.text)
+      .slice(-8)
+      .map((m) => ({ role: m.role === 'me' ? 'user' : 'assistant', text: m.text }));
     addLog('me', t); setPhase('processing');
     try {
-      const r = await sendJSON('/api/assistant/ask', 'POST', { question: t });
+      const r = await sendJSON('/api/assistant/ask', 'POST', { question: t, history });
       addLog('bot', r.answer || 'Не нашёл ответа.', { sources: r.sources || [] });
       if (voice) speak(r.answer || '');
     } catch {
