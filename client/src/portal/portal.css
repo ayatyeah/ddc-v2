@@ -89,7 +89,8 @@
 
 /* Шапка диалога (мессенджер): назад + аватар + имя */
 .pt-conv-head { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
-.pt-back-btn { display: none; width: 36px; height: 36px; flex: none; border: none; background: transparent; color: var(--ink); border-radius: 10px; cursor: pointer; place-items: center; }
+.pt-back-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; flex: none; padding: 0 12px 0 8px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 10px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 500; }
+.pt-back-txt { line-height: 1; }
 .pt-back-btn:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .pt-conv-who { display: flex; flex-direction: column; min-width: 0; }
 .pt-conv-who b { font-size: 15px; letter-spacing: -0.01em; }
@@ -302,8 +303,9 @@
     position: sticky; top: 0; z-index: 5; margin: 0; padding: 12px;
     padding-top: calc(12px + env(safe-area-inset-top)); background: var(--card); border-bottom: 1px solid var(--line);
   }
-  .pt-back-btn { display: grid; }
   .pt-dm.has-active .pt-chat { flex: 1; padding: 12px 12px 8px; }
+  .pt-back-txt { display: none; }
+  .pt-back-btn { padding: 0; width: 36px; justify-content: center; border-color: transparent; }
   .pt-compose { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
   .pt-view > .pt-compose { margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
   /* Место под плавающую кнопку ассистента (она поднята над строкой ввода) */

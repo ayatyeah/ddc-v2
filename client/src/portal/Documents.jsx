@@ -84,8 +84,9 @@ export default function Documents({ me, onAuthLost }) {
     return (
       <div className="pt-view pt-docview">
         <div className="pt-doc-bar">
-          <button className="pt-back-btn" onClick={() => { setActive(null); setView('list'); setAiPanel(null); setFullBody(''); }} aria-label="Назад">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+          <button className="pt-back-btn" onClick={() => { setActive(null); setView('list'); setAiPanel(null); setFullBody(''); }} aria-label="Назад к документам">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+            <span className="pt-back-txt">Назад</span>
           </button>
           <div className="pt-doc-bar-t"><b>{active.title}</b><small>{typeLabel(active.doc_type)}</small></div>
           <div className="pt-doc-ai-tools">
