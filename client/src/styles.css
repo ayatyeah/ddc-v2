@@ -1968,19 +1968,16 @@ html[data-a11y='on'] .kz-field { display: none; }
    Раньше был симметричный кроссфейд 0.3s — читался «резко/быстро». Теперь: старое мягко
    гаснет и чуть уходит вверх, новое дольше проявляется и нежно въезжает снизу (ease-out-quint) —
    появляется ощущение мягкости. Фон (3D/аврора) в переход не входит — двигается только контент. */
-::view-transition-old(root) {
-  animation: 0.42s cubic-bezier(0.4, 0, 0.2, 1) both vtPageOut;
-}
+/* БЕЗ «наплыва» светлого/тёмного: старое НЕ гаснет (остаётся на месте), новое плавно
+   проявляется ПОВЕРХ него. Нет момента, когда обе страницы полупрозрачны и сквозь них
+   просвечивает фон. Мягкая длинная кривая — переход спокойный, без резкости. */
+::view-transition-old(root) { animation: none; }
 ::view-transition-new(root) {
-  animation: 0.58s cubic-bezier(0.22, 1, 0.36, 1) both vtPageIn;
-}
-@keyframes vtPageOut {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(-8px); }
+  animation: 0.55s cubic-bezier(0.33, 0, 0.2, 1) both vtPageIn;
 }
 @keyframes vtPageIn {
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 /* ПЕРФ: раньше VT кроссфейдил ВЕСЬ root — включая fixed-фон (3D-canvas, аврора, туман)
    за страницей. Захват и кроссфейд полноэкранного снимка ПОВЕРХ работающего WebGL —
