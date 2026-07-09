@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLang } from '../store.js';
 import { t } from '../i18n.js';
 import { getJSON } from '../api.js';
@@ -6,6 +6,8 @@ import Reveal from './Reveal.jsx';
 
 // Открытые вакансии на странице «Карьера» — управляются из админки.
 // Если вакансий нет, секция ничего не рендерит (страница остаётся аккуратной).
+// Описание сворачивается (аккордеон): карточки в ряду одной высоты, а полный
+// текст раскрывается по клику — ничего не обрезается насовсем.
 export default function Vacancies({ onApply }) {
   const lang = useLang();
   const [items, setItems] = useState(null);
@@ -22,22 +24,53 @@ export default function Vacancies({ onApply }) {
         <div className="vac-list">
           {items.map((v) => (
             <Reveal key={v.id}>
-              <article className="vac-card text-glass">
-                <div className="vac-top">
-                  <h3>{v.title}</h3>
-                  {v.department && <span className="vac-dep">{v.department}</span>}
-                </div>
-                <div className="vac-meta">
-                  <span>📍 {v.location}</span>
-                  <span>🕘 {v.employment}</span>
-                </div>
-                {v.description && <p className="vac-desc">{v.description}</p>}
-                <button type="button" className="btn btn-primary vac-apply" onClick={() => onApply?.(v.title)}>{t(lang, 'vac.apply')}</button>
-              </article>
+              <VacancyCard v={v} lang={lang} onApply={onApply} />
             </Reveal>
           ))}
         </div>
       </div>
     </section>
+  );
+}
+
+// Одна карточка вакансии со сворачиваемым описанием.
+function VacancyCard({ v, lang, onApply }) {
+  const [open, setOpen] = useState(false);
+  const [clamped, setClamped] = useState(false);   // текст реально длиннее свёрнутой высоты?
+  const descRef = useRef(null);
+
+  // После рендера проверяем, переполняет ли описание свёрнутую область.
+  // Если нет — кнопку «Показать полностью» не показываем.
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    const check = () => setClamped(el.scrollHeight - el.clientHeight > 4);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [v.description, open]);
+
+  return (
+    <article className={`vac-card text-glass${open ? ' is-open' : ''}`}>
+      <div className="vac-top">
+        <h3>{v.title}</h3>
+        {v.department && <span className="vac-dep">{v.department}</span>}
+      </div>
+      <div className="vac-meta">
+        <span>📍 {v.location}</span>
+        <span>🕘 {v.employment}</span>
+      </div>
+      {v.description && (
+        <div className="vac-body">
+          <p ref={descRef} className={`vac-desc${open ? '' : ' is-clamped'}`}>{v.description}</p>
+          {(clamped || open) && (
+            <button type="button" className="vac-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+              {open ? t(lang, 'vac.less') : t(lang, 'vac.more')}
+            </button>
+          )}
+        </div>
+      )}
+      <button type="button" className="btn btn-primary vac-apply" onClick={() => onApply?.(v.title)}>{t(lang, 'vac.apply')}</button>
+    </article>
   );
 }
