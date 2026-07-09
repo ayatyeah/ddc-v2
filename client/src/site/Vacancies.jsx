@@ -11,6 +11,8 @@ import Reveal from './Reveal.jsx';
 export default function Vacancies({ onApply }) {
   const lang = useLang();
   const [items, setItems] = useState(null);
+  // Единое состояние на всю секцию: любая кнопка раскрывает/сворачивает все карточки.
+  const [open, setOpen] = useState(false);
   useEffect(() => { getJSON('/api/vacancies').then(setItems).catch(() => setItems([])); }, []);
   if (!items || items.length === 0) return null;
 
@@ -24,7 +26,7 @@ export default function Vacancies({ onApply }) {
         <div className="vac-list">
           {items.map((v) => (
             <Reveal key={v.id}>
-              <VacancyCard v={v} lang={lang} onApply={onApply} />
+              <VacancyCard v={v} lang={lang} onApply={onApply} open={open} onToggle={() => setOpen((o) => !o)} />
             </Reveal>
           ))}
         </div>
@@ -34,8 +36,8 @@ export default function Vacancies({ onApply }) {
 }
 
 // Одна карточка вакансии со сворачиваемым описанием.
-function VacancyCard({ v, lang, onApply }) {
-  const [open, setOpen] = useState(false);
+// Состояние open общее для всей секции, поэтому приходит пропсами.
+function VacancyCard({ v, lang, onApply, open, onToggle }) {
   const [clamped, setClamped] = useState(false);   // текст реально длиннее свёрнутой высоты?
   const descRef = useRef(null);
 
@@ -64,7 +66,7 @@ function VacancyCard({ v, lang, onApply }) {
         <div className="vac-body">
           <p ref={descRef} className={`vac-desc${open ? '' : ' is-clamped'}`}>{v.description}</p>
           {(clamped || open) && (
-            <button type="button" className="vac-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+            <button type="button" className="vac-toggle" aria-expanded={open} onClick={onToggle}>
               {open ? t(lang, 'vac.less') : t(lang, 'vac.more')}
             </button>
           )}
