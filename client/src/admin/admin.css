@@ -1107,3 +1107,18 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
   .nm-crop { width: 100%; padding: 14px; }
   .nm-crop-view { width: 100% !important; height: auto !important; aspect-ratio: 16 / 9; }
 }
+
+/* ── Мобильная карточная раскладка таблиц ──────────────────────────────────────
+   max-width колонок (Клиент 170px / Вопрос 230px / Дата 150px) объявлен НИЖЕ
+   мобильного медиа-блока и переживал его: «карточки» ужимались до узких полос,
+   а фон ячейки (hover / открытая строка) рисовался голубым прямоугольником
+   не на всю ширину. На мобиле ограничения снимаем. */
+@media (max-width: 820px) {
+  .adm-table td[data-label] { max-width: none; }
+}
+
+/* Ряд фильтров-чипов (.adm-seg) на узких экранах скроллится горизонтально.
+   Прячем «сырой» системный скроллбар — он занимал место и выглядел грубо.
+   Сам скролл (свайп/колесо) остаётся. Портал переиспользует этот же класс. */
+.adm-seg { scrollbar-width: none; -ms-overflow-style: none; }
+.adm-seg::-webkit-scrollbar { width: 0; height: 0; display: none; }

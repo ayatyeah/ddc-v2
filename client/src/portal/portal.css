@@ -308,6 +308,12 @@
     padding-top: calc(12px + env(safe-area-inset-top)); background: var(--card); border-bottom: 1px solid var(--line);
   }
   .pt-dm.has-active .pt-chat { flex: 1; padding: 12px 12px 8px; }
+  /* ФИКС высоты чата: у флекс-элементов min-height по умолчанию = auto, поэтому .pt-dm-conv
+     упирался в высоту ВСЕЙ переписки (2000+px) и height:100dvh игнорировался — строка ввода
+     уезжала за низ страницы. min-height:0 разрешает ужиматься, а список сообщений скроллится
+     внутри себя, оставляя приклеенный композер на экране. */
+  .pt-dm.has-active .pt-dm-conv { min-height: 0; }
+  .pt-dm.has-active .pt-chat { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   .pt-back-txt { display: none; }
   .pt-back-btn { padding: 0; width: 36px; justify-content: center; border-color: transparent; }
   .pt-compose { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
