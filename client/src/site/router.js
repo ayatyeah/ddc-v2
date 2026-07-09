@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import { flushSync } from 'react-dom';
 
 const listeners = new Set();
-const prefersReduced = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 
 export function navigate(path) {
   const lenis = typeof window !== 'undefined' ? window.__lenis : null;
@@ -19,18 +17,10 @@ export function navigate(path) {
 export function useRoute() {
   const [path, setPath] = useState(window.location.pathname);
   useEffect(() => {
-    const on = () => {
-      const apply = () => setPath(window.location.pathname);
-      // Плавный кроссфейд между страницами через View Transitions API (Chrome/Edge/Firefox/Safari 18+).
-      // flushSync — чтобы React обновил DOM синхронно ВНУТРИ перехода (иначе снимок сделается до апдейта).
-      if (document.startViewTransition && !prefersReduced()) {
-        try {
-          const vt = document.startViewTransition(() => flushSync(apply));
-          // Подавляем шум «Transition was skipped» при быстрой/прерванной навигации (переход просто мгновенный).
-          vt.ready?.catch(() => {}); vt.finished?.catch(() => {}); vt.updateCallbackDone?.catch(() => {});
-        } catch { apply(); }
-      } else { apply(); }
-    };
+    // Контент страницы меняем сразу, БЕЗ кроссфейда/снимка (он давал белую «пелену» поверх
+    // сцены). Видимый переход — это анимация самой 3D-сцены (пролёт здания→карта, navEase),
+    // её теперь ничто не перекрывает.
+    const on = () => setPath(window.location.pathname);
     listeners.add(on);
     window.addEventListener('popstate', on);
     return () => { listeners.delete(on); window.removeEventListener('popstate', on); };
