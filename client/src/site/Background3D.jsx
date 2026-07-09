@@ -16,21 +16,26 @@ export default function Background3D({ onReady }) {
     const host = hostRef.current;
     if (!host) return;
 
-    const mobile = window.matchMedia('(max-width: 760px)').matches;
+    // Единый признак мобильного профиля — тот же, что у perfProfile и CSS (≤820px либо мобильный UA).
+    // Раньше здесь был свой matchMedia(760px), и в полосе 761–820px сцена считала себя десктопной
+    // (рисовала свечения/ореолы/пыль, без 30-fps кэпа), хотя DPR и CSS уже были в мобильном режиме.
+    const mobile = perf.mobile;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // На мобиле рендерим в стабильную (максимальную) высоту экрана: адресная строка при
-    // скролле меняет высоту вьюпорта, и если на это ресайзить буфер — кадр «дышит» и фризит.
-    // Низ канваса просто уходит под фолд.
-    const stableH = mobile ? Math.max(window.innerHeight, (window.screen && window.screen.height) || 0) : 0;
+    // Реальный тач-девайс: только у него адресная строка меняет высоту вьюпорта и палец мешает скроллу.
+    const touch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+    // Фикс-высота канваса нужна ТОЛЬКО тач-браузерам (иначе кадр «дышит» под адресную строку).
+    // На узком окне ноутбука она заставляла рисовать во всю высоту ЭКРАНА вместо высоты окна —
+    // лишние пиксели и микрофризы. Низ канваса на телефоне просто уходит под фолд.
+    const stableH = touch ? Math.max(window.innerHeight, (window.screen && window.screen.height) || 0) : 0;
     const vw = () => window.innerWidth;
-    const vh = () => (mobile ? stableH : window.innerHeight);
+    const vh = () => (stableH || window.innerHeight);
     const dprNow = () => Math.min(window.devicePixelRatio || 1, perf.dprCap);
 
     const makeCanvas = () => {
       const c = document.createElement('canvas');
       c.id = 'bg3d'; c.setAttribute('aria-hidden', 'true');
       c.style.opacity = '0';
-      if (mobile) { c.style.width = vw() + 'px'; c.style.height = stableH + 'px'; }   // фикс-размер (см. выше)
+      if (stableH) { c.style.width = vw() + 'px'; c.style.height = stableH + 'px'; }   // фикс-размер (см. выше)
       host.appendChild(c);
       return c;
     };
@@ -123,9 +128,9 @@ export default function Background3D({ onReady }) {
     let lastW = vw();
     const onResize = () => {
       const w = vw();
-      if (mobile && w === lastW) return;   // изменилась только высота (адресная строка) — игнор
+      if (stableH && w === lastW) return;   // изменилась только высота (адресная строка) — игнор
       lastW = w;
-      if (mobile) { canvas.style.width = w + 'px'; canvas.style.height = stableH + 'px'; }
+      if (stableH) { canvas.style.width = w + 'px'; canvas.style.height = stableH + 'px'; }
       call('resize', w, vh(), dprNow());
     };
     const isUi = (el) => el && el.closest && el.closest('button, a, input, textarea, select, label, .modal, .nav-island, .af-card, .chip, .chip-info, .news-track');
@@ -145,7 +150,7 @@ export default function Background3D({ onReady }) {
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('blur', onBlur);
     window.addEventListener('focus', onFocus);
-    if (!mobile) {   // на телефоне вращение пальцем мешает скроллу — перетаскивание отключено
+    if (!touch) {   // на тач-экране вращение пальцем мешает скроллу — перетаскивание отключено
       window.addEventListener('pointerdown', onDown, { passive: true });
       window.addEventListener('pointermove', onMove, { passive: true });
       window.addEventListener('pointerup', onUp, { passive: true });

@@ -446,10 +446,11 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
     width: calc(100vw - 118px); height: 100vh; height: 100dvh;
     padding: 92px 22px calc(28px + env(safe-area-inset-bottom));
     /* «Liquid glass»: прозрачная стеклянная панель с бликом и сильным размытием */
+    /* Плотный фон вместо стекла: backdrop-filter пересчитывал blur(24px) над анимируемой
+       3D-сценой КАЖДЫЙ кадр. Раз шторка почти непрозрачная — размытие не нужно. */
     background:
-      linear-gradient(160deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.05)),
-      rgba(9, 13, 24, 0.76);
-    backdrop-filter: saturate(180%) blur(24px); -webkit-backdrop-filter: saturate(180%) blur(24px);
+      linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0.015) 45%, rgba(255,255,255,0.04)),
+      #0a0e18;
     border-left: 1px solid rgba(255,255,255,0.22);
     box-shadow: -22px 0 60px rgba(0, 0, 0, 0.30), inset 1px 0 0 rgba(255,255,255,0.30);
     transform: translateX(105%); pointer-events: none;
@@ -457,8 +458,8 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
   }
   [data-theme='dark'] .nav-links {
     background:
-      linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015) 45%, rgba(255,255,255,0.035)),
-      rgba(3, 5, 11, 0.86);
+      linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.012) 45%, rgba(255,255,255,0.03)),
+      #05080f;
     border-left-color: rgba(255,255,255,0.10);
     box-shadow: -22px 0 60px rgba(0, 0, 0, 0.5), inset 1px 0 0 rgba(255,255,255,0.14);
   }
@@ -501,8 +502,10 @@ html[data-a11y='on'] .eyebrow::before { display: none; }
 
   /* Светлая тема: выдвижная шторка-меню тоже светлеет (была захардкожена тёмной). */
   [data-theme='light'] .nav-links {
+    /* Непрозрачно: размытия под шторкой больше нет (сняли ради перфа), поэтому фон
+       должен перекрывать контент сам — иначе сквозь него «привидением» видно страницу. */
     background:
-      linear-gradient(160deg, rgba(255,255,255,0.92), rgba(248,250,255,0.84) 45%, rgba(243,247,255,0.90));
+      linear-gradient(160deg, #ffffff, #f9fbff 45%, #f4f8ff);
     border-left-color: rgba(20, 50, 110, 0.12);
     box-shadow: -22px 0 60px rgba(20, 40, 80, 0.16), inset 1px 0 0 rgba(255, 255, 255, 0.7);
   }
