@@ -159,7 +159,11 @@
 .pt-widget b { font-size: 14px; }
 
 /* Профиль */
-.pt-profile { max-width: 560px; }
+/* Профиль: адаптивная раскладка — контакты слева тянутся по ширине (с потолком,
+   чтобы строки не растягивались во весь монитор), визитка с QR — справа. */
+.pt-profile { display: grid; grid-template-columns: minmax(0, 620px) auto; gap: 28px; align-items: start; }
+.pt-profile-main { min-width: 0; }
+.pt-profile-extra { margin-top: 22px; max-width: 620px; }
 .pt-profile-top { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .pt-av.xl { width: 76px; height: 76px; font-size: 26px; border-radius: 22px; }
 .pt-profile-id h3 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; }
@@ -595,10 +599,29 @@
 .pt-2fa-code .adm-input { flex: 1; letter-spacing: 0.3em; font-size: 18px; text-align: center; }
 
 /* QR цифровой визитки в профиле */
-.pt-qr { margin-left: auto; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.pt-qr img { width: 92px; height: 92px; border-radius: 10px; border: 1px solid var(--line); background: #fff; padding: 4px; }
-.pt-qr span { font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
-@media (max-width: 560px) { .pt-qr { display: none; } }
+/* Визитка справа: карточка с крупным QR (≈180px — сканируется телефоном без труда) */
+.pt-vcard { flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: 0 4px 18px color-mix(in srgb, var(--ink) 5%, transparent); }
+.pt-vcard-qr { padding: 0; border: none; background: none; cursor: zoom-in; line-height: 0; border-radius: 14px; }
+.pt-vcard-qr img { width: 180px; height: 180px; border-radius: 14px; border: 1px solid var(--line); background: #fff; padding: 10px; display: block; }
+.pt-vcard-cap { font-size: 13.5px; font-weight: 700; color: var(--ink); margin-top: 2px; }
+.pt-vcard-sub { font-size: 11.5px; color: var(--ink-faint); text-align: center; max-width: 190px; }
+.pt-vcard-open { margin-top: 4px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 980px; background: transparent; color: var(--blue); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.pt-vcard-open:hover { background: color-mix(in srgb, var(--blue) 8%, transparent); }
+
+/* Визитка на весь экран — большой QR, чтобы сканировать с любого расстояния */
+.pt-qr-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, #0a0d14 62%, transparent); backdrop-filter: blur(4px); }
+.pt-qr-modal-in { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 30px 30px 26px; border-radius: 24px; background: #fff; max-width: min(92vw, 420px); }
+.pt-qr-modal-in img { width: min(72vw, 340px); height: min(72vw, 340px); border-radius: 16px; }
+.pt-qr-modal-name { font-size: 1.15rem; font-weight: 800; color: #12151c; }
+.pt-qr-modal-sub { font-size: 13px; color: #5b6472; text-align: center; margin-top: -4px; }
+.pt-qr-modal-hint { margin-top: 4px; font-size: 12px; color: #8a919c; }
+.pt-qr-modal-x { position: absolute; top: 12px; right: 14px; width: 34px; height: 34px; border: none; background: #f1f3f7; color: #444; border-radius: 50%; font-size: 22px; line-height: 1; cursor: pointer; }
+.pt-qr-modal-x:hover { background: #e6e9ef; }
+
+@media (max-width: 720px) {
+  .pt-profile { grid-template-columns: 1fr; gap: 20px; }
+  .pt-vcard { order: -1; align-self: stretch; }   /* визитку — наверх, во всю ширину */
+}
 
 /* Геймификация: очки, бейджи, рейтинг */
 .pt-gami { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 8px; }

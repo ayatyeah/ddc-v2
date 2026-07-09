@@ -324,6 +324,7 @@ function Profile({ me, onAuthLost }) {
   const [info, setInfo] = useState(null);
   const [edit, setEdit] = useState(null);   // { position, phone, skills } при редактировании
   const [qr, setQr] = useState('');         // QR цифровой визитки (vCard)
+  const [qrBig, setQrBig] = useState(false);   // визитка на весь экран — удобно сканировать
   const load = useCallback(() => {
     getJSON('/api/portal/users').then((list) => setInfo(list.find((u) => u.id === me?.id) || null)).catch((e) => { if (e.status === 401) onAuthLost?.(); });
   }, [me, onAuthLost]);
@@ -349,7 +350,7 @@ function Profile({ me, onAuthLost }) {
     // который многие сканеры (особенно iOS) игнорируют и читают как Latin-1 → крякозябры
     // во всех полях, кроме латиницы (имени). Единый byte-сегмент читается корректно везде.
     const vcardBytes = new TextEncoder().encode(vcard);
-    QRCode.toDataURL([{ data: vcardBytes, mode: 'byte' }], { errorCorrectionLevel: 'Q', margin: 3, scale: 8, width: 256, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
+    QRCode.toDataURL([{ data: vcardBytes, mode: 'byte' }], { errorCorrectionLevel: 'Q', margin: 3, scale: 8, width: 512, color: { dark: '#111827', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
   }, [me, info]);
 
   const saveEdit = async () => {
@@ -370,28 +371,54 @@ function Profile({ me, onAuthLost }) {
         <button className="adm-btn sm pt-view-act" onClick={() => setEdit(edit ? null : { position: info?.position || '', phone: info?.phone || '', skills: info?.skills || '' })}>{edit ? '× Отмена' : '✎ Редактировать'}</button>
       </div>
       <div className="pt-profile">
-        <div className="pt-profile-top">
-          <span className="pt-av xl">{initials(me?.username)}</span>
-          <div className="pt-profile-id">
-            <h3>{me?.username}</h3>
-            <p>{info?.position || roleLabel(me?.role)}{info?.department ? ` · ${info.department}` : ''}</p>
+        <div className="pt-profile-main">
+          <div className="pt-profile-top">
+            <span className="pt-av xl">{initials(me?.username)}</span>
+            <div className="pt-profile-id">
+              <h3>{me?.username}</h3>
+              <p>{info?.position || roleLabel(me?.role)}{info?.department ? ` · ${info.department}` : ''}</p>
+            </div>
           </div>
-          {qr && <div className="pt-qr" title="Цифровая визитка — отсканируйте, чтобы сохранить контакт"><img src={qr} alt="QR визитка" /><span>Визитка</span></div>}
+
+          {edit ? (
+            <div className="pt-fields edit">
+              <label className="pt-editf"><span>Должность</span><input className="adm-input" value={edit.position} onChange={(e) => setEdit({ ...edit, position: e.target.value })} placeholder="напр. Ведущий разработчик" /></label>
+              <label className="pt-editf"><span>Телефон</span><input className="adm-input" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="+7 …" /></label>
+              <label className="pt-editf"><span>Навыки</span><input className="adm-input" value={edit.skills} onChange={(e) => setEdit({ ...edit, skills: e.target.value })} placeholder="React, PostgreSQL, DevOps…" /></label>
+              <button className="adm-btn" onClick={saveEdit}>Сохранить</button>
+            </div>
+          ) : (
+            <div className="pt-fields">
+              {rows.map(([k, v]) => <div className="pt-field" key={k}><span>{k}</span><b>{v}</b></div>)}
+            </div>
+          )}
         </div>
 
-        {edit ? (
-          <div className="pt-fields edit">
-            <label className="pt-editf"><span>Должность</span><input className="adm-input" value={edit.position} onChange={(e) => setEdit({ ...edit, position: e.target.value })} placeholder="напр. Ведущий разработчик" /></label>
-            <label className="pt-editf"><span>Телефон</span><input className="adm-input" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="+7 …" /></label>
-            <label className="pt-editf"><span>Навыки</span><input className="adm-input" value={edit.skills} onChange={(e) => setEdit({ ...edit, skills: e.target.value })} placeholder="React, PostgreSQL, DevOps…" /></label>
-            <button className="adm-btn" onClick={saveEdit}>Сохранить</button>
-          </div>
-        ) : (
-          <div className="pt-fields">
-            {rows.map(([k, v]) => <div className="pt-field" key={k}><span>{k}</span><b>{v}</b></div>)}
-          </div>
+        {qr && (
+          <aside className="pt-vcard">
+            <button type="button" className="pt-vcard-qr" onClick={() => setQrBig(true)} title="Открыть визитку крупно — так удобнее сканировать">
+              <img src={qr} alt="QR визитка" />
+            </button>
+            <div className="pt-vcard-cap">Цифровая визитка</div>
+            <div className="pt-vcard-sub">Отсканируйте, чтобы сохранить контакт</div>
+            <button type="button" className="pt-vcard-open" onClick={() => setQrBig(true)}>Показать крупно</button>
+          </aside>
         )}
+      </div>
 
+      {qrBig && qr && (
+        <div className="pt-qr-modal" onClick={() => setQrBig(false)} role="dialog" aria-modal="true">
+          <div className="pt-qr-modal-in" onClick={(e) => e.stopPropagation()}>
+            <button className="pt-qr-modal-x" onClick={() => setQrBig(false)} aria-label="Закрыть">×</button>
+            <img src={qr} alt="QR визитка" />
+            <div className="pt-qr-modal-name">{me?.username}</div>
+            <div className="pt-qr-modal-sub">{info?.position || roleLabel(me?.role)}{info?.department ? ` · ${info.department}` : ''}</div>
+            <div className="pt-qr-modal-hint">Наведите камеру телефона на код</div>
+          </div>
+        </div>
+      )}
+
+      <div className="pt-profile-extra">
         <TwoFA onAuthLost={onAuthLost} />
         <InstallApp />
       </div>
