@@ -79,16 +79,23 @@ export default function Site() {
     // scrollHeight (reflow) на каждом кадре скролла. На мобиле это заметно для плавности.
     let maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
     const recalc = () => { maxScroll = Math.max(1, root.scrollHeight - window.innerHeight); };
+    // --sp читает ТОЛЬКО прогресс-бар. Пишем переменную прямо на него, а не в :root —
+    // иначе каждый кадр скролла инвалидируется стиль всего дерева (микрофризы).
+    const bar = document.querySelector('.scroll-progress');
+    let lastSp = '', lastBias = -1;
     const apply = () => {
       raf = 0;
       const y = window.scrollY;
       if (y > maxScroll) recalc();          // контент дорос (ленивые данные) — обновляем базу
       const sp = Math.min(1, Math.max(0, y / maxScroll));
-      root.style.setProperty('--sp', sp.toFixed(4));
+      const spStr = sp.toFixed(4);
+      if (bar && spStr !== lastSp) { bar.style.setProperty('--sp', spStr); lastSp = spStr; }  // мемо: не переписываем то же значение
       if (home) {
         sceneRef.current?.setTarget(0.04 + sp * 0.56);
         // Здание смещено вправо на герое (текст слева), возвращается к центру при скролле.
-        sceneRef.current?.setHeroBias?.(Math.max(0, 1 - sp / 0.28));
+        // Мемо: ниже первого экрана bias всегда 0 — не дёргаем сцену (в offthread это postMessage).
+        const bias = Math.max(0, 1 - sp / 0.28);
+        if (bias !== lastBias) { sceneRef.current?.setHeroBias?.(bias); lastBias = bias; }
       }
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };

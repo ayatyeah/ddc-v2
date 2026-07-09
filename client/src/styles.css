@@ -1157,7 +1157,10 @@ textarea.inp { resize: vertical; min-height: 110px; }
    Убраны scale(0.99) и per-child stagger — они форсировали перерисовку всего
    дерева страницы каждый кадр (заметный фриз на тяжёлых страницах вроде «Услуг»).
    Анимируется ОДИН контейнер, а не каждый вложенный блок. */
-.page-tx { animation: pageTxIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; will-change: opacity, transform; }
+/* ПЕРФ: без will-change. Анимация .page-tx отключена в браузерах с View Transitions
+   (@supports ниже), поэтому pageTxDone никогда не срабатывал и will-change висел ВЕЧНО —
+   весь #main держался отдельным полноэкранным композит-слоем поверх WebGL-сцены. */
+.page-tx { animation: pageTxIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .page-tx { animation-fill-mode: both; }
 /* Изоляция пересчёта: монтаж тяжёлой страницы (напр. «Услуги») не форсирует reflow
    всего документа во время перехода. layout+style — без paint, чтобы не обрезать
