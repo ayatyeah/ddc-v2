@@ -56,14 +56,17 @@ const vcardName = (name) => {
   return `${family};${given};;;`;
 };
 // makeVCardRaw — org уже собран (со структурными «;»), остальные поля экранируем сами.
+// Используем vCard 4.0: в нём UTF-8 — кодировка по умолчанию, поэтому сканеры (в т.ч.
+// Камера iOS) читают кириллицу корректно. В 3.0 многие ридеры считали текст Latin-1
+// и показывали кракозябры во всех полях, кроме латиницы (имени).
 const makeVCardRaw = ({ name, org, title, phone, note }) => [
   'BEGIN:VCARD',
-  'VERSION:3.0',
+  'VERSION:4.0',
   `N:${vcardName(name)}`,
   `FN:${vcardText(name)}`,
   org ? `ORG:${org}` : '',
   title ? `TITLE:${vcardText(title)}` : '',
-  phone ? `TEL;TYPE=CELL,VOICE:${vcardTel(phone)}` : '',
+  phone ? `TEL;TYPE=cell,voice:${vcardTel(phone)}` : '',
   note ? `NOTE:${vcardText(note)}` : '',
   'END:VCARD',
 ].filter(Boolean).join('\r\n');
