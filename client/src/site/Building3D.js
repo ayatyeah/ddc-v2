@@ -16,8 +16,12 @@ export function initBuilding(canvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  // Тени дорогие — на Firefox/слабых выключаем
-  renderer.shadowMap.enabled = !perf.lowPower && perf.engine !== 'gecko';
+  // Тени на телефоне НЕ включаем. Дело не только в цене: USE_SHADOWMAP с мягким PCF навешивается
+  // и на шейдер стекла, а он и так самый тяжёлый в сцене (transmission + clearcoat + 3 источника
+  // света). На iOS такая программа перестаёт линковаться — и стекло просто пропадает, тогда как
+  // опаковые меши с простыми шейдерами продолжают рисоваться. Firefox и слабые устройства — тоже
+  // без теней. Земля под башней подсвечена «гало», без тени она не выглядит висящей.
+  renderer.shadowMap.enabled = !perf.mobile && !perf.lowPower && perf.engine !== 'gecko';
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
