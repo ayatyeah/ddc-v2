@@ -49,7 +49,9 @@
   background: var(--brand); color: #fff; font-size: 14px; font-weight: 600; font-family: inherit;
   transition: filter 0.15s, transform 0.15s;
 }
-[data-theme='dark'] .adm-btn { color: #022622; }
+/* :not(.ghost) — иначе это правило (равная специфичность с .adm-btn.ghost из portal.css)
+   перебивает светлый текст ghost-кнопки тёмным #022622, и на графите она нечитаема. */
+[data-theme='dark'] .adm-btn:not(.ghost) { color: #022622; }
 .adm-btn:hover { filter: brightness(1.08); }
 .adm-btn:active { transform: scale(0.98); }
 .adm-btn[disabled] { opacity: 0.6; cursor: default; }
@@ -185,6 +187,14 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .us-role.r-staff   { background: rgba(20,160,160,0.16);  color: #128a8a; }
 .us-role.r-editor  { background: rgba(10,138,90,0.16);   color: #0a8a5a; }
 .us-role.r-viewer  { background: rgba(122,82,224,0.16);  color: #7a52e0; }
+/* На графите цвет РОЛИ = цвет ТЕКСТА на подложке того же оттенка. Тёмные цвета выше годятся
+   для светлой темы, но на тёмном фоне сливаются (r-admin давал контраст 1.93). Осветляем сам
+   текст — оттенок роли сохраняется, читаемость 7–9. Фон-подложку тоже чуть плотнее. */
+[data-theme='dark'] .us-role.r-admin   { background: rgba(43,186,172,0.18); color: #57cfc3; }
+[data-theme='dark'] .us-role.r-manager { background: rgba(230,173,82,0.18);  color: #e6ad52; }
+[data-theme='dark'] .us-role.r-staff   { background: rgba(69,201,201,0.18);  color: #45c9c9; }
+[data-theme='dark'] .us-role.r-editor  { background: rgba(63,201,140,0.18);  color: #3fc98c; }
+[data-theme='dark'] .us-role.r-viewer  { background: rgba(180,154,242,0.18); color: #b49af2; }
 .assignee-select { min-width: 110px; max-width: 150px; padding: 6px 8px; font-size: 12.5px; }
 
 /* ── Компактная таблица «Заявки»: умещается без горизонтального скролла ──────── */
@@ -290,7 +300,9 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .cr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
 .cr-nocv { font-size: 12.5px; color: var(--ink-faint); }
 .cr-ai { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
-.cr-rec { display: inline-block; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 980px; margin-bottom: 10px; }
+/* Фон задаётся инлайн ярким цветом рекомендации (зелёный/жёлтый/красный). Белый текст на нём
+   давал 1.9–3.8; тёмный читается на любом из них (5–10) в обеих темах. */
+.cr-rec { display: inline-block; color: #0a140f; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 980px; margin-bottom: 10px; }
 .cr-sum { font-size: 14px; line-height: 1.55; }
 .cr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
 .cr-col b { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
@@ -428,6 +440,9 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .rail-btn span { line-height: 1.18; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .rail-btn:hover { color: #e8edf5; background: rgba(255,255,255,0.05); }
 .rail-btn.active { color: #fff; background: var(--brand); }
+/* В графите --brand = бирюза, и белый на ней даёт 2.41. Тёмный текст → 6.69.
+   В светлой теме --brand = тёмно-зелёный, там белый правильный, поэтому правим только тёмную. */
+[data-theme='dark'] .rail-btn.active { color: var(--on-brand); }
 .rail-foot { margin-top: auto; display: flex; flex-direction: row; gap: 8px; align-items: center; flex-wrap: wrap; }
 .rail-icon {
   width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
@@ -717,6 +732,8 @@ textarea.adm-input { resize: vertical; min-height: 70px; }
 .mon-inc { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 .mon-inc.resolved { opacity: 0.6; }
 .mon-inc-sev { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); padding: 2px 8px; border-radius: 20px; flex: none; margin-top: 2px; }
+/* Цвет важности инцидента инлайн (--c); приглушённый серый «низкой» падал до 2.87 — осветляем на графите. */
+[data-theme='dark'] .mon-inc-sev { color: color-mix(in srgb, var(--c) 58%, #ffffff); }
 .mon-inc-b { flex: 1; min-width: 0; } .mon-inc-b b { font-size: 14px; } .mon-inc-b small { display: block; font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; } .mon-inc-b p { font-size: 12.5px; color: var(--ink-soft); margin: 6px 0 0; }
 .mon-inc-act { display: flex; gap: 6px; flex: none; }
 .adm-btn.sm, .adm-ghost.sm { padding: 5px 11px; font-size: 12.5px; }
@@ -907,6 +924,8 @@ button.dash-card:hover { border-color: var(--line-2); transform: translateY(-2px
 .st-badge.st-on_hold { color: #8b97ad; border-color: rgba(140,150,150,0.40); background: rgba(140,150,150,0.14); }
 .st-badge.st-served { color: #1f9d57; border-color: rgba(31,157,87,0.40); background: rgba(31,157,87,0.12); }
 .st-badge.st-rejected { color: #c0455a; border-color: rgba(192,69,90,0.40); background: rgba(192,69,90,0.12); }
+/* На графите приглушённый красный «Отклонён» падал до 3.47 — осветляем текст. */
+[data-theme='dark'] .st-badge.st-rejected { color: #e5788a; }
 
 /* Разворачиваемая панель: всё редактирование собрано здесь */
 .lead-detail > td { background: color-mix(in srgb, var(--brand) 4%, transparent); padding: 0 !important; border-bottom: 1px solid var(--line); }
