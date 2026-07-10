@@ -43,7 +43,7 @@ export function initBuilding(canvas) {
   controls.target.set(0, cy * 0.78, 0);
 
   // ── Освещение ──────────────────────────────────────────────────────────────
-  scene.add(new THREE.HemisphereLight(0xeaf2ff, 0xc4ccdb, 0.8));
+  scene.add(new THREE.HemisphereLight(0xeff8f7, 0xc9d1d1, 0.8));
   const key = new THREE.DirectionalLight(0xffffff, 1.8);
   key.position.set(14, 26, 16); key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
@@ -51,14 +51,14 @@ export function initBuilding(canvas) {
   key.shadow.camera.left = -20; key.shadow.camera.right = 20;
   key.shadow.camera.top = 36; key.shadow.camera.bottom = -8;
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x9fc0ff, 0.8);
+  const rim = new THREE.DirectionalLight(0x9fdcd6, 0.8);
   rim.position.set(-16, 12, -14); scene.add(rim);
   const fill = new THREE.DirectionalLight(0xfff0d8, 0.35);
   fill.position.set(8, 6, 18); scene.add(fill);
 
   const COL = {
-    glassTint: 0xaecdff, core: 0x12244d, mull: 0xdbe2ee,
-    blue: 0x2f6fe0, gold: 0xc8a14a, frame: 0xeef2f8, dark: 0x161d2c, glow: 0x9fd0ff,
+    glassTint: 0xa9ded8, core: 0x022622, mull: 0xe6e6e6,
+    brand: 0x2bbaac, gold: 0xecc371, frame: 0xf2f5f4, dark: 0x022622, glow: 0x9fe0d8,
   };
 
   const tower = new THREE.Group();
@@ -139,7 +139,7 @@ export function initBuilding(canvas) {
   for (const sx of [1, -1]) for (const sz of [1, -1]) posFin.push([sx * (W / 2 + 0.05), cy, sz * (D / 2 + 0.05)]);
   instance(new THREE.BoxGeometry(0.14, H + 0.1, 0.14), posFin, true);
 
-  // Акцентные ленты: синяя (DDC) и золотая (НБК)
+  // Акцентные ленты: зелёная (DDC) и золотая (НБК)
   const band = (color, hh, yy, intensity) => {
     const m = new THREE.Mesh(
       new RoundedBoxGeometry(W + 0.3, hh, D + 0.3, 3, 0.1),
@@ -147,7 +147,7 @@ export function initBuilding(canvas) {
     );
     m.position.y = yy; m.castShadow = true; tower.add(m); return m;
   };
-  const blueBand = band(COL.blue, 0.5, podTop + H - 1.6, 0.45);
+  const brandBand = band(COL.brand, 0.5, podTop + H - 1.6, 0.45);
   band(COL.gold, 0.32, podTop + H - 2.5, 0.4);
 
   // Корона: ступень + кольцо + антенна с маяком
@@ -180,7 +180,7 @@ export function initBuilding(canvas) {
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
   const halo = new THREE.Mesh(
     new THREE.CircleGeometry(9, 48),
-    new THREE.MeshBasicMaterial({ color: 0x7ea2ff, transparent: true, opacity: 0.15 })
+    new THREE.MeshBasicMaterial({ color: 0x2bbaac, transparent: true, opacity: 0.15 })
   );
   halo.rotation.x = -Math.PI / 2; halo.position.y = 0.02; scene.add(halo);
 
@@ -228,7 +228,7 @@ export function initBuilding(canvas) {
     if (!reduce) {
       glows.forEach((g) => { g.material.emissiveIntensity = g.userData.base * (0.55 + 0.45 * Math.sin(t * 1.3 + g.position.y)); });
       beacon.material.emissiveIntensity = 0.8 + 0.6 * (0.5 + 0.5 * Math.sin(t * 3));
-      blueBand.material.emissiveIntensity = 0.42 + 0.13 * Math.sin(t * 1.2);
+      brandBand.material.emissiveIntensity = 0.42 + 0.13 * Math.sin(t * 1.2);
     }
     renderer.render(scene, camera);
   }

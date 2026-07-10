@@ -89,7 +89,7 @@ export default function EvaluationModal({ lead, onClose, onSaved }) {
           <div className="eval-field full">
             <label>Вероятность повторного заказа (мнение сотрудника): <b>{form.repeat_prob} / 10</b></label>
             <input type="range" min="0" max="10" step="1" value={form.repeat_prob} onChange={set('repeat_prob')}
-              style={{ width: '100%', accentColor: 'var(--blue)' }} />
+              style={{ width: '100%', accentColor: 'var(--brand)' }} />
           </div>
           <div className="eval-field full">
             <label className="eval-check">

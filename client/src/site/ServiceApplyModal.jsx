@@ -61,7 +61,7 @@ export default function ServiceApplyModal({ services, initialId, lang, onClose }
   return createPortal((
     <div className="modal-ov" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
       <div className="modal apply-modal" role="dialog" aria-modal="true" aria-label={t(lang, 'services.apply')}>
-        <div className="bar" style={{ background: selected?.color || 'var(--blue)' }} />
+        <div className="bar" style={{ background: selected?.color || 'var(--brand)' }} />
         <div className="inner">
           <button className="x" onClick={onClose} aria-label={t(lang, 'news.close')}>×</button>
           <div className="eyebrow">{t(lang, 'contact.eyebrow')}</div>

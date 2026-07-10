@@ -17,7 +17,7 @@ function read(key, fallback, allowed) {
 let state = {
   lang: read('ddc_lang', 'ru', LANGS),
   a11y: read('ddc_a11y', 'off', ['on', 'off']),   // версия для слабовидящих
-  theme: read('ddc_theme', 'light', THEMES),       // тема оформления (весь сайт/портал/админка)
+  theme: read('ddc_theme', 'dark', THEMES),        // тема оформления (весь сайт/портал/админка); по умолчанию тёмная
 };
 
 const listeners = new Set();
@@ -64,6 +64,6 @@ export function useStore() { return useSyncExternalStore(subscribe, snapshot); }
 export function useLang() { return useStore().lang; }
 export function useA11y() { return useStore().a11y === 'on'; }
 export function useTheme() { return useStore().theme; }
-// Логотип под тему: на светлой — чёрная версия, на тёмной — белая.
-export function useLogo() { return useStore().theme === 'light' ? '/logo_ddc_black.svg?v=3' : '/logo_ddc.svg?v=2'; }
+// Логотип под тему: на светлой — фирменный зелёный монограмм, на тёмной — белая версия.
+export function useLogo() { return useStore().theme === 'light' ? '/favicon.svg?v=1' : '/logo_ddc.svg?v=2'; }
 export { LANGS, THEMES };

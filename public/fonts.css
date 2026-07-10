@@ -1,4 +1,52 @@
-/* Локальные шрифты (self-host). Сгенерировано scripts/fetch-fonts.mjs */
+/* Локальные шрифты (self-host). Блоки Inter/JetBrains Mono/Space Grotesk сгенерированы
+   scripts/fetch-fonts.mjs из Google Fonts.
+
+   ── ФИРМЕННЫЙ HALVAR ────────────────────────────────────────────────────────────────────
+   Halvar — лицензионный шрифт TypeMates, скачать его как Inter нельзя, поэтому файлов здесь
+   нет и блок ниже выключен. Чтобы включить фирменную типографику:
+     1) положите три файла в client/public/fonts/ (имена ровно такие):
+          halvar-mittelschrift-300.woff2   (Light)
+          halvar-mittelschrift-400.woff2   (Regular)
+          halvar-mittelschrift-700.woff2   (Bold)
+        и, если есть широкое начертание для заголовков:
+          halvar-breitschrift-700.woff2
+     2) раскомментируйте блок ниже.
+   Стек в styles.css (--sans/--display) уже начинается с Halvar, так что больше ничего
+   менять не нужно. Пока файлов нет, стек падает на SF Pro (Apple) → Inter.
+
+   ВАЖНО: Halvar не покрывает кириллицу во всех начертаниях — проверьте начертания на
+   русском и казахском (ә, ғ, қ, ң, ө, ұ, ү, һ, і) прежде чем убирать Inter из стека.
+
+@font-face {
+  font-family: 'Halvar Mittelschrift';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(/fonts/halvar-mittelschrift-300.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Halvar Mittelschrift';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/halvar-mittelschrift-400.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Halvar Mittelschrift';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/halvar-mittelschrift-700.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Halvar Breitschrift';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/halvar-breitschrift-700.woff2) format('woff2');
+}
+   ─────────────────────────────────────────────────────────────────────────────────────── */
+
 @font-face {
   font-family: 'Inter';
   font-style: normal;

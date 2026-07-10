@@ -60,7 +60,7 @@ export function initScene(canvas, env) {
   const scene = new THREE.Scene();
   // Туман сцены зависит от темы: в светлой — светлая дымка, в тёмной — глубокий navy
   // (иначе дальняя часть карты/сцены «уходила в серое» на тёмной теме — виден серый фон).
-  const fogColor = (th) => (th === 'light' ? 0xd8e5f4 : 0x08162c);
+  const fogColor = (th) => (th === 'light' ? 0xd9efec : 0x022622);
   const fogDensity = (th) => (th === 'light' ? 0.0032 : 0.0037);
   scene.fog = new THREE.FogExp2(fogColor(env.theme), fogDensity(env.theme));
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -69,15 +69,15 @@ export function initScene(canvas, env) {
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 600);
 
   // Меньше общего (ambient) света -> здания не «блекло-светлые», а тёмные с яркими бликами.
-  scene.add(new THREE.HemisphereLight(0xb8cdea, 0x26334f, 0.42));
+  scene.add(new THREE.HemisphereLight(0xc7e8e4, 0x1e4a45, 0.42));
   const key = new THREE.DirectionalLight(0xffffff, 1.25); key.position.set(14, 28, 20); scene.add(key);
-  const rim = new THREE.DirectionalLight(0x9fc0ff, 1.05); rim.position.set(-16, 12, 8); scene.add(rim);  // холодный контровой свет — чётче кромки стеклянных башен
+  const rim = new THREE.DirectionalLight(0x9fe0d8, 1.05); rim.position.set(-16, 12, 8); scene.add(rim);  // холодный контровой свет — чётче кромки стеклянных башен
   // Направленный прожектор НА башни — драматичный «свет оттуда»: тёмные здания, яркая подсветка.
-  const spot = new THREE.SpotLight(0xe2eeff, 4.8, 0, Math.PI / 5, 0.4, 0);   // distance 0, decay 0 -> предсказуемая яркость
+  const spot = new THREE.SpotLight(0xe6f7f4, 4.8, 0, Math.PI / 5, 0.4, 0);   // distance 0, decay 0 -> предсказуемая яркость
   spot.position.set(8, 72, 40); spot.target.position.set(0, 12, -9);
   scene.add(spot); scene.add(spot.target);
 
-  const metal = (c = 0xd8dde6) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.8, roughness: 0.3, envMapIntensity: 1.2 });
+  const metal = (c = 0xdadfe0) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.8, roughness: 0.3, envMapIntensity: 1.2 });
   const matte = (c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.2, roughness: 0.65 });
   const emis = (c, i = 0.6) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i, roughness: 0.5 });
   const box = (w, h, d, m, r = 0.1) => new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 1, r), m);   // 1 сегмент скругления — незаметно, но меньше полигонов
@@ -108,29 +108,52 @@ export function initScene(canvas, env) {
   const towerMats = [];
   let beacon = null, drawLogo = null;
   (() => {
-    // Стекло башен светится собственным цветом фасада (emissiveMap = текстура): окна и
-    // синева стекла «горят» изнутри, как на ночном референсе, а не выглядят блекло.
-    // Лёгкий холодный тон + чуть глаже стекло -> насыщеннее синева и чётче блики.
-    const towerMat = (tex) => new THREE.MeshStandardMaterial({
-      map: tex, color: 0x4f617e, roughness: 0.2, metalness: 0.44, envMapIntensity: 1.2,     // тёмнее стекло, сильнее читаются грани
-      emissive: 0xbfe6ff, emissiveMap: tex, emissiveIntensity: 0.82,                        // окна светятся ярче (тёплая синева)
-    });
+    // Стекло башен светится собственным рисунком фасада (emissiveMap = та же текстура):
+    // окна «горят» изнутри, как на ночном референсе, а не выглядят блекло.
+    //
+    // ВАЖНО: /tex/facade_*.jpg — фотографические и СИНИЕ. Ни color, ни emissive их не
+    // перекрашивают: шейдер умножает тон на текел, а умножение на синеву даёт синеву.
+    // Поэтому обесцвечиваем выборку прямо в шейдере (яркость по Rec.709) — рельеф, окна и
+    // блики текстуры сохраняются, а тон целиком задают uniform'ы diffuse/emissive. Так башни
+    // подчиняются фирменной палитре, и перерисовывать ассеты не нужно.
+    const LUMA = 'vec3( 0.2126, 0.7152, 0.0722 )';
+    const desaturateFacade = (m) => {
+      m.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <map_fragment>', `#include <map_fragment>
+            #ifdef USE_MAP
+              diffuseColor.rgb = diffuse * dot( texture2D( map, vMapUv ).rgb, ${LUMA} );
+            #endif`)
+          .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+            #ifdef USE_EMISSIVEMAP
+              totalEmissiveRadiance = emissive * dot( texture2D( emissiveMap, vEmissiveMapUv ).rgb, ${LUMA} );
+            #endif`);
+      };
+      m.customProgramCacheKey = () => 'ddc-facade-desat';   // своя программа, не конфликтует с кэшем других Standard-материалов
+      return m;
+    };
+    // После обесцвечивания насыщенность даёт ТОЛЬКО diffuse — раньше половину тона приносила
+    // сама текстура, поэтому здесь он заметно гуще. Свечение окон — фирменная бирюза.
+    const towerMat = (tex) => desaturateFacade(new THREE.MeshStandardMaterial({
+      map: tex, color: 0x1e6b62, roughness: 0.2, metalness: 0.44, envMapIntensity: 1.2,     // фирменная зелень стекла
+      emissive: 0x2bbaac, emissiveMap: tex, emissiveIntensity: 0.62,                        // окна горят бирюзой
+    }));
     const tower = (w, d, h, x, tex) => {
       const tg = new THREE.Group();
       const body = box(w, h, d, towerMat(tex), 0.1); body.position.y = h / 2; tg.add(body);
-      const finMat = metal(0xaab6c8);
+      const finMat = metal(0xb2bdbe);
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.22, h, 0.22), finMat); fin.position.set(sx * (w / 2), h / 2, sz * (d / 2)); tg.add(fin); }
-      const crown = box(w + 0.4, 1.2, d + 0.4, matte(0xdfe4ec), 0.1); crown.position.y = h + 0.6; tg.add(crown);
+      const crown = box(w + 0.4, 1.2, d + 0.4, matte(0xe6e6e6), 0.1); crown.position.y = h + 0.6; tg.add(crown);
       tg.position.x = x; return tg;
     };
     // Башни с уверенным широким силуэтом (h/w ≈ 2.7) — не вытянутые «спички».
     gTowers.add(tower(9.5, 9.5, 26, -7, facadeA));
     gTowers.add(tower(10.5, 10.5, 29, 6.5, facadeB));
     // Синий подиум, посаженный прямо на карту (тонкая плита у поверхности)
-    const podium = box(26, 1.6, 14, matte(0x1c4f8e), 0.2); podium.position.y = 0.8; gTowers.add(podium);
-    const podiumTop = box(22, 0.4, 11, emis(0x3a7fd6, 0.62), 0.2); podiumTop.position.y = 1.7; gTowers.add(podiumTop);
+    const podium = box(26, 1.6, 14, matte(0x0f534c), 0.2); podium.position.y = 0.8; gTowers.add(podium);
+    const podiumTop = box(22, 0.4, 11, emis(0x2bbaac, 0.62), 0.2); podiumTop.position.y = 1.7; gTowers.add(podiumTop);
     const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 3, 8), metal()); mast.position.set(6.5, 30.6, 0); gTowers.add(mast);
-    beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), emis(0x7ad6ff, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
+    beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), emis(0x6fe0d6, 0.9)); beacon.position.set(6.5, 32.4, 0); gTowers.add(beacon);
 
     // Мягкое голубое свечение у основания — «штаб-квартира светится на карте».
     // На мобиле пропускаем (большой additive-план = тяжёлый overdraw → фризы).
@@ -138,7 +161,7 @@ export function initScene(canvas, env) {
       const glowCv = mkCanvas(128, 128);
       const gx = glowCv.getContext('2d');
       const gr = gx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      gr.addColorStop(0, 'rgba(120,210,255,0.9)'); gr.addColorStop(0.45, 'rgba(70,160,255,0.32)'); gr.addColorStop(1, 'rgba(70,160,255,0)');
+      gr.addColorStop(0, 'rgba(120,235,225,0.9)'); gr.addColorStop(0.45, 'rgba(43,186,172,0.32)'); gr.addColorStop(1, 'rgba(43,186,172,0)');
       gx.fillStyle = gr; gx.fillRect(0, 0, 128, 128);
       const glowTex = new THREE.CanvasTexture(glowCv);
       const baseGlow = new THREE.Mesh(new THREE.PlaneGeometry(46, 32),
@@ -158,7 +181,7 @@ export function initScene(canvas, env) {
     drawLogo = (img) => {
       try {
         sg.clearRect(0, 0, 256, 256);
-        sg.shadowColor = 'rgba(120,210,255,0.9)'; sg.shadowBlur = 20;
+        sg.shadowColor = 'rgba(120,235,225,0.9)'; sg.shadowBlur = 20;
         sg.drawImage(img, 26, 26, 204, 204);
         signTex.needsUpdate = true;
       } catch { /* вывеска необязательна */ }
@@ -240,13 +263,13 @@ export function initScene(canvas, env) {
     // ExtrudeGeometry — плита страны. bevelSegments 2 -> мягкая реалистичная кромка (не гранёная).
     const extrude = new THREE.ExtrudeGeometry(shape, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.4, bevelSegments: 1, steps: 1 });
 
-    // Синяя кристаллическая суша (референс — гранёный лёд/стекло): насыщенный синий с
-    //   мягкой географической вариацией (север светлее, восток чуть глубже). Огранку даёт
-    //   гексагональная bump-текстура ниже + глянец с отражениями среды.
+    // Кристаллическая суша (референс — гранёный лёд/стекло): фирменная зелень с мягкой
+    //   географической вариацией (север светлее, юг глубже). Огранку даёт гексагональная
+    //   bump-текстура ниже + глянец с отражениями среды.
     extrude.computeBoundingBox();
     {
       const bb = extrude.boundingBox, pos = extrude.attributes.position;
-      const cN = new THREE.Color(0x4b86e0), cS = new THREE.Color(0x2a58a4), cM = new THREE.Color(0x376ecb), tmp = new THREE.Color();
+      const cN = new THREE.Color(0x2f8f86), cS = new THREE.Color(0x0f534c), cM = new THREE.Color(0x1c6f68), tmp = new THREE.Color();
       const cols = new Float32Array(pos.count * 3);
       const dy = (bb.max.y - bb.min.y) || 1, dx = (bb.max.x - bb.min.x) || 1;
       for (let i = 0; i < pos.count; i++) {
@@ -299,13 +322,13 @@ export function initScene(canvas, env) {
     const mapTex = new THREE.CanvasTexture(mcv);
     mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping; mapTex.repeat.set(0.09, 0.09); mapTex.anisotropy = (mobile || perf.lite) ? 2 : 4;
 
-    // Синий глянцевый кристалл: цвет из вершин (география), огранка из bump, глянец + отражения
+    // Гранёный зелёный кристалл: цвет из вершин (география), огранка из bump, глянец + отражения
     // среды (scene.environment) дают «ледяной»/стеклянный вид как в референсе. Без transmission —
     // чтобы не грузить мобилу лишним проходом; глянец имитируем низким roughness + envMap.
     const mapMat = new THREE.MeshStandardMaterial({
       color: 0xffffff, vertexColors: true, bumpMap: mapTex, bumpScale: 0.7,
       metalness: 0.52, roughness: 0.25, envMapIntensity: 1.75,
-      emissive: 0x1f52a8, emissiveIntensity: 0.3,
+      emissive: 0x0f534c, emissiveIntensity: 0.3,
       transparent: true, opacity: 1,
     });
     mapMat.userData = { baseOp: 0.96 };
@@ -320,7 +343,7 @@ export function initScene(canvas, env) {
     const dotCv = mkCanvas(64, 64);
     const dctx = dotCv.getContext('2d');
     const dg = dctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    dg.addColorStop(0, 'rgba(220,248,255,1)'); dg.addColorStop(0.25, 'rgba(150,225,255,0.9)'); dg.addColorStop(1, 'rgba(120,210,250,0)');
+    dg.addColorStop(0, 'rgba(226,255,250,1)'); dg.addColorStop(0.25, 'rgba(140,232,222,0.9)'); dg.addColorStop(1, 'rgba(43,186,172,0)');
     dctx.fillStyle = dg; dctx.fillRect(0, 0, 64, 64);
     const dotTex = new THREE.CanvasTexture(dotCv);
     nodeMat = new THREE.SpriteMaterial({ map: dotTex, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.95 });
@@ -373,8 +396,8 @@ export function initScene(canvas, env) {
       // сияние: толстая мягкая линия + яркое ядро (две линии).
       // depthTest:false — дуги рисуются ПОВЕРХ карты (как и точки-узлы), иначе наклонённая
       // толстая плита перекрывает их и они «уходят за/внутрь карты».
-      const glowMat = new THREE.LineBasicMaterial({ color: 0x5fc8ea, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
-      const coreMat = new THREE.LineBasicMaterial({ color: 0xe2f7ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+      const glowMat = new THREE.LineBasicMaterial({ color: 0x2bbaac, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+      const coreMat = new THREE.LineBasicMaterial({ color: 0xe9fffb, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
       glowMat.userData = { glow: true, baseOp: 0.28 };
       coreMat.userData = { baseOp: 0.9 };
       const arcGlow = new THREE.Line(lGeo, glowMat); gMap.add(arcGlow);
@@ -421,7 +444,7 @@ export function initScene(canvas, env) {
       og.setAttribute('position', new THREE.Float32BufferAttribute(dots, 3));
       // Мелкие рассеянные огоньки — контур читается облаком, а не сплошной кромкой.
       const outlineDotMat = new THREE.PointsMaterial({
-        map: dotTex, color: 0x7ad6ff, size: 1.55, sizeAttenuation: true,
+        map: dotTex, color: 0x6fe0d6, size: 1.55, sizeAttenuation: true,
         transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.9,
       });
       outlineDotMat.userData = { baseOp: 0.9 };
@@ -455,7 +478,7 @@ export function initScene(canvas, env) {
       const dustGeo = new THREE.BufferGeometry();
       dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dust, 3));
       const dustMat = new THREE.PointsMaterial({
-        map: dotTex, color: 0x63c4ec, size: 0.95, sizeAttenuation: true,
+        map: dotTex, color: 0x57cfc3, size: 0.95, sizeAttenuation: true,
         transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.34,
       });
       dustMat.userData = { baseOp: 0.34 };
@@ -502,15 +525,15 @@ export function initScene(canvas, env) {
     });
     geo.translate(-cxf, -cyf, 0); geo.scale(s, s, s); geo.rotateX(-Math.PI / 2); geo.translate(0, TEXT_Y, 0);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x0d3166, metalness: 0.56, roughness: 0.29, envMapIntensity: 1.12,
-      emissive: 0x0a2452, emissiveIntensity: 0.55, transparent: true, opacity: 0,
+      color: 0x073b36, metalness: 0.56, roughness: 0.29, envMapIntensity: 1.12,
+      emissive: 0x04302b, emissiveIntensity: 0.55, transparent: true, opacity: 0,
     });
     bodyMat.userData = { baseOp: 1 };
     const mesh = new THREE.Mesh(geo, bodyMat); mesh.renderOrder = 6; ddcGroup.add(mesh); ddcMeshMats.push(bodyMat);
 
     // неон-контур по буквам: внешний контур + «дырки» (счётчик в D), на верхней грани.
-    const glowMat = new LineMaterial({ color: 0x3aa0ff, linewidth: 4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
-    const coreMat = new LineMaterial({ color: 0xcdeeff, linewidth: 1.4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
+    const glowMat = new LineMaterial({ color: 0x2bbaac, linewidth: 4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
+    const coreMat = new LineMaterial({ color: 0xdefff9, linewidth: 1.4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
     glowMat.resolution.set(W, H); coreMat.resolution.set(W, H);
     glowMat.userData = { baseOp: 0.5, glow: true }; coreMat.userData = { baseOp: 0.95 };
     ddcLineMats.push(glowMat, coreMat);

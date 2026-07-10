@@ -49,7 +49,7 @@ function Bars({ series }) {
         const x = pad + i * bw;
         return (
           <g key={i}>
-            <rect x={x + bw * 0.18} y={H - pad - h} width={bw * 0.64} height={h} rx="3" fill="var(--blue)" />
+            <rect x={x + bw * 0.18} y={H - pad - h} width={bw * 0.64} height={h} rx="3" fill="var(--brand)" />
             {d.count > 0 && <text x={x + bw / 2} y={H - pad - h - 5} textAnchor="middle" className="an-bar-val">{d.count}</text>}
             <text x={x + bw / 2} y={H - 8} textAnchor="middle" className="an-bar-lab">{d.label}</text>
           </g>
