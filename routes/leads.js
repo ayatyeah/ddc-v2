@@ -66,7 +66,10 @@ router.post('/api/leads', formLimiter, async (req, res) => {
 });
 
 // ── Админ: список клиентов ────────────────────────────────────────────────────
-router.get('/api/leads', auth, async (req, res) => {
+// PII граждан (ФИО/email/телефон/сообщение) — только роли, работающие с CRM (те же, что и
+// правят лиды). viewer-наблюдатель к персональным данным не допускается. staff изолируется
+// до своих ниже по коду.
+router.get('/api/leads', auth, requireRole('admin', 'editor', 'manager', 'staff'), async (req, res) => {
   const { status, q } = req.query;
   // Отклики на вакансии (kind='career') сюда НЕ попадают — они в разделе «Отклики».
   const where = [`COALESCE(l.kind, '') <> 'career'`];

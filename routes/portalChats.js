@@ -167,6 +167,19 @@ router.delete('/api/portal/messages/:id(\\d+)', auth, async (req, res) => {
   } catch (e) { console.error('DELETE /api/portal/messages:', e.message); res.status(500).json({ error: 'Не удалось удалить' }); }
 });
 
+// Есть ли у пользователя доступ к вложению чата: файл виден лишь тому, кто видит сообщение,
+// где он выложен. Общий канал — всем сотрудникам; ЛС — двум собеседникам; групповой чат —
+// участникам. Иначе перебором id можно было выкачать вложения чужих переписок (IDOR).
+async function canSeeChatFile(fileId, me) {
+  const { rows } = await db.query(
+    `SELECT recipient_id, author_id, chat_id FROM messages WHERE file_id = $1 ORDER BY id ASC LIMIT 1`, [fileId]);
+  if (!rows.length) return false;                                    // файл не привязан к сообщению — не отдаём
+  const m = rows[0];
+  if (m.chat_id != null) return isChatMember(m.chat_id, me);         // групповой чат
+  if (m.recipient_id == null) return true;                           // общий командный канал
+  return me != null && (m.author_id === me || m.recipient_id === me); // личный диалог
+}
+
 // ── Скачивание/просмотр загруженного файла (контролируемая отдача) ──
 router.get('/api/files/:id(\\d+)', auth, async (req, res) => {
   const id = Number(req.params.id);
@@ -174,8 +187,13 @@ router.get('/api/files/:id(\\d+)', auth, async (req, res) => {
     const { rows } = await db.query(`SELECT * FROM files WHERE id = $1`, [id]);
     if (!rows.length) return res.status(404).json({ error: 'Файл не найден' });
     const f = rows[0];
-    // CV откликов — только рекрутерам (admin/manager). Вложения чата — любому авторизованному.
-    if (f.kind === 'cv' && !['admin', 'manager'].includes(req.admin.role)) return res.status(403).json({ error: 'Доступ только для рекрутеров' });
+    // CV откликов — только рекрутерам (admin/manager).
+    if (f.kind === 'cv') {
+      if (!['admin', 'manager'].includes(req.admin.role)) return res.status(403).json({ error: 'Доступ только для рекрутеров' });
+    } else {
+      // Вложения чата — только участнику переписки, где файл выложен.
+      if (!(await canSeeChatFile(id, req.admin.id))) return res.status(403).json({ error: 'Нет доступа к файлу' });
+    }
     const p = path.join(UPLOAD_DIR, f.stored);
     if (!fs.existsSync(p)) return res.status(404).json({ error: 'Файл отсутствует на диске' });
     const inline = /^image\//.test(f.mime);                       // картинки показываем, остальное — скачиваем

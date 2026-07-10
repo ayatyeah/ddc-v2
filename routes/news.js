@@ -84,7 +84,7 @@ function normalizeNews(body = {}) {
   };
 }
 
-router.get('/api/admin/news', auth, async (req, res) => {
+router.get('/api/admin/news', auth, requireRole('admin', 'editor'), async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT ${NEWS_COLS} FROM news ORDER BY news_date DESC, id DESC LIMIT 500`

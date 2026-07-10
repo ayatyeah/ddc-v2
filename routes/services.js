@@ -39,7 +39,7 @@ router.get('/api/services', async (req, res) => {
   }
 });
 
-router.get('/api/admin/services', auth, async (req, res) => {
+router.get('/api/admin/services', auth, requireRole('admin', 'editor'), async (req, res) => {
   try {
     const { rows } = await db.query(`SELECT ${SERVICE_COLS} FROM services ORDER BY sort_order ASC, id ASC LIMIT 200`);
     res.json(rows);

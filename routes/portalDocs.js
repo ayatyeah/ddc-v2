@@ -17,6 +17,11 @@ const DOC_TYPES = {
   letter: 'официальное деловое письмо', explanatory: 'объяснительная записка', request: 'служебный запрос',
 };
 
+// Документы личные (заявления, объяснительные) — читать может автор либо admin/manager,
+// как и удалять. Раньше чтение/экспорт были открыты любому авторизованному: перебором id
+// читались чужие персональные документы.
+const canAccessDoc = (authorId, admin) => authorId === admin.id || ['admin', 'manager'].includes(admin.role);
+
 router.post('/api/portal/docs/generate', auth, async (req, res) => {
   const type = DOC_TYPES[req.body?.type] ? req.body.type : 'memo';
   const to = clip(req.body?.to, 200), subject = clip(req.body?.subject, 300), details = clip(req.body?.details, 3000);
@@ -41,15 +46,20 @@ router.post('/api/portal/docs/generate', auth, async (req, res) => {
 
 router.get('/api/portal/docs', auth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT id, title, doc_type, category, author_id, author_name, created_at, updated_at FROM documents ORDER BY id DESC LIMIT 300`);
+    // admin/manager видят все документы; остальные — только свои.
+    const all = ['admin', 'manager'].includes(req.admin.role);
+    const { rows } = all
+      ? await db.query(`SELECT id, title, doc_type, category, author_id, author_name, created_at, updated_at FROM documents ORDER BY id DESC LIMIT 300`)
+      : await db.query(`SELECT id, title, doc_type, category, author_id, author_name, created_at, updated_at FROM documents WHERE author_id = $1 ORDER BY id DESC LIMIT 300`, [req.admin.id]);
     res.json(rows);
   } catch (e) { console.error('GET /api/portal/docs:', e.message); res.status(500).json({ error: 'Ошибка чтения документов' }); }
 });
 // Один документ с текстом (для предпросмотра без тяжёлого PDF-iframe)
 router.get('/api/portal/docs/:id(\\d+)', auth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT id, title, doc_type, category, body, author_name, created_at FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    const { rows } = await db.query(`SELECT id, title, doc_type, category, body, author_id, author_name, created_at FROM documents WHERE id = $1`, [Number(req.params.id)]);
     if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (!canAccessDoc(rows[0].author_id, req.admin)) return res.status(403).json({ error: 'Нет доступа к документу' });
     res.json(rows[0]);
   } catch (e) { console.error('GET /api/portal/docs/:id:', e.message); res.status(500).json({ error: 'Ошибка' }); }
 });
@@ -72,8 +82,9 @@ router.post('/api/portal/docs', auth, async (req, res) => {
 // ИИ-краткое содержание документа (по id — сервер берёт текст из БД).
 router.post('/api/portal/docs/:id(\\d+)/summary', auth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT title, body FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    const { rows } = await db.query(`SELECT title, body, author_id FROM documents WHERE id = $1`, [Number(req.params.id)]);
     if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (!canAccessDoc(rows[0].author_id, req.admin)) return res.status(403).json({ error: 'Нет доступа к документу' });
     const prompt = `Кратко изложи суть документа ниже на русском языке — 3–5 пунктов маркированным списком, по делу, без воды. Документ «${rows[0].title}»:\n"""\n${(rows[0].body || '').slice(0, 6000)}\n"""`;
     const summary = cleanAnswer(await aiText(prompt));
     res.json({ summary });
@@ -84,8 +95,9 @@ const DOC_TR_LANG = { kk: 'казахский', en: 'английский' };
 router.post('/api/portal/docs/:id(\\d+)/translate', auth, async (req, res) => {
   const to = DOC_TR_LANG[req.body?.to] ? req.body.to : 'kk';
   try {
-    const { rows } = await db.query(`SELECT title, body FROM documents WHERE id = $1`, [Number(req.params.id)]);
+    const { rows } = await db.query(`SELECT title, body, author_id FROM documents WHERE id = $1`, [Number(req.params.id)]);
     if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (!canAccessDoc(rows[0].author_id, req.admin)) return res.status(403).json({ error: 'Нет доступа к документу' });
     const prompt = `Переведи текст делового документа на ${DOC_TR_LANG[to]} язык. Сохрани деловой стиль и структуру. Верни ТОЛЬКО перевод, без пояснений.\n\n${(rows[0].body || '').slice(0, 6000)}`;
     const text = cleanAnswer(await aiText(prompt));
     res.json({ text, to });
@@ -97,6 +109,7 @@ router.get('/api/portal/docs/:id(\\d+)/pdf', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`SELECT * FROM documents WHERE id = $1`, [Number(req.params.id)]);
     if (!rows.length) return res.status(404).json({ error: 'Документ не найден' });
+    if (!canAccessDoc(rows[0].author_id, req.admin)) return res.status(403).json({ error: 'Нет доступа к документу' });
     if (!fontsAvailable()) return res.status(500).json({ error: 'Шрифты для PDF не найдены (assets/fonts)' });
     const d = rows[0];
     const pdf = await buildDocPDF({ id: d.id, title: d.title, body: d.body, author: d.author_name, createdAt: d.created_at, docType: d.doc_type });
@@ -114,6 +127,7 @@ router.get('/api/portal/docs/:id(\\d+)/docx', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`SELECT * FROM documents WHERE id = $1`, [Number(req.params.id)]);
     if (!rows.length) return res.status(404).json({ error: 'Документ не найден' });
+    if (!canAccessDoc(rows[0].author_id, req.admin)) return res.status(403).json({ error: 'Нет доступа к документу' });
     if (!docxAvailable()) return res.status(500).json({ error: 'Генерация DOCX недоступна' });
     const d = rows[0];
     const docx = await buildDocDOCX({ id: d.id, title: d.title, body: d.body, author: d.author_name, createdAt: d.created_at, docType: d.doc_type });

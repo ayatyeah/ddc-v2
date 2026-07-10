@@ -12,7 +12,7 @@ const { OPENAI_KEY, GEMINI_KEYS, aiText, aiBatch } = require('../lib/ai');
 const router = express.Router();
 
 // ── Админ: дашборд (сводка) ───────────────────────────────────────────────────
-router.get('/api/admin/dashboard', auth, async (req, res) => {
+router.get('/api/admin/dashboard', auth, requireRole('admin', 'manager'), async (req, res) => {
   try {
     const [lt, ln, lw, nt, np, fc, au] = await Promise.all([
       // Отклики на вакансии (kind='career') не считаем — они в разделе «Карьера»,
@@ -89,7 +89,7 @@ function leadsSignature(rows) {
 }
 
 // Текущий (последний) кэшированный анализ
-router.get('/api/admin/ai/analysis', auth, async (req, res) => {
+router.get('/api/admin/ai/analysis', auth, requireRole('admin', 'editor', 'manager'), async (req, res) => {
   try {
     const { rows } = await db.query(`SELECT content, leads_sig, created_at FROM ai_analysis ORDER BY id DESC LIMIT 1`);
     if (!rows.length) return res.json({ analysis: null });
@@ -305,7 +305,7 @@ router.delete('/api/admin/wiki/:id(\\d+)', auth, requireRole('admin', 'manager',
 });
 
 // ── Админ: история изменений ──────────────────────────────────────────────────
-router.get('/api/admin/audit', auth, async (req, res) => {
+router.get('/api/admin/audit', auth, requireRole('admin', 'manager'), async (req, res) => {
   try {
     const params = []; let where = '';
     if (req.query.entity && ['lead', 'news', 'service', 'career', 'vacancy', 'user', 'department', 'feed', 'system', 'incident', 'wiki', 'broadcast'].includes(req.query.entity)) { params.push(req.query.entity); where = `WHERE entity = $1`; }

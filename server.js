@@ -67,8 +67,12 @@ app.use(compression());
 
 const origins = (process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim()).filter(Boolean);
+// origin: true (reflect-any) + credentials: true — дыра: любой сторонний сайт делает
+// credentialed-запросы от имени жертвы. В проде при пустом CORS_ORIGIN запрещаем кросс-оригин
+// (origin: false). Same-origin деплой (фронт и API на одном домене) от этого не страдает —
+// там CORS-заголовки не нужны вовсе. В dev оставляем permissive для удобства.
 app.use(cors({
-  origin: origins.length ? origins : true,   // в dev можно true; на проде укажи домены
+  origin: origins.length ? origins : (PROD ? false : true),
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));  // под base64 фото новостей и вложения (файл ≤6 МБ → ~8 МБ base64 + запас)

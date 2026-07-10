@@ -6,9 +6,17 @@ const db = require('../db');
 const { auth } = require('../lib/auth');
 const { clip, parseJsonLoose, cleanAnswer } = require('../lib/util');
 const { OPENAI_KEY, GEMINI_KEYS, callGemini, callOpenAI, aiText, embed, transcribeAudio } = require('../lib/ai');
-const { cosine, semanticSearch, prefixSearch, KIND_LABEL, indexReady } = require('../lib/rag');
+const { cosine, semanticSearch, prefixSearch, filterHitsByAccess, KIND_LABEL, indexReady } = require('../lib/rag');
 
 const router = express.Router();
+
+// Лимиты на платные ИИ-вызовы: без них любой залогиненный (или угнанная сессия) крутит
+// OpenAI/Gemini в цикле — неограниченный счёт и исчерпание квот. Ключ — id пользователя
+// (не IP: за одним NAT много сотрудников). Ставятся ПОСЛЕ auth, поэтому req.admin доступен.
+// tts/voice дороже (аудио/транскрипция) — им лимит строже.
+const aiKey = (req) => String(req.admin?.id ?? req.ip);
+const aiLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, keyGenerator: aiKey, standardHeaders: true, legacyHeaders: false, message: { error: 'Слишком часто. Подождите минуту.' } });
+const heavyAiLimiter = rateLimit({ windowMs: 60 * 1000, max: 8, keyGenerator: aiKey, standardHeaders: true, legacyHeaders: false, message: { error: 'Слишком часто. Подождите минуту.' } });
 
 // ── Память диалога: скользящее окно ───────────────────────────────────────────
 // LLM не помнит ничего между вызовами — «память» = пересылка последних реплик
@@ -53,7 +61,8 @@ router.post('/api/portal/search', auth, async (req, res) => {
   const q = clip(req.body?.q, 200);
   if (!q) return res.json({ results: [], semantic: false });
   try {
-    const hits = await prefixSearch(q, 10);
+    const raw = await prefixSearch(q, 30);                          // берём с запасом — ACL часть отсеет
+    const hits = (await filterHitsByAccess(raw, req.admin)).slice(0, 10);
     res.json({
       results: hits.map((r) => ({ kind: r.kind, ref_id: r.ref_id, title: r.title, snippet: r.snippet, tab: r.tab, kindLabel: KIND_LABEL[r.kind] || r.kind })),
       semantic: false,
@@ -62,13 +71,15 @@ router.post('/api/portal/search', auth, async (req, res) => {
 });
 
 // ── RAG «Спроси у ДиДи»: вопрос → релевантные фрагменты → ответ ИИ с источниками ──
-router.post('/api/assistant/ask', auth, async (req, res) => {
+router.post('/api/assistant/ask', auth, aiLimiter, async (req, res) => {
   const q = clip(req.body?.question || req.body?.q, 500);
   if (!q) return res.status(400).json({ error: 'Пустой вопрос' });
   const history = sanitizeHistory(req.body?.history);
   try {
     // Follow-up-вопросы ищем с учётом предыдущей реплики (иначе «а подробнее?» не найдёт контекст).
-    const hits = await semanticSearch(retrievalQuery(q, history), 6);
+    // ACL: чужие заявки/документы/задачи не должны попадать ни в источники, ни в контекст ИИ.
+    const raw = await semanticSearch(retrievalQuery(q, history), 18);
+    const hits = (await filterHitsByAccess(raw, req.admin)).slice(0, 6);
     const sources = hits.map((h) => ({ kind: h.kind, kindLabel: KIND_LABEL[h.kind] || h.kind, ref_id: h.ref_id, title: h.title, tab: h.tab }));
     const NOINFO = 'Честно — по этому вопросу я ничего не нашёл в базе портала, так что придумывать не буду 🙂 Лучше уточнить у HR или в разделе «Контакты». Могу ещё поискать, если переформулируете.';
     // Порог релевантности: не отвечаем «из головы», если ничего похожего не нашли.
@@ -90,7 +101,7 @@ router.post('/api/assistant/ask', auth, async (req, res) => {
 // ── ИИ-генератор контента: из темы/тезисов → готовый текст, на нужном языке ──
 const GEN_KINDS = { news: 'корпоративную новость для внутреннего портала компании', announcement: 'короткое объявление для сотрудников', service: 'описание ИТ-услуги компании для сайта' };
 const GEN_LANG = { ru: 'русском', kk: 'казахском', en: 'английском' };
-router.post('/api/assistant/generate', auth, async (req, res) => {
+router.post('/api/assistant/generate', auth, aiLimiter, async (req, res) => {
   const topic = clip(req.body?.topic, 600);
   const kind = GEN_KINDS[req.body?.kind] ? req.body.kind : 'news';
   const lang = GEN_LANG[req.body?.lang] ? req.body.lang : 'ru';
@@ -138,7 +149,7 @@ router.post('/api/public/ask', publicAskLimiter, async (req, res) => {
 // клиента (браузерный SpeechSynthesis), если ключа/сети нет.
 const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts';
 const OPENAI_TTS_VOICE = process.env.OPENAI_TTS_VOICE || 'shimmer';   // мягкий женский; можно nova/coral/sage
-router.post('/api/assistant/tts', auth, async (req, res) => {
+router.post('/api/assistant/tts', auth, heavyAiLimiter, async (req, res) => {
   const text = clip(req.body?.text, 500);
   if (!text) return res.status(400).json({ error: 'Пустой текст' });
   if (!OPENAI_KEY) return res.status(503).json({ error: 'Нет OPENAI_API_KEY' });
@@ -191,7 +202,7 @@ async function parseCommand(text) {
 }
 
 // Команда текстом (фолбэк / ручной ввод).
-router.post('/api/assistant/command', auth, async (req, res) => {
+router.post('/api/assistant/command', auth, aiLimiter, async (req, res) => {
   const text = clip(req.body?.text, 500);
   if (!text) return res.status(400).json({ error: 'Пустая команда' });
   try { res.json(await parseCommand(text)); }
@@ -199,7 +210,7 @@ router.post('/api/assistant/command', auth, async (req, res) => {
 });
 
 // Голосовая команда: аудио (base64 data-URL) → транскрипция → разбор в действия.
-router.post('/api/assistant/voice', auth, async (req, res) => {
+router.post('/api/assistant/voice', auth, heavyAiLimiter, async (req, res) => {
   const dataUrl = String(req.body?.audio || '');
   // Data-URL может содержать параметры (напр. data:audio/webm;codecs=opus;base64,…) — парсим строкой.
   const idx = dataUrl.indexOf(';base64,');
