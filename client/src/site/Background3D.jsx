@@ -51,7 +51,7 @@ export default function Background3D({ onReady }) {
       width: vw(), height: vh(), dpr: dprNow(),
     });
 
-    let disposed = false, worker = null, inst = null, fellBack = false, lastTarget = 0;
+    let disposed = false, worker = null, inst = null, fellBack = false, lastTarget = 0, vsyncRaf = 0;
     const queue = [];   // команды до готовности инлайн-сцены (воркер сам буферизует сообщения)
     const call = (m, ...a) => {
       if (disposed) return;
@@ -110,9 +110,20 @@ export default function Background3D({ onReady }) {
           requestAnimationFrame(() => { canvas.style.opacity = ''; });
           startInline();
         };
+        // Safari и Firefox не дают воркеру собственный requestAnimationFrame, и он просит такт
+        // у нас (см. scene.worker.js). Отдаём настоящий кадр развёртки — без этого сцена там
+        // крутится по setTimeout(16) и рвётся о вертикальную синхронизацию.
+        const pumpVsync = () => {
+          if (vsyncRaf || disposed || !worker) return;
+          vsyncRaf = requestAnimationFrame((t) => {
+            vsyncRaf = 0;
+            try { worker?.postMessage({ type: 'vsync', t }); } catch { /* воркер уже закрыт */ }
+          });
+        };
         worker.onmessage = (e) => {
           const d = e.data || {};
           if (d.type === 'tier') onTier(d.tier);
+          else if (d.type === 'raf') pumpVsync();
           else if (d.type === 'error') fallback();
         };
         worker.onerror = fallback;
@@ -173,6 +184,7 @@ export default function Background3D({ onReady }) {
 
     return () => {
       disposed = true;
+      if (vsyncRaf) { cancelAnimationFrame(vsyncRaf); vsyncRaf = 0; }
       window.removeEventListener('resize', onResize);
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('blur', onBlur);

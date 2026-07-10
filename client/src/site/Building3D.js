@@ -16,10 +16,8 @@ export function initBuilding(canvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  // Тени дорогие: отдельный depth-пасс 1024×1024 + мягкая PCF-фильтрация КАЖДЫЙ кадр.
-  // На телефоне это заметная нагрузка (модель и так стоит на подсвеченном «гало»),
-  // на Firefox и слабых устройствах — тоже. Десктоп теней не теряет.
-  renderer.shadowMap.enabled = !perf.mobile && !perf.lowPower && perf.engine !== 'gecko';
+  // Тени дорогие — на Firefox/слабых выключаем
+  renderer.shadowMap.enabled = !perf.lowPower && perf.engine !== 'gecko';
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
@@ -89,7 +87,8 @@ export function initBuilding(canvas) {
     g.userData.base = 0.3 + Math.random() * 0.5; glows.push(g); tower.add(g);
   }
 
-  // Стеклянная навесная стена (полупрозрачная, отражающая)
+  // Стеклянная навесная стена (полупрозрачная, отражающая) — настоящее физическое стекло
+  // с преломлением, на ВСЕХ устройствах. Именно оно даёт зданию вид, поэтому не упрощаем.
   const glass = new THREE.Mesh(
     new RoundedBoxGeometry(W, H, D, 6, 0.28),
     new THREE.MeshPhysicalMaterial({
@@ -101,29 +100,40 @@ export function initBuilding(canvas) {
   );
   glass.position.y = cy; tower.add(glass);
 
-  // Импосты: горизонтальные межэтажные линии + вертикальные стойки
+  // Импосты и рёбра — через InstancedMesh: 88 одинаковых боксов = 88 draw call'ов, и каждый
+  // выполняется в КАЖДОМ проходе рендера (тень + преломление стекла + основной) — ~260 вызовов
+  // на кадр только на решётку фасада. Инстансинг сводит их к 4 вызовам. Геометрия, материал и
+  // позиции те же — картинка попиксельно идентична.
   const mullMat = new THREE.MeshStandardMaterial({ color: COL.mull, roughness: 0.3, metalness: 0.75, envMapIntensity: 1.2 });
+  const dummy = new THREE.Object3D();
+  const instance = (geo, positions, castShadow) => {
+    const im = new THREE.InstancedMesh(geo, mullMat, positions.length);
+    positions.forEach((p, i) => { dummy.position.set(p[0], p[1], p[2]); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
+    im.instanceMatrix.needsUpdate = true;
+    im.castShadow = !!castShadow;
+    im.frustumCulled = false;   // решётка всегда внутри габарита башни — отсечение не нужно
+    tower.add(im);
+  };
+
   const FLOORS = 18, fstep = (H - 0.6) / FLOORS;
-  const hGeoFB = new THREE.BoxGeometry(W + 0.05, 0.05, 0.06);
-  const hGeoLR = new THREE.BoxGeometry(0.06, 0.05, D + 0.05);
+  const posFB = [], posLR = [];
   for (let f = 1; f < FLOORS; f++) {
     const y = podTop + f * fstep;
-    for (const sz of [1, -1]) { const m = new THREE.Mesh(hGeoFB, mullMat); m.position.set(0, y, sz * (D / 2 + 0.005)); tower.add(m); }
-    for (const sx of [1, -1]) { const m = new THREE.Mesh(hGeoLR, mullMat); m.position.set(sx * (W / 2 + 0.005), y, 0); tower.add(m); }
+    for (const sz of [1, -1]) posFB.push([0, y, sz * (D / 2 + 0.005)]);
+    for (const sx of [1, -1]) posLR.push([sx * (W / 2 + 0.005), y, 0]);
   }
-  const vGeo = new THREE.BoxGeometry(0.06, H - 0.5, 0.06);
-  for (let i = -2; i <= 2; i++) for (const sz of [1, -1]) {
-    const m = new THREE.Mesh(vGeo, mullMat); m.position.set(i * (W / 5.2), cy, sz * (D / 2 + 0.01)); tower.add(m);
-  }
-  for (let i = -1; i <= 1; i++) for (const sx of [1, -1]) {
-    const m = new THREE.Mesh(vGeo, mullMat); m.position.set(sx * (W / 2 + 0.01), cy, i * (D / 3.4)); tower.add(m);
-  }
+  instance(new THREE.BoxGeometry(W + 0.05, 0.05, 0.06), posFB);
+  instance(new THREE.BoxGeometry(0.06, 0.05, D + 0.05), posLR);
+
+  const posV = [];
+  for (let i = -2; i <= 2; i++) for (const sz of [1, -1]) posV.push([i * (W / 5.2), cy, sz * (D / 2 + 0.01)]);
+  for (let i = -1; i <= 1; i++) for (const sx of [1, -1]) posV.push([sx * (W / 2 + 0.01), cy, i * (D / 3.4)]);
+  instance(new THREE.BoxGeometry(0.06, H - 0.5, 0.06), posV);
+
   // Угловые рёбра во всю высоту
-  const finGeo = new THREE.BoxGeometry(0.14, H + 0.1, 0.14);
-  for (const sx of [1, -1]) for (const sz of [1, -1]) {
-    const fin = new THREE.Mesh(finGeo, mullMat);
-    fin.position.set(sx * (W / 2 + 0.05), cy, sz * (D / 2 + 0.05)); fin.castShadow = true; tower.add(fin);
-  }
+  const posFin = [];
+  for (const sx of [1, -1]) for (const sz of [1, -1]) posFin.push([sx * (W / 2 + 0.05), cy, sz * (D / 2 + 0.05)]);
+  instance(new THREE.BoxGeometry(0.14, H + 0.1, 0.14), posFin, true);
 
   // Акцентные ленты: синяя (DDC) и золотая (НБК)
   const band = (color, hh, yy, intensity) => {
@@ -171,6 +181,13 @@ export function initBuilding(canvas) {
   halo.rotation.x = -Math.PI / 2; halo.position.y = 0.02; scene.add(halo);
 
   // ── Видимость / прогресс / рендер ─────────────────────────────────────────
+  // Сцена статична: башня, свет и земля не двигаются — двигается только камера. Карта теней
+  // рендерится из СОБСТВЕННОЙ ортокамеры источника света и от положения зрителя не зависит,
+  // значит она каждый кадр получалась одна и та же. Считаем её один раз и замораживаем:
+  // тени попиксельно те же, а лишний depth-пасс (1024×1024, каждый кадр) исчезает.
+  key.shadow.autoUpdate = false;
+  key.shadow.needsUpdate = true;
+
   let progress = 0;
   function setProgress(p) { progress = Math.max(0, Math.min(1, p)); }
 
@@ -183,18 +200,23 @@ export function initBuilding(canvas) {
   const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
   // Рендерим ТОЛЬКО когда канва в кадре и ПОЛНОСТЬЮ гасим rAF за её пределами (раньше цикл
   // крутился вхолостую даже за экраном — лишняя работа на главном потоке при скролле Услуг).
-  const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) start(); else stop(); }, { threshold: 0.01 });
+  let visible = true;
+  const io = new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible) start(); else stop(); }, { threshold: 0.01 });
   io.observe(canvas);
 
   const clock = new THREE.Clock();
-  // FPS-кэп: на мобиле/слабых устройствах эта сцена (она на ГЛАВНОМ потоке, в отличие от фона
-  // Scene3D в воркере) рендерится ~30 fps — авто-вращение на глаз плавное, а нагрузка на CPU/GPU
-  // и конкуренция с тач-скроллом вдвое ниже. На десктопе — без ограничения.
-  const FRAME_MIN = (perf.mobile || perf.lite) ? 1000 / 30 : 0;
-  let raf = 0, last = -1;
+  // FPS-кэп. 13 мс → 60 fps на 60/120 Гц и 72 fps на 144 Гц. Телефон раньше держали на 30 fps,
+  // но кадр подешевел вчетверо (инстансинг решётки + замороженная карта теней), а вращающееся
+  // здание на 30 fps рядом со 120-Гц скроллом читается как рывки.
+  // 30 fps оставляем двум случаям: софт-рендер (SwiftShader/llvmpipe — там не поможет ничто)
+  // и prefers-reduced-motion (вращение и пульсация выключены, кадр статичен — чаще незачем).
+  // Именно 30 мс, а не 1000/30 = 33.33: иначе окно промахивается мимо кадра 60-Гц экрана
+  // (33.3 < 33.33) и вместо 30 fps выходит 20.
+  const FRAME_MIN = (perf.softwareGpu || reduce) ? 30 : 13;
+  let raf = 0, last = -1, ready = false, disposed = false;
   function loop(now) {
     raf = requestAnimationFrame(loop);
-    if (FRAME_MIN && now - last < FRAME_MIN) return;   // держим целевой FPS
+    if (now - last < FRAME_MIN) return;   // держим целевой FPS
     last = now;
     const t = clock.getElapsedTime();
     controls.target.y = cy * 0.78 - progress * 2.0;
@@ -206,15 +228,28 @@ export function initBuilding(canvas) {
     }
     renderer.render(scene, camera);
   }
-  function start() { if (!raf) { last = -1; raf = requestAnimationFrame(loop); } }
+  function start() { if (ready && visible && !disposed && !raf) { last = -1; raf = requestAnimationFrame(loop); } }
   function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-  start();
+
+  // Шейдер физического стекла (transmission + clearcoat) — самый тяжёлый на компиляцию: сотни
+  // миллисекунд синхронно на первом кадре. compileAsync задействует KHR_parallel_shader_compile,
+  // то есть компиляция уходит с главного потока, и первый кадр больше не «стопорит» страницу.
+  // Рендерить начинаем, когда программы готовы (нет расширения — промис отработает после
+  // обычной компиляции). start() идемпотентен, поэтому страховки ниже безопасны.
+  const go = () => { ready = true; start(); };
+  const fallback = setTimeout(go, 2000);          // промис не пришёл — рендерим по-старому
+  try { renderer.compileAsync(scene, camera).catch(() => {}).then(go); } catch { go(); }
 
   return {
     setProgress,
     dispose() {
+      disposed = true; clearTimeout(fallback);
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); controls.dispose();
-      scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const m = o.material; (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose()); } });
+      scene.traverse((o) => {
+        if (o.isInstancedMesh) o.dispose();
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) { const m = o.material; (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose()); }
+      });
       renderer.dispose();
     },
   };

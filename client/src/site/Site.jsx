@@ -99,7 +99,12 @@ export default function Site() {
       }
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-    const onResize = () => { recalc(); onScroll(); };
+    // iOS: при скролле СНИЗУ ВВЕРХ разворачивается адресная строка и браузер сыплет resize-событиями.
+    // recalc() читает scrollHeight — это принудительный reflow, и мы делали его десятки раз прямо
+    // посреди жеста → падение FPS на обратном скролле. Дебаунсим: пересчёт после паузы, а слегка
+    // устаревший maxScroll на эти 180 мс ни на что не влияет (он питает только прогресс-бар и сцену).
+    let rt = 0;
+    const onResize = () => { clearTimeout(rt); rt = setTimeout(() => { recalc(); onScroll(); }, 180); };
     const t = setTimeout(recalc, 1200);     // после первичной загрузки данных высота устаканилась
     recalc(); apply();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -108,7 +113,7 @@ export default function Site() {
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
-      clearTimeout(t);
+      clearTimeout(t); clearTimeout(rt);
       if (raf) cancelAnimationFrame(raf);
     };
   }, [path, route.prog, route.yaw]);
