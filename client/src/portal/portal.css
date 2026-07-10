@@ -406,11 +406,8 @@
 .pt-modal h3 { font-size: 1.15rem; margin-bottom: 14px; }
 .pt-modal-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 
-/* Фильтр-чипы (общие для календаря/новостей/задач) */
-.cal-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.cal-fchip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 980px; border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 13px; cursor: pointer; transition: all 0.15s; }
-.cal-fchip .cal-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c, #888); }
-.cal-fchip.on { color: var(--ink); border-color: var(--c, var(--brand)); background: color-mix(in srgb, var(--c, var(--brand)) 12%, transparent); }
+/* Фильтр-чипы переехали в styles.css: их использует и админка (History.jsx),
+   а portal.css в её чанк не попадает — чипы оставались без стилей. */
 
 /* Календарь */
 .cal-wrap { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }

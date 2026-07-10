@@ -79,10 +79,46 @@
   --shadow-pop: 0 20px 54px rgba(0, 0, 0, 0.5);
 }
 
+/* Портал и админка — рабочие инструменты, а не витрина. В тёмной теме им идёт нейтральный
+   графит: фирменный зелёный там спорит с десятками цветных статусов, ролей и меток разделов.
+   Фирменным остаётся акцент (бирюза) — им подсвечены активные пункты, кнопки и ссылки.
+   Светлая тема у всех трёх приложений общая. Метку <html data-app> ставит App.jsx;
+   селектор из двух атрибутов заведомо перебивает базовый [data-theme='dark'] выше. */
+[data-theme='dark'][data-app='portal'],
+[data-theme='dark'][data-app='admin'] {
+  --canvas: #0d1117;
+  --card: #161c22;
+  --card-glass: rgba(22, 28, 34, 0.82);
+  --nav-glass: rgba(13, 17, 23, 0.90);
+  --ink: #e8edf2;
+  --ink-soft: #a4aeb7;
+  --ink-faint: #79838c;
+  --line: rgba(255, 255, 255, 0.10);
+  --line-2: rgba(255, 255, 255, 0.19);
+  --shadow-pop: 0 20px 54px rgba(0, 0, 0, 0.6);
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 /* Базовый кегль чуть крупнее (16 → 17px) — всё на rem-единицах масштабируется по сайту. */
 /* Текучая (fluid) типографика: корневой кегль плавно растёт с шириной экрана
    (16px на телефоне → 18px на десктопе). Всё на rem масштабируется заодно. */
+/* ── Фильтр-чипы ──────────────────────────────────────────────────────────────
+   Общий компонент: календарь, новости и задачи портала + журнал действий админки.
+   Живёт здесь, а не в portal.css: портал и админка — разные ленивые чанки, и на /admin
+   portal.css не загружается. Раньше чипы истории оставались вообще без стилей. */
+.cal-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.cal-fchip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px;
+  border-radius: 980px; border: 1px solid var(--line); background: var(--card);
+  color: var(--ink-soft); font: inherit; font-size: 13px; cursor: pointer; transition: all 0.15s;
+}
+.cal-fchip:hover { border-color: var(--line-2); color: var(--ink); }
+.cal-fchip .cal-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c, var(--grey)); }
+.cal-fchip.on {
+  color: var(--ink); border-color: var(--c, var(--brand));
+  background: color-mix(in srgb, var(--c, var(--brand)) 12%, transparent);
+}
+
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; font-size: clamp(16px, 14.7px + 0.35vw, 18px); }
 body {
   font-family: var(--sans);

@@ -57,7 +57,7 @@ export default function History({ onAuthLost }) {
       <div className="hist-bar card-surface">
         <div className="cal-filters hist-filters">
           {FILTERS.map((f) => (
-            <button key={f.id} className={`cal-fchip ${filter === f.id ? 'on' : ''}`} style={{ '--c': '#2f6fe0' }} onClick={() => setFilter(f.id)}>
+            <button key={f.id} className={`cal-fchip ${filter === f.id ? 'on' : ''}`} style={{ '--c': 'var(--brand)' }} onClick={() => setFilter(f.id)}>
               <span className="cal-dot" /> {f.label}
             </button>
           ))}

@@ -10,6 +10,11 @@ const PortalApp = lazy(() => import('./portal/PortalApp.jsx'));
    SPA-fallback на сервере отдаёт index.html для любого пути. */
 export default function App() {
   const [path, setPath] = useState(window.location.pathname);
+  const app = path.startsWith('/admin') ? 'admin' : path.startsWith('/portal') ? 'portal' : 'site';
+
+  // <html data-app> нужен CSS: у портала и админки своя тёмная тема (нейтральный графит).
+  // Ставим на корне, а не на .adm/.pt — иначе фон body остался бы фирменно-зелёным.
+  useEffect(() => { document.documentElement.dataset.app = app; }, [app]);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
