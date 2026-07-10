@@ -4,8 +4,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { ADMIN_USERNAME } = require('../lib/config');
-const { auth, requireRole, logAudit } = require('../lib/auth');
-const { clip } = require('../lib/util');
+const { auth, requireRole, logAudit, bumpTokenVersion } = require('../lib/auth');
+const { clip, validatePassword } = require('../lib/util');
 
 const router = express.Router();
 const ALLOWED_ROLES = ['admin', 'manager', 'staff', 'editor', 'viewer'];
@@ -45,9 +45,9 @@ router.post('/api/admin/users', auth, requireRole('admin'), async (req, res) => 
   const department = String(req.body?.department || '').trim().slice(0, 120);
   const role = ALLOWED_ROLES.includes(req.body?.role) ? req.body.role : 'staff';
   const birth_date = req.body?.birth_date ? String(req.body.birth_date).slice(0, 10) : '';
-  if (!username || password.length < 4) {
-    return res.status(400).json({ error: 'Логин и пароль (от 4 символов) обязательны' });
-  }
+  if (!username) return res.status(400).json({ error: 'Укажите логин' });
+  const pw = validatePassword(password, username);
+  if (!pw.ok) return res.status(400).json({ error: pw.error });
   // ФИО, телефон и дата рождения обязательны при регистрации сотрудника.
   if (full_name.split(/\s+/).filter(Boolean).length < 2) {
     return res.status(400).json({ error: 'Укажите ФИО полностью (фамилия и имя)' });
@@ -116,6 +116,8 @@ router.patch('/api/admin/users/:id(\\d+)', auth, requireRole('admin'), async (re
       `UPDATE users SET ${set.join(', ')} WHERE id = $${vals.length}
        RETURNING id, username, full_name, department, role, active, birth_date, can_write_news, created_at`, vals);
     if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден' });
+    // Смена роли завершает прежние сессии — иначе понижение прав не действует до истечения токена.
+    if ('role' in (req.body || {})) await bumpTokenVersion(id);
     logAudit(req, 'user', id, 'update', `Обновлён пользователь ${rows[0].username}`);
     res.json(rows[0]);
   } catch (e) {
@@ -126,13 +128,18 @@ router.patch('/api/admin/users/:id(\\d+)', auth, requireRole('admin'), async (re
 
 // Смена пароля пользователя администратором
 router.post('/api/admin/users/:id(\\d+)/password', auth, requireRole('admin'), async (req, res) => {
+  const id = Number(req.params.id);
   const password = String(req.body?.password || '');
-  if (password.length < 4) return res.status(400).json({ error: 'Пароль должен быть не короче 4 символов' });
   try {
+    // Логин целевого пользователя нужен и для проверки «пароль не содержит логин», и для аудита.
+    const u = await db.query(`SELECT username FROM users WHERE id = $1`, [id]);
+    if (!u.rows.length) return res.status(404).json({ error: 'Пользователь не найден' });
+    const pw = validatePassword(password, u.rows[0].username);
+    if (!pw.ok) return res.status(400).json({ error: pw.error });
     const hash = await bcrypt.hash(password, 10);
-    const { rows } = await db.query(`UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING username`, [hash, Number(req.params.id)]);
-    if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден' });
-    logAudit(req, 'user', Number(req.params.id), 'password', `Сменён пароль пользователя ${rows[0].username}`);
+    await db.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [hash, id]);
+    await bumpTokenVersion(id);   // смена пароля завершает все прежние сессии пользователя
+    logAudit(req, 'user', id, 'password', `Сменён пароль пользователя ${u.rows[0].username}`);
     res.json({ ok: true });
   } catch (e) { console.error('POST /api/admin/users/password:', e.message); res.status(500).json({ error: 'Не удалось сменить пароль' }); }
 });
