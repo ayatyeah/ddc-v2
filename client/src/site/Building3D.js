@@ -16,8 +16,10 @@ export function initBuilding(canvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  // Тени дорогие — на Firefox/слабых выключаем
-  renderer.shadowMap.enabled = !perf.lowPower && perf.engine !== 'gecko';
+  // Тени дорогие: отдельный depth-пасс 1024×1024 + мягкая PCF-фильтрация КАЖДЫЙ кадр.
+  // На телефоне это заметная нагрузка (модель и так стоит на подсвеченном «гало»),
+  // на Firefox и слабых устройствах — тоже. Десктоп теней не теряет.
+  renderer.shadowMap.enabled = !perf.mobile && !perf.lowPower && perf.engine !== 'gecko';
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
