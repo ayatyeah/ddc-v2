@@ -32,20 +32,27 @@ export default function PortalNews({ me, onAuthLost }) {
   }, [onAuthLost]);
   useEffect(() => { load(); }, [load]);
 
+  // form.id есть → правим уже опубликованную новость (PATCH), иначе публикуем новую (POST).
   const submit = async (e) => {
     e?.preventDefault?.();
     if (!form.title.trim() || !form.body.trim()) return;
+    const payload = { title: form.title.trim(), body: form.body.trim(), category: form.category, pinned: form.pinned };
     try {
-      await sendJSON('/api/portal/news', 'POST', { title: form.title.trim(), body: form.body.trim(), category: form.category, pinned: form.pinned, author_name: me?.username });
+      if (form.id) await sendJSON(`/api/portal/news/${form.id}`, 'PATCH', payload);
+      else await sendJSON('/api/portal/news', 'POST', { ...payload, author_name: me?.username });
       setForm(null); load();
     } catch (e2) { if (e2.status === 401) onAuthLost?.(); else alert(e2.message || 'Не удалось'); }
   };
+  const edit = (n) => setForm({ id: n.id, title: n.title, body: n.body, category: n.category, pinned: !!n.pinned });
   const del = async (n) => {
     if (!confirm('Удалить новость?')) return;
     try { await sendJSON(`/api/portal/news/${n.id}`, 'DELETE'); load(); } catch (e) { if (e.status === 401) onAuthLost?.(); }
   };
 
   const shown = cat === 'all' ? items : items.filter((n) => n.category === cat);
+  // Права как на сервере: править — «редакция» (canWrite: админ/начальник/флаг) либо автор;
+  // удалять — только автор или админ (удаление необратимо).
+  const canEdit = (n) => canWrite || n.author_id === me?.id;
   const canDelete = (n) => me?.role === 'admin' || n.author_id === me?.id;
 
   return (
@@ -74,8 +81,13 @@ export default function PortalNews({ me, onAuthLost }) {
               <div className="news-card-top">
                 <span className="news-cat">{c.label}</span>
                 {n.pinned && <span className="news-pin">📌 Закреплено</span>}
-                <span className="news-date">{fmtDate(n.created_at)}</span>
-                {canDelete(n) && <button className="cal-del" onClick={() => del(n)} aria-label="Удалить">×</button>}
+                <span className="news-date">{fmtDate(n.created_at)}{n.updated_at ? ' · изменено' : ''}</span>
+                {(canEdit(n) || canDelete(n)) && (
+                  <div className="cal-item-tools">
+                    {canEdit(n) && <button className="cal-edit" onClick={() => edit(n)} aria-label="Редактировать" title="Редактировать">✎</button>}
+                    {canDelete(n) && <button className="cal-del" onClick={() => del(n)} aria-label="Удалить" title="Удалить">×</button>}
+                  </div>
+                )}
               </div>
               <h3 className="news-title">{n.title}</h3>
               <div className="news-body">{n.body}</div>
@@ -88,7 +100,7 @@ export default function PortalNews({ me, onAuthLost }) {
       {form && (
         <div className="pt-modal-bg" onClick={() => setForm(null)}>
           <form className="pt-modal wide" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-            <h3>Новая новость</h3>
+            <h3>{form.id ? 'Редактировать новость' : 'Новая новость'}</h3>
             <div className="cal-form-row">
               <div className="adm-field"><label>Категория</label>
                 <select className="adm-input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
@@ -110,7 +122,7 @@ export default function PortalNews({ me, onAuthLost }) {
               <textarea className="adm-input" rows={7} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Введите заголовок и нажмите «Сгенерировать ИИ» — ДиДи напишет черновик, который можно поправить." /></div>
             <div className="pt-modal-foot">
               <button type="button" className="adm-btn ghost" onClick={() => setForm(null)}>Отмена</button>
-              <button type="submit" className="adm-btn">Опубликовать</button>
+              <button type="submit" className="adm-btn">{form.id ? 'Сохранить' : 'Опубликовать'}</button>
             </div>
           </form>
         </div>

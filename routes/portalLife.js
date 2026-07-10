@@ -247,7 +247,7 @@ async function canWriteNews(admin) {
 router.get('/api/portal/news', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, title, body, category, pinned, author_id, author_name, created_at
+      `SELECT id, title, body, category, pinned, author_id, author_name, created_at, updated_at
          FROM portal_news ORDER BY pinned DESC, created_at DESC LIMIT 100`);
     res.json({ items: rows, canWrite: await canWriteNews(req.admin) });
   } catch (e) { console.error('GET /api/portal/news:', e.message); res.status(500).json({ error: 'Ошибка чтения новостей' }); }
@@ -272,6 +272,33 @@ router.post('/api/portal/news', auth, async (req, res) => {
     } catch { /* уведомления не критичны */ }
     res.status(201).json(rows[0]);
   } catch (e) { console.error('POST /api/portal/news:', e.message); res.status(500).json({ error: 'Не удалось опубликовать' }); }
+});
+// Правка уже опубликованной новости. Править может «редакция» — тот, кому вообще разрешено
+// публиковать новости (админ / начальник отдела / сотрудник с флагом can_write_news), — а также
+// автор конкретной новости. Удаление остаётся строже (автор или админ): оно необратимо.
+// Уведомления НЕ рассылаем — это правка, а не новая публикация.
+router.patch('/api/portal/news/:id(\\d+)', auth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const n = await db.query(`SELECT author_id FROM portal_news WHERE id = $1`, [id]);
+    if (!n.rows.length) return res.status(404).json({ error: 'Не найдено' });
+    const isAuthor = n.rows[0].author_id != null && n.rows[0].author_id === req.admin.id;
+    if (!isAuthor && !(await canWriteNews(req.admin)))
+      return res.status(403).json({ error: 'Редактировать новости могут админ, начальники отделов и сотрудники с правом' });
+
+    const title = clip(req.body?.title, 200);
+    const body = clip(req.body?.body, 6000);
+    if (!title || !body) return res.status(400).json({ error: 'Укажите заголовок и текст' });
+    const category = PNEWS_CATS.includes(req.body?.category) ? req.body.category : 'company';
+    const pinned = !!req.body?.pinned;
+
+    const { rows } = await db.query(
+      `UPDATE portal_news SET title = $1, body = $2, category = $3, pinned = $4, updated_at = now()
+        WHERE id = $5
+       RETURNING id, title, body, category, pinned, author_id, author_name, created_at, updated_at`,
+      [title, body, category, pinned, id]);
+    res.json(rows[0]);
+  } catch (e) { console.error('PATCH /api/portal/news:', e.message); res.status(500).json({ error: 'Не удалось сохранить' }); }
 });
 router.delete('/api/portal/news/:id(\\d+)', auth, async (req, res) => {
   const id = Number(req.params.id);
