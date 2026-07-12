@@ -573,11 +573,63 @@ function PersonCard({ u, rect, online, onWrite, onEnter, onLeave }) {
   );
 }
 
-/* ── Сотрудники: справочник + поиск + Magic Hover-карточка ── */
+/* ── Полный профиль сотрудника (модалка по клику): контакты, навыки, стаж, QR-визитка. ── */
+function PersonProfileModal({ u, online, onClose, onWrite }) {
+  const [qr, setQr] = useState('');
+  const email = corpEmail(u.username);
+  useEffect(() => {
+    let alive = true;
+    const vcard = makeVCardRaw({
+      name: u.name, org: 'Центр цифрового развития', title: u.position || roleLabel(u.role),
+      phone: u.phone, email, note: u.department,
+    });
+    QRCode.toDataURL(vcard, { errorCorrectionLevel: 'M', margin: 1, scale: 7, width: 172, color: { dark: '#062b25', light: '#ffffff' } })
+      .then((d) => { if (alive) setQr(d); }).catch(() => {});
+    return () => { alive = false; };
+  }, [u.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onEsc = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+  const skills = String(u.skills || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const tel = u.phone ? u.phone.replace(/[^\d+]/g, '') : '';
+  return createPortal(
+    <div className="pt-modal-ov" onClick={onClose}>
+      <div className="pt-modal pt-pprofile" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <button className="pt-pprofile-x" onClick={onClose} aria-label="Закрыть">×</button>
+        <div className="pt-pprofile-head">
+          <span className={`pt-av xl ${online ? 'on' : ''}`}>{initials(u.name)}</span>
+          <h3>{u.name}</h3>
+          <p>{u.position || roleLabel(u.role)}</p>
+          <div className="pt-pprofile-badges">
+            <span className="pt-pprofile-role">{roleLabel(u.role)}</span>
+            {online && <span className="pt-pprofile-online">● онлайн</span>}
+          </div>
+        </div>
+        <div className="pt-pprofile-rows">
+          {u.department && <div className="pt-pprofile-row"><span>Отдел</span><b>{u.department}</b></div>}
+          <div className="pt-pprofile-row"><span>Телефон</span>{u.phone ? <a href={`tel:${tel}`}>{u.phone}</a> : <b className="muted">не указан</b>}</div>
+          <div className="pt-pprofile-row"><span>Email</span><a href={`mailto:${email}`}>{email}</a></div>
+          {u.hired_at && <div className="pt-pprofile-row"><span>В компании с</span><b>{new Date(u.hired_at).toLocaleDateString('ru-RU')}</b></div>}
+        </div>
+        {skills.length > 0 && (
+          <div className="pt-pprofile-skills"><span>Навыки</span><div className="pt-pprofile-chips">{skills.map((s, i) => <em key={i}>{s}</em>)}</div></div>
+        )}
+        {qr && <div className="pt-pprofile-qr"><img src={qr} alt="QR-визитка" /><small>Отсканируйте камерой — контакт сохранится в телефон</small></div>}
+        <button className="pt-pprofile-write" onClick={() => { onWrite(u); onClose(); }}>Написать сообщение</button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/* ── Сотрудники: справочник + поиск + Magic Hover-карточка + профиль по клику ── */
 function People({ onAuthLost, onWrite }) {
   const [users, setUsers] = useState([]);
   const [q, setQ] = useState('');
   const [hover, setHover] = useState(null);   // { u, rect }
+  const [profileU, setProfileU] = useState(null);   // открытый полный профиль
   const showT = useRef(0), hideT = useRef(0);
   const online = usePresence();
   useEffect(() => { getJSON('/api/portal/users').then(setUsers).catch((e) => { if (e.status === 401) onAuthLost?.(); }); }, [onAuthLost]);
@@ -596,6 +648,8 @@ function People({ onAuthLost, onWrite }) {
   const cardEnter = () => clearTimeout(hideT.current);      // мышь перешла на карточку — не прячем
   const cardLeave = () => { hideT.current = setTimeout(() => setHover(null), 120); };
   const write = (u) => { setHover(null); onWrite?.(u); };
+  // Клик по сотруднику — полный профиль (работает и на телефоне, где hover-карточки нет).
+  const openProfile = (u) => { clearTimeout(showT.current); setHover(null); setProfileU(u); };
 
   return (
     <div className="pt-view">
@@ -603,14 +657,17 @@ function People({ onAuthLost, onWrite }) {
       <input className="adm-input pt-search" placeholder="Поиск: имя, отдел, должность…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="pt-people">
         {list.map((u) => (
-          <div className="pt-person" key={u.id} onMouseEnter={(e) => enter(e, u)} onMouseLeave={leave}>
+          <div className="pt-person" key={u.id} role="button" tabIndex={0}
+            onClick={() => openProfile(u)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openProfile(u))}
+            onMouseEnter={(e) => enter(e, u)} onMouseLeave={leave}>
             <span className={`pt-av ${online(u.id) ? 'on' : ''}`}>{initials(u.name)}</span>
             <div className="pt-person-t"><b>{u.name}{online(u.id) && <span className="pt-online-tag">онлайн</span>}</b><small>{roleLabel(u.role)}{u.department ? ` · ${u.department}` : ''}</small></div>
           </div>
         ))}
         {list.length === 0 && <div className="pt-empty">{users.length ? 'Никого не найдено.' : 'Список пуст.'}</div>}
       </div>
-      {hover && <PersonCard u={hover.u} rect={hover.rect} online={online(hover.u.id)} onWrite={write} onEnter={cardEnter} onLeave={cardLeave} />}
+      {hover && !profileU && <PersonCard u={hover.u} rect={hover.rect} online={online(hover.u.id)} onWrite={write} onEnter={cardEnter} onLeave={cardLeave} />}
+      {profileU && <PersonProfileModal u={profileU} online={online(profileU.id)} onClose={() => setProfileU(null)} onWrite={write} />}
     </div>
   );
 }
