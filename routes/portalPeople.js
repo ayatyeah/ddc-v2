@@ -13,7 +13,7 @@ router.get('/api/portal/users', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT id, username, full_name, department, role, position, phone, skills, hired_at FROM users WHERE active = TRUE ORDER BY full_name NULLS LAST, username`);
-    res.json(rows.map((u) => ({ id: u.id, name: u.full_name || u.username, department: u.department || '', role: u.role, position: u.position || '', phone: u.phone || '', skills: u.skills || '', hired_at: u.hired_at })));
+    res.json(rows.map((u) => ({ id: u.id, username: u.username || '', name: u.full_name || u.username, department: u.department || '', role: u.role, position: u.position || '', phone: u.phone || '', skills: u.skills || '', hired_at: u.hired_at })));
   } catch (e) { console.error('GET /api/portal/users:', e.message); res.status(500).json({ error: 'Ошибка чтения сотрудников' }); }
 });
 

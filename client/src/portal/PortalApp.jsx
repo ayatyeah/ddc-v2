@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { getJSON, sendJSON, apiFetch } from '../api.js';
 import { hideSplash } from '../splash.js';
 import ThemeToggle from '../ThemeToggle.jsx';
@@ -59,7 +60,7 @@ const vcardName = (name) => {
 // Используем vCard 4.0: в нём UTF-8 — кодировка по умолчанию, поэтому сканеры (в т.ч.
 // Камера iOS) читают кириллицу корректно. В 3.0 многие ридеры считали текст Latin-1
 // и показывали кракозябры во всех полях, кроме латиницы (имени).
-const makeVCardRaw = ({ name, org, title, phone, note }) => [
+const makeVCardRaw = ({ name, org, title, phone, email, note }) => [
   'BEGIN:VCARD',
   'VERSION:3.0',
   `N:${vcardName(name)}`,
@@ -67,10 +68,15 @@ const makeVCardRaw = ({ name, org, title, phone, note }) => [
   org ? `ORG:${org}` : '',
   title ? `TITLE:${vcardText(title)}` : '',
   phone ? `TEL;TYPE=cell,voice:${vcardTel(phone)}` : '',
+  email ? `EMAIL;TYPE=work:${vcardText(email)}` : '',
   note ? `NOTE:${vcardText(note)}` : '',
   'END:VCARD',
 ].filter(Boolean).join('\r\n');
-const makeVCard = ({ name, org, title, phone, note }) => makeVCardRaw({ name, org: org ? vcardText(org) : '', title, phone, note });
+const makeVCard = ({ name, org, title, phone, email, note }) => makeVCardRaw({ name, org: org ? vcardText(org) : '', title, phone, email, note });
+// Корпоративная почта сотрудника из логина (домен из контактов ЦЦР). Реальной колонки email
+// в БД нет — для визитки/карточки строим по единому корпоративному шаблону.
+const CORP_MAIL_DOMAIN = 'bsbnb.kz';
+const corpEmail = (username) => (username ? `${String(username).toLowerCase()}@${CORP_MAIL_DOMAIN}` : '');
 
 // Вложения чата
 const ATTACH_ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.txt';
@@ -92,6 +98,9 @@ export default function PortalApp() {
   const [busy, setBusy] = useState(false);
   const [twofa, setTwofa] = useState(null);   // { ticket, code } — второй шаг входа
   const [tab, setTab] = useState('home');
+  // Собеседник, выбранный из карточки сотрудника («Написать») — Dm откроет с ним диалог сразу.
+  const [dmPeer, setDmPeer] = useState(null);
+  const writeTo = (u) => { setDmPeer(u); goTab('dm'); };
   // На мобиле при открытом диалоге прячем верхнюю панель (мессенджер-стиль).
   const [convOpen, setConvOpen] = useState(false);
   // Боковое меню (на телефоне выезжает слева по бургеру; на десктопе всегда видно).
@@ -222,7 +231,7 @@ export default function PortalApp() {
         {tab === 'mission' && (isHead ? <Mission onAuthLost={onAuthLost} /> : <Home me={me} onGo={goTab} />)}
         {tab === 'home' && <Home me={me} onGo={goTab} />}
         {tab === 'profile' && <Profile me={me} onAuthLost={onAuthLost} />}
-        {tab === 'people' && <People onAuthLost={onAuthLost} />}
+        {tab === 'people' && <People onAuthLost={onAuthLost} onWrite={writeTo} />}
         {tab === 'calendar' && <Calendar me={me} onAuthLost={onAuthLost} />}
         {tab === 'news' && <PortalNews me={me} onAuthLost={onAuthLost} />}
         {tab === 'polls' && <Polls me={me} onAuthLost={onAuthLost} />}
@@ -231,7 +240,7 @@ export default function PortalApp() {
         {tab === 'requests' && <Requests me={me} onAuthLost={onAuthLost} />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
         {tab === 'depts' && <Departments me={me} onAuthLost={onAuthLost} />}
-        {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
+        {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} initialPeer={dmPeer} onPeerUsed={() => setDmPeer(null)} />}
         {tab === 'chat' && <Chats me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
       </main>
 
@@ -513,28 +522,95 @@ function TwoFA({ onAuthLost }) {
   );
 }
 
-/* ── Сотрудники: справочник + поиск ── */
-function People({ onAuthLost }) {
+/* ── Мини-карточка сотрудника (Magic Hover): фото, должность, контакты, QR-визитка, «Написать».
+   Рендерится в портал поверх всего (вне overflow-контейнеров), позиционируется рядом со строкой. ── */
+function PersonCard({ u, rect, online, onWrite, onEnter, onLeave }) {
+  const [qr, setQr] = useState('');
+  const email = corpEmail(u.username);
+  useEffect(() => {
+    let alive = true;
+    const vcard = makeVCardRaw({
+      name: u.name, org: 'Центр цифрового развития', title: u.position || roleLabel(u.role),
+      phone: u.phone, email, note: u.department,
+    });
+    QRCode.toDataURL(vcard, { errorCorrectionLevel: 'M', margin: 1, scale: 6, width: 132, color: { dark: '#062b25', light: '#ffffff' } })
+      .then((d) => { if (alive) setQr(d); }).catch(() => { if (alive) setQr(''); });
+    return () => { alive = false; };
+  }, [u.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Позиция: справа от строки; если не влезает — слева; по вертикали удерживаем в экране.
+  const W = 296, H = 356, GAP = 14;
+  let left = rect.right + GAP;
+  if (left + W > window.innerWidth - 10) left = rect.left - W - GAP;
+  left = Math.max(10, Math.min(left, window.innerWidth - W - 10));
+  let top = rect.top + rect.height / 2 - H / 2;
+  top = Math.max(10, Math.min(top, window.innerHeight - H - 10));
+  const tel = u.phone ? u.phone.replace(/[^\d+]/g, '') : '';
+
+  return createPortal(
+    <div className="pt-pcard" style={{ left, top }} role="dialog" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <div className="pt-pcard-top">
+        <span className={`pt-av lg ${online ? 'on' : ''}`}>{initials(u.name)}</span>
+        <div className="pt-pcard-id">
+          <b>{u.name}</b>
+          <small>{u.position || roleLabel(u.role)}</small>
+          {u.department && <span className="pt-pcard-dept">{u.department}</span>}
+          {online && <span className="pt-pcard-online">● онлайн</span>}
+        </div>
+      </div>
+      <div className="pt-pcard-rows">
+        {u.phone
+          ? <a className="pt-pcard-row" href={`tel:${tel}`}><i>☎</i><span>{u.phone}</span></a>
+          : <div className="pt-pcard-row muted"><i>☎</i><span>телефон не указан</span></div>}
+        <a className="pt-pcard-row" href={`mailto:${email}`}><i>✉</i><span>{email}</span></a>
+      </div>
+      <div className="pt-pcard-foot">
+        <div className="pt-pcard-qr">{qr ? <img src={qr} alt="QR-визитка" /> : <div className="pt-pcard-qr-ph" />}<em>Наведите камеру — сохранит контакт</em></div>
+        <button className="pt-pcard-write" onClick={() => onWrite(u)}>Написать</button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/* ── Сотрудники: справочник + поиск + Magic Hover-карточка ── */
+function People({ onAuthLost, onWrite }) {
   const [users, setUsers] = useState([]);
   const [q, setQ] = useState('');
+  const [hover, setHover] = useState(null);   // { u, rect }
+  const showT = useRef(0), hideT = useRef(0);
   const online = usePresence();
   useEffect(() => { getJSON('/api/portal/users').then(setUsers).catch((e) => { if (e.status === 401) onAuthLost?.(); }); }, [onAuthLost]);
+  useEffect(() => () => { clearTimeout(showT.current); clearTimeout(hideT.current); }, []);
   const ql = q.trim().toLowerCase();
-  const list = ql ? users.filter((u) => [u.name, u.department, u.role, roleLabel(u.role)].some((x) => (x || '').toLowerCase().includes(ql))) : users;
+  const list = ql ? users.filter((u) => [u.name, u.department, u.role, roleLabel(u.role), u.position].some((x) => (x || '').toLowerCase().includes(ql))) : users;
   const onlineCount = users.filter((u) => online(u.id)).length;
+
+  // Небольшая задержка перед показом — чтобы карточка не мелькала при быстром проведении мышью.
+  const enter = (e, u) => {
+    clearTimeout(hideT.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    showT.current = setTimeout(() => setHover({ u, rect }), 180);
+  };
+  const leave = () => { clearTimeout(showT.current); hideT.current = setTimeout(() => setHover(null), 160); };
+  const cardEnter = () => clearTimeout(hideT.current);      // мышь перешла на карточку — не прячем
+  const cardLeave = () => { hideT.current = setTimeout(() => setHover(null), 120); };
+  const write = (u) => { setHover(null); onWrite?.(u); };
+
   return (
     <div className="pt-view">
       <div className="pt-view-h"><h2>Сотрудники</h2><span className="pt-hint">{users.length} чел.{onlineCount ? ` · ${onlineCount} онлайн` : ''}</span></div>
       <input className="adm-input pt-search" placeholder="Поиск: имя, отдел, должность…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="pt-people">
         {list.map((u) => (
-          <div className="pt-person" key={u.id}>
+          <div className="pt-person" key={u.id} onMouseEnter={(e) => enter(e, u)} onMouseLeave={leave}>
             <span className={`pt-av ${online(u.id) ? 'on' : ''}`}>{initials(u.name)}</span>
             <div className="pt-person-t"><b>{u.name}{online(u.id) && <span className="pt-online-tag">онлайн</span>}</b><small>{roleLabel(u.role)}{u.department ? ` · ${u.department}` : ''}</small></div>
           </div>
         ))}
         {list.length === 0 && <div className="pt-empty">{users.length ? 'Никого не найдено.' : 'Список пуст.'}</div>}
       </div>
+      {hover && <PersonCard u={hover.u} rect={hover.rect} online={online(hover.u.id)} onWrite={write} onEnter={cardEnter} onLeave={cardLeave} />}
     </div>
   );
 }
@@ -802,7 +878,7 @@ function CreateChat({ me, onClose, onCreated, onAuthLost }) {
 }
 
 /* ── Личные сообщения (список → диалог через Thread) ── */
-function Dm({ me, onAuthLost, onConv }) {
+function Dm({ me, onAuthLost, onConv, initialPeer, onPeerUsed }) {
   const [users, setUsers] = useState([]);
   const [active, setActive] = useState(null);
   const online = usePresence();
@@ -812,6 +888,11 @@ function Dm({ me, onAuthLost, onConv }) {
   useEffect(() => {
     getJSON('/api/portal/users').then((u) => setUsers(u.filter((x) => x.id !== me?.id))).catch((e) => { if (e.status === 401) onAuthLost?.(); });
   }, [me, onAuthLost]);
+  // Пришли из карточки сотрудника («Написать») — сразу открываем диалог с ним.
+  useEffect(() => {
+    if (initialPeer && initialPeer.id !== me?.id) { openChat(initialPeer); onPeerUsed?.(); }
+    else if (initialPeer) onPeerUsed?.();
+  }, [initialPeer]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const poll = useCallback(() => getJSON(`/api/portal/dm/${active.id}`), [active]);
   const post = useCallback((body, file) => sendJSON('/api/portal/dm', 'POST', { to: active.id, body, file }), [active]);
