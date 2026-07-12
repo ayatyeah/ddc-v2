@@ -239,7 +239,7 @@ export default function PortalApp() {
         {tab === 'docs' && <Documents me={me} onAuthLost={onAuthLost} />}
         {tab === 'requests' && <Requests me={me} onAuthLost={onAuthLost} />}
         {tab === 'tasks' && <Tasks me={me} onAuthLost={onAuthLost} />}
-        {tab === 'depts' && <Departments me={me} onAuthLost={onAuthLost} />}
+        {tab === 'depts' && <Departments me={me} onAuthLost={onAuthLost} onWrite={writeTo} />}
         {tab === 'dm' && <Dm me={me} onAuthLost={onAuthLost} onConv={setConvOpen} initialPeer={dmPeer} onPeerUsed={() => setDmPeer(null)} />}
         {tab === 'chat' && <Chats me={me} onAuthLost={onAuthLost} onConv={setConvOpen} />}
       </main>
@@ -1130,14 +1130,21 @@ function Tasks({ me, onAuthLost }) {
 }
 
 /* ── Отделы ── */
-function Departments({ me, onAuthLost }) {
+function Departments({ me, onAuthLost, onWrite }) {
   const [depts, setDepts] = useState([]);
+  const [usersById, setUsersById] = useState({});   // полные данные сотрудника для профиля по клику
+  const [profileU, setProfileU] = useState(null);
   const [edit, setEdit] = useState(null);   // {id,name,desc} редактируемого отдела
   const [view, setView] = useState('org');  // org (дерево) | list (карточки)
   const online = usePresence();
   const isAdmin = me?.role === 'admin';
   const load = useCallback(() => { getJSON('/api/portal/departments').then((d) => setDepts(d.departments || [])).catch((e) => { if (e.status === 401) onAuthLost?.(); }); }, [onAuthLost]);
   useEffect(() => { load(); }, [load]);
+  // Полный справочник — чтобы по клику на сотрудника в оргструктуре открыть профиль со всеми полями.
+  useEffect(() => { getJSON('/api/portal/users').then((us) => setUsersById(Object.fromEntries(us.map((u) => [u.id, u])))).catch(() => {}); }, []);
+  // Клик по сотруднику → профиль: берём полные данные по id, иначе то, что есть в оргструктуре.
+  const openProfile = (m) => { if (m?.id != null) setProfileU(usersById[m.id] || m); };
+  const write = (u) => { setProfileU(null); onWrite?.(u); };
 
   const save = async (e) => {
     e?.preventDefault?.();
@@ -1173,7 +1180,8 @@ function Departments({ me, onAuthLost }) {
                 <div className="org-people">
                   {(d.members || []).length === 0 ? <span className="org-empty">—</span>
                     : d.members.map((m, j) => (
-                      <div className="org-leaf" key={j} title={m.name}>
+                      <div className="org-leaf" key={j} title={m.name} role="button" tabIndex={0}
+                        onClick={() => openProfile(m)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openProfile(m))}>
                         <span className={`pt-av xs ${online(m.id) ? 'on' : ''}`}>{initials(m.name)}</span>
                         <span className="org-leaf-n">{m.name}</span>
                       </div>
@@ -1196,7 +1204,11 @@ function Departments({ me, onAuthLost }) {
             <p>{d.desc}</p>
             <div className="pt-dept-m">
               {(d.members || []).length === 0 ? <span className="pt-empty sm">Нет сотрудников</span>
-                : d.members.map((m, j) => <span className="pt-chip" key={j}><span className="pt-av xs">{initials(m.name)}</span>{m.name}</span>)}
+                : d.members.map((m, j) => (
+                  <button className="pt-chip" key={j} type="button" onClick={() => openProfile(m)} title={`Открыть профиль: ${m.name}`}>
+                    <span className={`pt-av xs ${online(m.id) ? 'on' : ''}`}>{initials(m.name)}</span>{m.name}
+                  </button>
+                ))}
             </div>
           </div>
         ))}
@@ -1218,6 +1230,7 @@ function Departments({ me, onAuthLost }) {
           </form>
         </div>
       )}
+      {profileU && <PersonProfileModal u={profileU} online={online(profileU.id)} onClose={() => setProfileU(null)} onWrite={write} />}
     </div>
   );
 }
