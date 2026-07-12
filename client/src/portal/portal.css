@@ -180,6 +180,9 @@
 .pt-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; overflow-y: auto; align-content: start; }
 .pt-person { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; cursor: pointer; transition: border-color 0.16s var(--ease), transform 0.16s var(--ease), box-shadow 0.16s var(--ease); }
 .pt-person:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* Десктоп: раскрытие данных — наведением, кликом ничего не открываем → обычный курсор
+   (ховер-подсветка остаётся как подсказка, что строка «живая»). На телефоне — тап-раскрытие. */
+.pt-person-hoveronly { cursor: default; }
 .pt-person:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); transform: translateY(-1px); box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 12%, transparent); }
 .pt-person-t { display: flex; flex-direction: column; min-width: 0; }
 .pt-person-t b { font-size: 14.5px; }
@@ -341,6 +344,14 @@
   .pt-main { height: auto; min-height: calc(100vh - 56px); }
   .pt-view { height: auto; min-height: calc(100vh - 56px); padding: 16px 16px 24px; }
   .pt-view-h h2 { font-size: 1.3rem; }
+  /* Шапка раздела переносит действие (дата в Переговорных, кнопка) на новую строку,
+     иначе оно упирается в правый край экрана. Действие остаётся прижатым вправо. */
+  .pt-view-h { flex-wrap: wrap; row-gap: 8px; }
+  .pt-view-act { margin-left: auto; }
+  .pt-view-h .adm-input.pt-view-act { max-width: 100%; }
+  /* Переключатель статуса на карточке доски: на узком экране ужимаем, чтобы «Готово» не срезалось */
+  .kb-move-b { padding: 6px 3px; font-size: 10px; gap: 4px; }
+  .kb-move-b .kb-dot { width: 6px; height: 6px; }
 
   /* Крупнее контролы форм на телефоне (десктоп не трогаем) */
   .pt .adm-input { font-size: 16px; padding: 13px 15px; }   /* 16px — iOS не зумит при фокусе */

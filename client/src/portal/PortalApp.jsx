@@ -648,8 +648,13 @@ function People({ onAuthLost, onWrite }) {
   const cardEnter = () => clearTimeout(hideT.current);      // мышь перешла на карточку — не прячем
   const cardLeave = () => { hideT.current = setTimeout(() => setHover(null), 120); };
   const write = (u) => { setHover(null); onWrite?.(u); };
-  // Клик по сотруднику — полный профиль (работает и на телефоне, где hover-карточки нет).
+  // Клик по сотруднику — полный профиль.
   const openProfile = (u) => { clearTimeout(showT.current); setHover(null); setProfileU(u); };
+  // На десктопе данные раскрываются наведением (Magic Hover-карточка), поэтому тап-раскрытие
+  // профиля включаем ТОЛЬКО там, где точного указателя/hover нет — на телефоне и планшете.
+  // (Клавиатурный Enter открывает профиль везде — это доступность, а не «раскрытие по тапу».)
+  const [coarse] = useState(() => typeof window !== 'undefined' && !!window.matchMedia
+    && window.matchMedia('(hover: none), (pointer: coarse)').matches);
 
   return (
     <div className="pt-view">
@@ -657,8 +662,9 @@ function People({ onAuthLost, onWrite }) {
       <input className="adm-input pt-search" placeholder="Поиск: имя, отдел, должность…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="pt-people">
         {list.map((u) => (
-          <div className="pt-person" key={u.id} role="button" tabIndex={0}
-            onClick={() => openProfile(u)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openProfile(u))}
+          <div className={`pt-person${coarse ? '' : ' pt-person-hoveronly'}`} key={u.id} role="button" tabIndex={0}
+            onClick={coarse ? () => openProfile(u) : undefined}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openProfile(u))}
             onMouseEnter={(e) => enter(e, u)} onMouseLeave={leave}>
             <span className={`pt-av ${online(u.id) ? 'on' : ''}`}>{initials(u.name)}</span>
             <div className="pt-person-t"><b>{u.name}{online(u.id) && <span className="pt-online-tag">онлайн</span>}</b><small>{roleLabel(u.role)}{u.department ? ` · ${u.department}` : ''}</small></div>
