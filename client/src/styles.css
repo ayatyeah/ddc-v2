@@ -99,6 +99,16 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Полосы прокрутки под тему: тонкие, полупрозрачные, в цвет интерфейса — вместо системного
+   светлого скроллбара, который выбивался из тёмной темы. Адаптивно: --ink светлый на тёмной
+   теме (thumb виден на тёмном фоне) и тёмный на светлой. Firefox — через scrollbar-*. */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 24%, transparent) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--brand) 45%, color-mix(in srgb, var(--ink) 22%, transparent)); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
 /* Базовый кегль чуть крупнее (16 → 17px) — всё на rem-единицах масштабируется по сайту. */
 /* Текучая (fluid) типографика: корневой кегль плавно растёт с шириной экрана
    (16px на телефоне → 18px на десктопе). Всё на rem масштабируется заодно. */
