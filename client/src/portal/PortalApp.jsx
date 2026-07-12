@@ -949,7 +949,17 @@ function Tasks({ me, onAuthLost }) {
     } catch (e2) { if (e2.status === 401) onAuthLost?.(); else alert(e2.message || 'Не удалось'); }
   };
   const patch = async (tk, body) => {
-    try { await sendJSON(`/api/portal/tasks/${tk.id}`, 'PATCH', body); load(); } catch (e) { if (e.status === 401) onAuthLost?.(); }
+    // finally load() — и после успеха, и после отказа синхронизируемся с сервером: при 403
+    // (нет прав менять чужую задачу) оптимистичное изменение откатится к состоянию из БД.
+    try { await sendJSON(`/api/portal/tasks/${tk.id}`, 'PATCH', body); }
+    catch (e) { if (e.status === 401) onAuthLost?.(); }
+    finally { load(); }
+  };
+  // Ручная смена статуса на карточке доски (тап — работает и на телефоне, где drag недоступен).
+  const setStatus = (tk, status) => {
+    if (tk.status === status) return;
+    setTasks((ts) => ts.map((t) => t.id === tk.id ? { ...t, status } : t));   // оптимистично
+    patch(tk, { status });
   };
   const del = async (tk) => { if (!confirm('Удалить задачу?')) return; try { await sendJSON(`/api/portal/tasks/${tk.id}`, 'DELETE'); load(); } catch (e) { if (e.status === 401) onAuthLost?.(); } };
   const cycle = (tk) => patch(tk, { status: tk.status === 'open' ? 'in_progress' : tk.status === 'in_progress' ? 'done' : 'open' });
@@ -1008,6 +1018,17 @@ function Tasks({ me, onAuthLost }) {
                       <div className="kb-card-f">
                         <span className="kb-who">{tk.assignee_name ? `👤 ${tk.assignee_name}` : 'без исполнителя'}</span>
                         {(tk.created_by === me?.username || isHead) && <button className="kb-del" onClick={() => del(tk)} aria-label="Удалить">×</button>}
+                      </div>
+                      {/* Ручная смена статуса тапом — работает и на телефоне, где перетаскивание недоступно */}
+                      <div className="kb-move" role="group" aria-label="Сменить статус">
+                        {[['open', 'Открыта'], ['in_progress', 'В работе'], ['done', 'Готово']].map(([mst, ml]) => (
+                          <button key={mst} type="button" draggable={false}
+                            className={`kb-move-b st-${mst} ${tk.status === mst ? 'on' : ''}`}
+                            onClick={(e) => { e.stopPropagation(); setStatus(tk, mst); }}
+                            title={ml} aria-label={ml} aria-pressed={tk.status === mst}>
+                            <span className={`kb-dot st-${mst}`} /><em>{ml}</em>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   ))}
