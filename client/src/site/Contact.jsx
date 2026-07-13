@@ -13,7 +13,7 @@ const OFFICE = { lat: 51.089838, lon: 71.423773 };
 const YMAP_SRC = 'https://yandex.ru/map-widget/v1/?um=constructor%3A559caa52e2037f65fed187374363c14995a318f4efb2819fb2b67e6e893013ac&source=constructor';
 // Фолбэк — Google Maps: грузится там, где Яндекс режут (корп-файрвол банка, антитрекинг-
 // блокировщики держат домены Яндекса в чёрных списках из-за Метрики). Ключ/аккаунт не нужны.
-const GMAP_SRC = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3481.6644261091533!2d71.42083987720851!3d51.08972594112904!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4245845413b94003%3A0xb6cd478279e9e301!2z0L_RgC3Rgi4g0JzQsNC90LPQuNC90LjQuiDQldC7LiA1N2EsINCQ0YHRgtCw0L3QsCAwMjAwMDA!5e1!3m2!1sru!2skz!4v1783921914873!5m2!1sru!2skz';
+const GMAP_SRC = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2506.0152570307673!2d71.42083987720851!3d51.08972594112904!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4245845413b94003%3A0xb6cd478279e9e301!2z0L_RgC3Rgi4g0JzQsNC90LPQuNC70LjQuiDQldC7LiA1N2EsINCQ0YHRgtCw0L3QsCAwMjAwMDA!5e0!3m2!1sru!2skz!4v1783924038046!5m2!1sru!2skz';
 // Внешние ссылки «открыть в картах» — всегда на виду: если инлайн-карта у кого-то не грузится,
 // адрес всё равно открывается в том сервисе, что доступен в его сети.
 const MAP_LINKS = [
