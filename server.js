@@ -53,7 +53,7 @@ app.use(helmet({
       connectSrc: ["'self'"],
       workerSrc: ["'self'", 'blob:'],
       objectSrc: ["'none'"],
-      frameSrc: ["'self'", 'https://yandex.ru', 'https://yandex.kz'],
+      frameSrc: ["'self'", 'https://yandex.ru', 'https://yandex.kz', 'https://www.google.com'],
       frameAncestors: ["'self'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],

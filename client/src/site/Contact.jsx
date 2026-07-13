@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLang } from '../store.js';
 import { t } from '../i18n.js';
 import { sendJSON } from '../api.js';
@@ -6,6 +6,80 @@ import Reveal from './Reveal.jsx';
 import Consent from './Consent.jsx';
 
 const EMPTY = { full_name: '', email: '', phone: '', subject: '', message: '' };
+
+// Офис DDC: Астана, Мәңгілік Ел, 57А (Nur Alem / EXPO).
+const OFFICE = { lat: 51.089838, lon: 71.423773 };
+// Основная карта — фирменный конструктор Яндекса. Работает у большинства.
+const YMAP_SRC = 'https://yandex.ru/map-widget/v1/?um=constructor%3A559caa52e2037f65fed187374363c14995a318f4efb2819fb2b67e6e893013ac&source=constructor';
+// Фолбэк — Google Maps: грузится там, где Яндекс режут (корп-файрвол банка, антитрекинг-
+// блокировщики держат домены Яндекса в чёрных списках из-за Метрики). Ключ/аккаунт не нужны.
+const GMAP_SRC = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3481.6644261091533!2d71.42083987720851!3d51.08972594112904!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4245845413b94003%3A0xb6cd478279e9e301!2z0L_RgC3Rgi4g0JzQsNC90LPQuNC90LjQuiDQldC7LiA1N2EsINCQ0YHRgtCw0L3QsCAwMjAwMDA!5e1!3m2!1sru!2skz!4v1783921914873!5m2!1sru!2skz';
+// Внешние ссылки «открыть в картах» — всегда на виду: если инлайн-карта у кого-то не грузится,
+// адрес всё равно открывается в том сервисе, что доступен в его сети.
+const MAP_LINKS = [
+  { label: 'Яндекс', href: `https://yandex.kz/maps/163/astana/?ll=${OFFICE.lon}%2C${OFFICE.lat}&pt=${OFFICE.lon}%2C${OFFICE.lat}&z=17` },
+  { label: 'Google', href: `https://www.google.com/maps/search/?api=1&query=${OFFICE.lat},${OFFICE.lon}` },
+  { label: '2ГИС', href: 'https://go.2gis.com/2AsQp' },
+];
+
+// Карта контактов с устойчивостью к блокировке Яндекса.
+function ContactMap({ lang }) {
+  const wrapRef = useRef(null);
+  const [inView, setInView] = useState(false);
+  const [fallback, setFallback] = useState(false);
+
+  // Рендерим карту только когда она подъезжает к экрану (перф) — и лишь тогда пингуем Яндекс.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return undefined; }
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) { setInView(true); io.disconnect(); }
+    }, { rootMargin: '250px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  // Доступен ли Яндекс? Пингуем фавикон картинкой: onerror/таймаут → домен режется
+  // (корп-файрвол банка, антитрекинг-блокировщик держит домены Яндекса в чёрных списках) →
+  // сразу показываем Google Maps вместо пустого iframe. Пинг картинкой проходит CSP
+  // (img-src https:), в отличие от fetch (connect-src 'self'). onLoad самого iframe для
+  // детекта НЕ годится: у заблокированного домена браузер отдаёт страницу-ошибку и load всё равно
+  // срабатывает — поэтому проверяем связность отдельным лёгким запросом.
+  useEffect(() => {
+    if (!inView) return undefined;
+    let done = false;
+    const decide = (blocked) => { if (!done) { done = true; if (blocked) setFallback(true); } };
+    const img = new Image();
+    const tid = setTimeout(() => decide(true), 3000);   // не ответил за 3с → считаем заблокированным
+    img.onload = () => { clearTimeout(tid); decide(false); };
+    img.onerror = () => { clearTimeout(tid); decide(true); };
+    img.src = 'https://yandex.ru/favicon.ico?_=' + Date.now();
+    return () => { clearTimeout(tid); done = true; img.onload = null; img.onerror = null; };
+  }, [inView]);
+
+  return (
+    <div className="contact-map" ref={wrapRef}>
+      {inView && (
+        <iframe
+          key={fallback ? 'gmap' : 'ya'}
+          title={t(lang, 'contact.addr')}
+          src={fallback ? GMAP_SRC : YMAP_SRC}
+          referrerPolicy="strict-origin-when-cross-origin"
+          width="100%"
+          height="100%"
+          style={{ border: 0 }}
+          allowFullScreen
+        />
+      )}
+      <div className="contact-map-link">
+        <span className="cml-addr">Мәңгілік Ел, 57А</span>
+        {MAP_LINKS.map((m) => (
+          <a key={m.label} href={m.href} target="_blank" rel="noopener noreferrer">{m.label}</a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Contact() {
   const lang = useLang();
@@ -91,25 +165,7 @@ export default function Contact() {
         </div>
 
         <Reveal delay={200}>
-          <div className="contact-map">
-            <iframe
-              title={t(lang, 'contact.addr')}
-              src="https://yandex.ru/map-widget/v1/?um=constructor%3A559caa52e2037f65fed187374363c14995a318f4efb2819fb2b67e6e893013ac&source=constructor"
-              width="100%"
-              height="100%"
-              style={{ border: 0 }}
-              loading="lazy"
-              allowFullScreen
-            />
-            <a
-              className="contact-map-link"
-              href="https://yandex.kz/maps/163/astana/house/manggilik_el_dangghyly_57a/Y0gYcgVjTkIEQFtrfXx5eHRgbA==/?ll=71.423773%2C51.089838&pt=71.423773%2C51.089838&z=17"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Мәңгілік Ел, 57А → {t(lang, 'contact.map')}
-            </a>
-          </div>
+          <ContactMap lang={lang} />
         </Reveal>
       </div>
     </section>
